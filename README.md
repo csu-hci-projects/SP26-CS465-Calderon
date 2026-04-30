@@ -13,6 +13,7 @@ Start here:
 - `dev/active/cs465-airdesk/architecture.md` - proposed system architecture and package boundaries
 - `dev/active/cs465-airdesk/research-notes.md` - technical research notes and current working positions
 - `dev/active/cs465-airdesk/sprint-0.md` - first implementation sprint plan and acceptance criteria
+- `dev/active/cs465-airdesk/sprint-1.md` - live camera/tracking/recording sprint plan
 - `dev/active/cs465-airdesk/tasks.md` - implementation and paper checklist
 - `dev/active/cs465-airdesk/handoff-prompt.md` - prompt for a fresh agent
 

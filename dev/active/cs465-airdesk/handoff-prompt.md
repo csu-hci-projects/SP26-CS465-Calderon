@@ -29,7 +29,8 @@ Read these files first:
 3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
 4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
 5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
-6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
+7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 Current preferred research question:
 
@@ -124,5 +125,16 @@ Current first sprint direction:
 - add mock/replay backend
 - add first synthetic gesture primitive tests
 - avoid polished UI, cursor takeover, Kinect, and ML training until the foundation is stable
+
+Current second sprint direction:
+
+- test Python/OpenCV/MediaPipe dependency viability
+- constrain Python to 3.12 if live tracking packages do not support 3.14
+- add OpenCV camera capture/probe backend
+- implement MediaPipe as backend zero if packaging and runtime behavior are viable
+- add bounded `track` and `record` CLI commands
+- record normalized landmark/event JSONL by default, not raw video
+- replay recorded tracking streams through static recognizers
+- document real-camera tracking quality before deciding whether Sprint 2 should build command-mode policy or tracking robustness
 
 ---

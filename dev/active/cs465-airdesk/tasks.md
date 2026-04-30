@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: see `sprint-0.md`.
+Current next sprint: see `sprint-1.md`.
 
 ## Phase 0: Project Setup
 
