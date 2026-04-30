@@ -26,6 +26,7 @@ class JsonlRecordingWriter:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._handle = path.open("w", encoding="utf-8")
 
     def __enter__(self) -> JsonlRecordingWriter:
@@ -47,6 +48,7 @@ class JsonlRecordingWriter:
 
     def _write(self, record: dict[str, Any]) -> None:
         self._handle.write(json.dumps(record, sort_keys=True) + "\n")
+        self._handle.flush()
 
 
 def iter_recording(path: Path) -> list[RecordingRecord]:

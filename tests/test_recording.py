@@ -11,7 +11,7 @@ def test_jsonl_recording_round_trips_tracking_frame_and_event(
     tmp_path: Path,
     make_empty_tracking_frame: TrackingFrame,
 ) -> None:
-    path = tmp_path / "recording.jsonl"
+    path = tmp_path / "nested" / "recording.jsonl"
     event = EventLogEntry(
         event_type="gesture_candidate", timestamp=1.1, payload={"name": "open_palm"}
     )

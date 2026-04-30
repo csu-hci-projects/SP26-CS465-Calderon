@@ -11,6 +11,12 @@ dependencies = [
 [project.scripts]
 airdesk = "airdesk.cli:app"
 
+[project.optional-dependencies]
+live = [
+    "mediapipe>=0.10.35",
+    "opencv-python>=4.13.0.92",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",

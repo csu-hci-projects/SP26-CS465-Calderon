@@ -29,13 +29,13 @@ Current next sprint: see `sprint-1.md`.
 
 ## Phase 1: Technical Spike
 
-- [ ] Open webcam reliably
+- [x] Open webcam reliably
 - [ ] Enumerate camera modes and identify stable resolution/FPS options
 - [ ] Tune webcam exposure/focus/FPS settings where possible
-- [ ] Run MediaPipe hand tracking locally
-- [ ] Draw/debug 21 hand landmarks
+- [x] Run MediaPipe hand tracking locally
+- [x] Draw/debug 21 hand landmarks
 - [ ] Measure landmark stability under normal desk lighting
-- [ ] Record sample landmark streams
+- [x] Record sample landmark streams
 - [x] Replay recorded landmark streams through a mock/replay backend
 - [x] Detect open palm
 - [x] Detect fist

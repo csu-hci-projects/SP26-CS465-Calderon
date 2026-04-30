@@ -34,13 +34,14 @@ class FrameMetadata:
 
 @dataclass(frozen=True)
 class CapturedFrame:
-    """A captured frame boundary; pixel payloads stay optional for Sprint 0."""
+    """A captured frame boundary; pixel payloads stay out of serialized recordings."""
 
     metadata: FrameMetadata
     image_ref: str | None = None
+    image: Any | None = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {"metadata": self.metadata.to_dict(), "image_ref": self.image_ref}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CapturedFrame:

@@ -290,3 +290,20 @@ Spend Sprint 2 on tracking robustness:
 
 The decision should be based on recorded data, not vibes.
 
+## Implementation Notes
+
+Updated: 2026-04-30
+
+- OpenCV and MediaPipe live dependencies resolve with `uv sync --dev --extra live`.
+- Python 3.14 is currently viable with `opencv-python==4.13.0.92` and `mediapipe==0.10.35`, so the project has not been pinned down to Python 3.12.
+- MediaPipe's installed package uses the Tasks API. The backend uses `HandLandmarker`, not the old `mp.solutions.hands` API.
+- The Hand Landmarker model is downloaded on first use into ignored `data/models/hand_landmarker.task`.
+- `/dev/video0` opened and recorded frames in a smoke test, but reported `1920x1080` at `5.00` FPS.
+- A two-frame record/replay smoke test succeeded with zero detected hands.
+
+Remaining Sprint 1 work:
+
+- run deliberate hand-in-frame samples,
+- add camera format/FPS controls or at least report more camera capabilities,
+- measure landmark stability,
+- decide whether Sprint 2 can proceed to command-mode policy.

@@ -28,15 +28,27 @@ uv run pytest
 uv run ruff check .
 ```
 
-Useful Sprint 0 commands:
+Live camera/tracking support is optional:
+
+```bash
+uv sync --dev --extra live
+uv run airdesk camera probe --device /dev/video0
+uv run airdesk track --backend mediapipe --device /dev/video0 --max-frames 120 --no-show
+uv run airdesk record --backend mediapipe --device /dev/video0 --max-frames 120 --out data/recordings/sample.jsonl
+uv run airdesk replay data/recordings/sample.jsonl
+```
+
+The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model bundle into ignored `data/models/` on first use.
+
+Useful safe commands:
 
 ```bash
 uv run airdesk doctor
 uv run airdesk camera list
-uv run airdesk camera probe /dev/video0
+uv run airdesk camera probe --device /dev/video0
 uv run airdesk profile validate configs/profiles/study-safe.toml
 uv run airdesk replay tests/fixtures/replay-one-frame.jsonl
 uv run airdesk hyprland dry-run workspace r+1
 ```
 
-The live MediaPipe tracker is intentionally scaffolded as an optional backend. Tests and replay do not require webcam, Hyprland, or MediaPipe access.
+Tests and replay do not require webcam, Hyprland, or MediaPipe access.

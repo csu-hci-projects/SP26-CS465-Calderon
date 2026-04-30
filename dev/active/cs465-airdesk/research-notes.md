@@ -51,6 +51,15 @@ Risk:
 
 Use MediaPipe as one backend, not as the project's core identity.
 
+Sprint 1 implementation note:
+
+- `mediapipe==0.10.35` and `opencv-python==4.13.0.92` install and import under Python 3.14 in this repo's `uv` environment.
+- The installed MediaPipe package exposes the Tasks API, not the older `mp.solutions.hands` namespace.
+- AirDesk therefore uses `mediapipe.tasks.python.vision.HandLandmarker` with a local `.task` model in ignored `data/models/`.
+- The model URL used is Google's public Hand Landmarker bundle:
+  `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`
+- A two-frame smoke test on `/dev/video0` ran the pipeline and produced replayable JSONL, but detected zero hands because no hand was intentionally placed in frame during the run.
+
 References:
 
 - https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/python
@@ -259,6 +268,26 @@ Useful if AirDesk logs enough labeled data.
 
 AirDesk should be designed as a pluggable, profile-driven spatial input daemon.
 
+## Sprint 1 Live Tracking Notes
+
+Date: 2026-04-30
+
+Local smoke-test observations:
+
+- `uv sync --dev --extra live` resolves OpenCV and MediaPipe.
+- `uv run airdesk camera list` reports `/dev/video0` through `/dev/video3`.
+- `uv run airdesk camera probe --device /dev/video0` opened the camera and read a frame at `1920x1080`, reporting `5.00` FPS.
+- OpenCV emitted `ioctl(VIDIOC_QBUF): Bad file descriptor` on release, but the probe and recording still succeeded.
+- `uv run airdesk track --backend mediapipe --device /dev/video0 --max-frames 2 --no-show` ran MediaPipe Hand Landmarker and printed frame summaries.
+- `uv run airdesk record --backend mediapipe --device /dev/video0 --max-frames 2 --no-show --out data/recordings/sprint1-smoke.jsonl` produced a replayable file.
+- `uv run airdesk replay data/recordings/sprint1-smoke.jsonl` reported `frames=2 events=2 hands=0 open_palm=0 fist=0 pinch=0`.
+
+Interpretation:
+
+- The live signal pipeline works mechanically.
+- The observed 5 FPS at 1920x1080 is likely too slow for comfortable gesture interaction.
+- Before moving to command-mode policy, run a deliberate hand-in-frame sample and investigate camera resolution/FPS controls.
+
 Initial implementation should prioritize:
 
 1. recording/replay
@@ -269,4 +298,3 @@ Initial implementation should prioritize:
 6. study logging
 
 ML, Kinect, cursor control, and virtual keyboard are part of the serious roadmap, not discarded stretch fantasies.
-
