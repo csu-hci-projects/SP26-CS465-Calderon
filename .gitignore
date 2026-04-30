@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+# Local runtime artifacts
+data/*
+!data/.gitkeep
+*.jsonl
+!tests/fixtures/*.jsonl
+*.log
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Study exports may contain participant data.
+studies/data/

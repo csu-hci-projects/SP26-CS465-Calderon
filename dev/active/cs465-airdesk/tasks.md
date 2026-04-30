@@ -5,27 +5,27 @@ Current next sprint: see `sprint-0.md`.
 ## Phase 0: Project Setup
 
 - [ ] Initialize new repo in `/home/caden/projects/AirDesk` if desired
-- [ ] Choose Python package manager (`uv` recommended if available)
-- [ ] Add baseline `src/airdesk/` project structure
-- [ ] Add README with project setup and run command
+- [x] Choose Python package manager (`uv` recommended if available)
+- [x] Add baseline `src/airdesk/` project structure
+- [x] Add README with project setup and run command
 - [ ] Add license if this may become public
-- [ ] Add `.gitignore` for Python, logs, local videos, and study data
-- [ ] Add config directory for profiles and defaults
-- [ ] Add tests directory and baseline test runner
+- [x] Add `.gitignore` for Python, logs, local videos, and study data
+- [x] Add config directory for profiles and defaults
+- [x] Add tests directory and baseline test runner
 - [ ] Decide initial UI technology for debug window / overlay / control center
 
 ## Phase 0.5: Architecture Foundation
 
-- [ ] Define core typed data structures for frames, landmarks, gestures, modes, profiles, and actions
-- [ ] Define `HandTrackerBackend` interface
-- [ ] Define capture backend interface
-- [ ] Define action target interface
-- [ ] Define profile/config schema
-- [ ] Define event/log schema
-- [ ] Add dry-run action target
-- [ ] Add recorded replay backend design
-- [ ] Add sample config/profile files
-- [ ] Add unit tests for config loading and event serialization
+- [x] Define core typed data structures for frames, landmarks, gestures, modes, profiles, and actions
+- [x] Define `HandTrackerBackend` interface
+- [x] Define capture backend interface
+- [x] Define action target interface
+- [x] Define profile/config schema
+- [x] Define event/log schema
+- [x] Add dry-run action target
+- [x] Add recorded replay backend design
+- [x] Add sample config/profile files
+- [x] Add unit tests for config loading and event serialization
 
 ## Phase 1: Technical Spike
 
@@ -36,12 +36,12 @@ Current next sprint: see `sprint-0.md`.
 - [ ] Draw/debug 21 hand landmarks
 - [ ] Measure landmark stability under normal desk lighting
 - [ ] Record sample landmark streams
-- [ ] Replay recorded landmark streams through a mock/replay backend
-- [ ] Detect open palm
-- [ ] Detect fist
+- [x] Replay recorded landmark streams through a mock/replay backend
+- [x] Detect open palm
+- [x] Detect fist
 - [ ] Detect swipe left/right
 - [ ] Detect pointing direction
-- [ ] Detect pinch start/hold/release
+- [x] Detect pinch start/hold/release
 - [ ] Add gesture confidence and cooldown
 - [ ] Compare at least one alternative hand tracking backend if MediaPipe is unstable
 
@@ -59,9 +59,9 @@ Current next sprint: see `sprint-0.md`.
 - [ ] Verify `hyprctl dispatch workspace ...`
 - [ ] Verify `hyprctl dispatch movefocus ...`
 - [ ] Verify fullscreen/floating dispatchers
-- [ ] Create `hyprland.py` wrapper
-- [ ] Add dry-run mode so commands can be tested safely
-- [ ] Add command log output
+- [x] Create `hyprland.py` wrapper
+- [x] Add dry-run mode so commands can be tested safely
+- [x] Add command log output
 - [ ] Investigate Hyprland IPC events for active workspace/window context
 - [ ] Keep Hyprland-specific behavior behind an action adapter
 

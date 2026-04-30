@@ -1,0 +1,49 @@
+id = "window-manager"
+name = "Window Manager"
+allowed_modes = ["command"]
+activation_gesture = "open_palm"
+min_confidence = 0.80
+cooldown_ms = 600
+destructive_actions = false
+logging_level = "events"
+dry_run_default = true
+
+[[bindings]]
+gesture = "swipe_left"
+mode = "command"
+action_type = "hyprland.dispatch"
+command = "workspace"
+parameters = { args = ["r-1"] }
+min_confidence = 0.80
+
+[[bindings]]
+gesture = "swipe_right"
+mode = "command"
+action_type = "hyprland.dispatch"
+command = "workspace"
+parameters = { args = ["r+1"] }
+min_confidence = 0.80
+
+[[bindings]]
+gesture = "point_left"
+mode = "command"
+action_type = "hyprland.dispatch"
+command = "movefocus"
+parameters = { args = ["l"] }
+min_confidence = 0.85
+
+[[bindings]]
+gesture = "point_right"
+mode = "command"
+action_type = "hyprland.dispatch"
+command = "movefocus"
+parameters = { args = ["r"] }
+min_confidence = 0.85
+
+[[bindings]]
+gesture = "fist"
+mode = "command"
+action_type = "airdesk.mode"
+command = "cancel"
+min_confidence = 0.80
+

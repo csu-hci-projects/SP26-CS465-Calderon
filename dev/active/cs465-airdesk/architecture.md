@@ -107,6 +107,16 @@ airdesk/
   config/           schema, defaults, profile loading
 ```
 
+Sprint 0 implementation status:
+
+- `src/airdesk/state/` owns typed frame, landmark, tracking, gesture, action, and event records.
+- `src/airdesk/profiles/` loads TOML profiles and validates required profile/binding fields.
+- `src/airdesk/actions/` contains dry-run and Hyprland action targets.
+- `src/airdesk/capture/` and `src/airdesk/tracking/` define backend interfaces.
+- `src/airdesk/recording/` stores replayable JSONL tracking/event records.
+- `src/airdesk/gestures/` contains the first static rule recognizers for open palm, fist, and pinch.
+- `configs/profiles/` contains the initial `study-safe` and `window-manager` profiles.
+
 Potential top-level project layout:
 
 ```text
@@ -382,4 +392,3 @@ Safety rules:
 - How much should AirDesk depend on Hyprland-specific concepts versus a generic action layer?
 - How early should Kinect support be added?
 - What is the right boundary between a research build and a daily-use build?
-

@@ -1,0 +1,1 @@
+"""Study tooling placeholder package."""

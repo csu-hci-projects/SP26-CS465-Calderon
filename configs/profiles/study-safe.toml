@@ -1,0 +1,31 @@
+id = "study-safe"
+name = "Study Safe"
+allowed_modes = ["command"]
+activation_gesture = "open_palm"
+min_confidence = 0.85
+cooldown_ms = 800
+destructive_actions = false
+logging_level = "verbose"
+dry_run_default = true
+
+[[bindings]]
+gesture = "open_palm"
+mode = "command"
+action_type = "airdesk.mode"
+command = "listen"
+min_confidence = 0.85
+
+[[bindings]]
+gesture = "fist"
+mode = "command"
+action_type = "airdesk.mode"
+command = "cancel"
+min_confidence = 0.80
+
+[[bindings]]
+gesture = "pinch"
+mode = "command"
+action_type = "dry-run.note"
+command = "pinch-observed"
+min_confidence = 0.80
+
