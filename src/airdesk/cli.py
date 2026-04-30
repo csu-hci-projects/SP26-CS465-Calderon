@@ -12,10 +12,12 @@ import typer
 from airdesk import __version__
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import HYPRLAND_DISPATCH
-from airdesk.capture.opencv import format_probe_result, probe_camera
+from airdesk.analysis.recording import analyze_recording, format_analysis
+from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
+from airdesk.runtime import AirdeskRuntime, format_runtime_summary
 from airdesk.state.types import ActionRequest, EventLogEntry, TrackingFrame, utc_timestamp
 from airdesk.tracking.interfaces import HandTrackerBackend
 from airdesk.tracking.mediapipe import DEFAULT_HAND_LANDMARKER_MODEL
@@ -53,9 +55,19 @@ def replay(
 
 
 @app.command()
+def analyze(path: Annotated[Path, typer.Argument(exists=True, readable=True)]) -> None:
+    """Analyze a JSONL recording for timing, gesture, and stability signals."""
+    typer.echo(format_analysis(analyze_recording(path)))
+
+
+@app.command()
 def track(
     backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
     device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
     model_path: Annotated[
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
@@ -73,6 +85,7 @@ def track(
         device=device,
         max_frames=max_frames,
         show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
     )
@@ -96,6 +109,15 @@ def record(
     out: Annotated[Path, typer.Option(help="Output JSONL recording path.")],
     backend: Annotated[str, typer.Option(help="Tracking backend to record.")] = "mediapipe",
     device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    label: Annotated[str | None, typer.Option(help="Short label for this recording.")] = None,
+    duration: Annotated[
+        float | None,
+        typer.Option(help="Stop after this many seconds based on frame timestamps."),
+    ] = None,
     model_path: Annotated[
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
@@ -113,11 +135,13 @@ def record(
         device=device,
         max_frames=max_frames,
         show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
     )
     frame_count = 0
     interrupted = False
+    first_frame_timestamp: float | None = None
     try:
         tracker.start()
         with JsonlRecordingWriter(out) as writer:
@@ -125,11 +149,28 @@ def record(
                 EventLogEntry(
                     event_type="recording_started",
                     timestamp=utc_timestamp(),
-                    payload={"backend": backend, "device": device, "max_frames": max_frames},
+                    payload={
+                        "backend": backend,
+                        "device": device,
+                        "max_frames": max_frames,
+                        "duration": duration,
+                        "label": label,
+                        "model_path": str(model_path),
+                        "camera_settings": CameraSettings(
+                            width=width,
+                            height=height,
+                            fps=fps,
+                            fourcc=fourcc,
+                        ).to_dict(),
+                    },
                 )
             )
             try:
                 for frame in tracker.frames():
+                    if first_frame_timestamp is None:
+                        first_frame_timestamp = frame.timestamp
+                    if duration is not None and frame.timestamp - first_frame_timestamp >= duration:
+                        break
                     writer.write_tracking_frame(frame)
                     frame_count += 1
             except KeyboardInterrupt:
@@ -145,7 +186,12 @@ def record(
                 EventLogEntry(
                     event_type="recording_finished",
                     timestamp=utc_timestamp(),
-                    payload={"frames": frame_count, "interrupted": interrupted},
+                    payload={
+                        "frames": frame_count,
+                        "interrupted": interrupted,
+                        "duration": duration,
+                        "label": label,
+                    },
                 )
             )
     except RuntimeError as exc:
@@ -154,6 +200,46 @@ def record(
     finally:
         tracker.stop()
     typer.echo(f"recorded frames={frame_count} out={out}")
+
+
+@app.command()
+def run(
+    backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "replay",
+    recording: Annotated[Path | None, typer.Option(help="Replay JSONL recording path.")] = None,
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    profile: Annotated[
+        Path,
+        typer.Option(help="Profile TOML path."),
+    ] = Path("configs/profiles/study-safe.toml"),
+    dry_run: Annotated[bool, typer.Option(help="Route actions to the dry-run target.")] = True,
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
+) -> None:
+    """Run the safe recognition/policy/action pipeline."""
+    if not dry_run:
+        typer.echo("Sprint 2 runtime only supports --dry-run.", err=True)
+        raise typer.Exit(code=1)
+    source = str(recording) if recording is not None else device
+    tracker = _make_tracker(
+        backend=backend,
+        device=source,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+    )
+    runtime = AirdeskRuntime(
+        tracker=tracker,
+        profile=load_profile(profile),
+        action_target=DryRunActionTarget(),
+    )
+    typer.echo(format_runtime_summary(runtime.run()))
 
 
 def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:
@@ -198,6 +284,7 @@ def _make_tracker(
     device: str,
     max_frames: int | None,
     show: bool,
+    camera_settings: CameraSettings | None = None,
     model_path: Path = DEFAULT_HAND_LANDMARKER_MODEL,
     auto_download_model: bool = True,
 ) -> HandTrackerBackend:
@@ -208,6 +295,7 @@ def _make_tracker(
             device=device,
             model_path=model_path,
             auto_download_model=auto_download_model,
+            camera_settings=camera_settings or CameraSettings(),
             max_frames=max_frames,
             show=show,
         )
@@ -230,14 +318,27 @@ def list_cameras() -> None:
 @camera_app.command()
 def probe(
     device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
 ) -> None:
     """Attempt to open a camera device and read one frame."""
     try:
-        result = probe_camera(device)
+        result = probe_camera(
+            device,
+            settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        )
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(format_probe_result(result))
+
+
+@camera_app.command("modes")
+def modes(device: Annotated[str, typer.Option(help="Camera path.")] = "/dev/video0") -> None:
+    """Report camera modes through v4l2-ctl when available."""
+    typer.echo(camera_modes(device))
 
 
 @hyprland_app.command("dry-run")

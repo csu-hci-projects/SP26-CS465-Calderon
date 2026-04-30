@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.request import urlretrieve
 
-from airdesk.capture.opencv import OpenCVCaptureBackend
+from airdesk.capture.opencv import CameraSettings, OpenCVCaptureBackend
 from airdesk.state.types import HandLandmarks, Landmark, NormalizedHand, TrackingFrame
 
 HAND_LANDMARKER_MODEL_URL = (
@@ -25,6 +25,7 @@ class MediaPipeHandTrackerBackend:
     device: str | int = "/dev/video0"
     model_path: Path = DEFAULT_HAND_LANDMARKER_MODEL
     auto_download_model: bool = True
+    camera_settings: CameraSettings = field(default_factory=CameraSettings)
     max_frames: int | None = None
     max_num_hands: int = 2
     min_detection_confidence: float = 0.5
@@ -69,7 +70,11 @@ class MediaPipeHandTrackerBackend:
             min_tracking_confidence=self.min_tracking_confidence,
         )
         self._landmarker = HandLandmarker.create_from_options(options)
-        self._capture = OpenCVCaptureBackend(device=self.device, max_frames=self.max_frames)
+        self._capture = OpenCVCaptureBackend(
+            device=self.device,
+            settings=self.camera_settings,
+            max_frames=self.max_frames,
+        )
         self._capture.start()
 
     def stop(self) -> None:

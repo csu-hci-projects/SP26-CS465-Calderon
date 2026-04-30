@@ -305,3 +305,20 @@ Stay in robustness mode:
 
 Either path should be chosen from recordings and tests, not from vibes.
 
+## Implementation Notes
+
+Updated: 2026-04-30
+
+- `airdesk camera modes --device /dev/video0` can report camera modes through `v4l2-ctl`.
+- `/dev/video0` supports MJPG `640x480 @ 30 FPS` and `1280x720 @ 30 FPS`.
+- OpenCV did not honor requested settings when passed the literal `/dev/video0` path, so AirDesk now normalizes `/dev/videoN` to numeric index `N`.
+- `airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG` now reports `640x480 @ 30 FPS`.
+- `airdesk analyze` reports frame counts, hand-present frames, average FPS, primitive candidate counts, longest candidate runs, and simple landmark jitter.
+- `airdesk run --backend replay ... --dry-run` routes replayed frames through recognition, command-mode policy, profile binding resolution, and `DryRunActionTarget`.
+- Real Hyprland execution remains out of scope for Sprint 2.
+
+Remaining Sprint 2 work:
+
+- record deliberate hand-in-frame samples,
+- analyze hand-present landmark stability,
+- tune primitive thresholds against recorded data if needed.

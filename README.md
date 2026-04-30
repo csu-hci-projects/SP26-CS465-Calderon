@@ -15,6 +15,7 @@ Start here:
 - `dev/active/cs465-airdesk/sprint-0.md` - first implementation sprint plan and acceptance criteria
 - `dev/active/cs465-airdesk/sprint-1.md` - live camera/tracking/recording sprint plan
 - `dev/active/cs465-airdesk/sprint-2.md` - tracking-quality and dry-run command-mode plan
+- `dev/active/cs465-airdesk/tracking-samples.md` - local tracking sample protocol
 - `dev/active/cs465-airdesk/tasks.md` - implementation and paper checklist
 - `dev/active/cs465-airdesk/handoff-prompt.md` - prompt for a fresh agent
 
@@ -33,10 +34,11 @@ Live camera/tracking support is optional:
 
 ```bash
 uv sync --dev --extra live
-uv run airdesk camera probe --device /dev/video0
-uv run airdesk track --backend mediapipe --device /dev/video0 --max-frames 120 --no-show
-uv run airdesk record --backend mediapipe --device /dev/video0 --max-frames 120 --out data/recordings/sample.jsonl
+uv run airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG
+uv run airdesk track --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --no-show
+uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --out data/recordings/sample.jsonl
 uv run airdesk replay data/recordings/sample.jsonl
+uv run airdesk analyze data/recordings/sample.jsonl
 ```
 
 The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model bundle into ignored `data/models/` on first use.

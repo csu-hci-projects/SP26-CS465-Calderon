@@ -288,6 +288,19 @@ Interpretation:
 - The observed 5 FPS at 1920x1080 is likely too slow for comfortable gesture interaction.
 - Before moving to command-mode policy, run a deliberate hand-in-frame sample and investigate camera resolution/FPS controls.
 
+## Sprint 2 Tracking Notes
+
+Date: 2026-04-30
+
+Local implementation observations:
+
+- `airdesk camera modes --device /dev/video0` reports MJPG modes up to `1920x1080 @ 30 FPS` and YUYV modes where `1920x1080` is limited to `5 FPS`.
+- Opening `/dev/video0` as a literal path through OpenCV did not honor requested `640x480 @ 30 FPS`.
+- AirDesk now normalizes `/dev/videoN` to numeric index `N` before passing it to OpenCV.
+- With `--width 640 --height 480 --fps 30 --fourcc MJPG`, `airdesk camera probe --device /dev/video0` reports `640x480 @ 30 FPS`.
+- A short `sprint2-smoke` recording at `640x480/MJPG` produced replayable JSONL and analyzed successfully with no hand present.
+- The next useful local artifact should be a deliberate hand-in-frame sample, not another empty-frame smoke test.
+
 Initial implementation should prioritize:
 
 1. recording/replay

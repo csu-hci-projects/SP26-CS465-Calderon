@@ -30,8 +30,8 @@ Current next sprint: see `sprint-2.md`.
 ## Phase 1: Technical Spike
 
 - [x] Open webcam reliably
-- [ ] Enumerate camera modes and identify stable resolution/FPS options
-- [ ] Tune webcam exposure/focus/FPS settings where possible
+- [x] Enumerate camera modes and identify stable resolution/FPS options
+- [x] Tune webcam exposure/focus/FPS settings where possible
 - [x] Run MediaPipe hand tracking locally
 - [x] Draw/debug 21 hand landmarks
 - [ ] Measure landmark stability under normal desk lighting
@@ -42,7 +42,7 @@ Current next sprint: see `sprint-2.md`.
 - [ ] Detect swipe left/right
 - [ ] Detect pointing direction
 - [x] Detect pinch start/hold/release
-- [ ] Add gesture confidence and cooldown
+- [x] Add gesture confidence and cooldown
 - [ ] Compare at least one alternative hand tracking backend if MediaPipe is unstable
 
 ## Phase 1.5: Sensor Backend Experiments
@@ -67,17 +67,17 @@ Current next sprint: see `sprint-2.md`.
 
 ## Phase 3: Interaction Design
 
-- [ ] Implement clutch mode: open palm held for ~300 ms
+- [x] Implement clutch mode: open palm held for ~300 ms
 - [ ] Add visible feedback for "listening"
-- [ ] Add gesture-to-command mappings
-- [ ] Add cancel gesture
-- [ ] Add cooldown after command execution
-- [ ] Define mode model: command, cursor, text, media, window-manager, presentation, accessibility
-- [ ] Define profile model: bindings, thresholds, safety rules, overlay behavior
-- [ ] Avoid destructive commands until recognition is reliable
+- [x] Add gesture-to-command mappings
+- [x] Add cancel gesture
+- [x] Add cooldown after command execution
+- [x] Define mode model: command, cursor, text, media, window-manager, presentation, accessibility
+- [x] Define profile model: bindings, thresholds, safety rules, overlay behavior
+- [x] Avoid destructive commands until recognition is reliable
 - [ ] Add pause/kill switch behavior
 - [ ] Add keyboard/mouse override or suppression behavior
-- [ ] Add Study Safe profile
+- [x] Add Study Safe profile
 - [ ] Add Hybrid Keyboard + Hands profile concept
 
 ## Phase 3.5: Cursor Mode

@@ -34,7 +34,7 @@ def make_hand() -> Callable[[str], NormalizedHand]:
             for index, x in tip_xs.items():
                 landmarks[index] = Landmark(x, 0.25, 0.0)
             landmarks[4] = Landmark(0.36, 0.26, 0.0)
-            landmarks[8] = Landmark(0.38, 0.27, 0.0)
+            landmarks[8] = Landmark(0.36, 0.26, 0.0)
         else:
             raise ValueError(f"unknown synthetic pose: {pose}")
 
