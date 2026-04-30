@@ -28,7 +28,8 @@ Read these files first:
 2. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/plan.md`
 3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
 4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
-5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
+6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 Current preferred research question:
 
@@ -111,5 +112,17 @@ Current architecture direction:
 - package around replaceable backends and typed pipeline boundaries
 - start with recording/replay, normalized hand state, rule-based gestures, Hyprland dry-run/dispatch, overlay feedback, and study logging
 - design for future control center, Kinect/depth input, cursor control, virtual keyboard, hybrid keyboard+hand workflows, and personal ML training
+
+Current first sprint direction:
+
+- implement project skeleton and tooling
+- define core typed data structures and event schema
+- define profile/config schema
+- add dry-run action target and Hyprland action wrapper
+- add capture/tracking interfaces
+- add JSONL recording/replay format
+- add mock/replay backend
+- add first synthetic gesture primitive tests
+- avoid polished UI, cursor takeover, Kinect, and ML training until the foundation is stable
 
 ---

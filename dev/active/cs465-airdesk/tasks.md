@@ -1,5 +1,7 @@
 # AirDesk Tasks
 
+Current next sprint: see `sprint-0.md`.
+
 ## Phase 0: Project Setup
 
 - [ ] Initialize new repo in `/home/caden/projects/AirDesk` if desired
