@@ -30,7 +30,8 @@ Read these files first:
 4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
 5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
 6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
-7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
+8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 Current preferred research question:
 
@@ -136,5 +137,15 @@ Current second sprint direction:
 - record normalized landmark/event JSONL by default, not raw video
 - replay recorded tracking streams through static recognizers
 - document real-camera tracking quality before deciding whether Sprint 2 should build command-mode policy or tracking robustness
+
+Current third sprint direction:
+
+- improve camera probing/control with requested width, height, and FPS
+- record deliberate hand-in-frame samples for open palm, fist, pinch, no-hand, and normal desk motion
+- analyze replayed recordings for FPS, hand presence, primitive counts, candidate runs, and simple landmark jitter
+- implement command-mode state policy in dry-run only
+- resolve profile bindings with confidence thresholds and cooldowns
+- add a safe `run` path over replay/live backends that routes gestures to `DryRunActionTarget`
+- do not execute real Hyprland commands from live gestures until reliability data supports it
 
 ---
