@@ -9,8 +9,9 @@ from airdesk.state.types import GestureCandidate, NormalizedHand, TrackingFrame
 
 FINGER_TIPS = (8, 12, 16, 20)
 FINGER_MCPS = (5, 9, 13, 17)
-THUMB_TIP = 4
 INDEX_TIP = 8
+INDEX_MCP = 5
+THUMB_TIP = 4
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class HandPoseFeatures:
     pinch_distance: float
     hand_confidence: float | None
     handedness: str | None
+    index_direction: str | None = None
 
     def to_flat_dict(self) -> dict[str, float | int | str]:
         return {
@@ -36,6 +38,7 @@ class HandPoseFeatures:
             if self.hand_confidence is not None
             else "unknown",
             "handedness": self.handedness or "unknown",
+            "index_direction": self.index_direction or "unknown",
         }
 
 
@@ -97,6 +100,20 @@ class StaticHandPoseRecognizer:
                 )
             )
 
+        if features.index_direction in {"left", "right"} and features.folded_fingers >= 3:
+            results.append(
+                GestureCandidate(
+                    name=f"point_{features.index_direction}",
+                    confidence=0.85,
+                    timestamp=timestamp,
+                    hand_id=hand.hand_id,
+                    metadata={
+                        "index_direction": features.index_direction,
+                        "folded_fingers": features.folded_fingers,
+                    },
+                )
+            )
+
         return results
 
     def features_for_frame(self, frame: TrackingFrame) -> list[HandPoseFeatures]:
@@ -121,6 +138,7 @@ class StaticHandPoseRecognizer:
             pinch_distance=self._pinch_distance(hand),
             hand_confidence=hand.confidence,
             handedness=hand.handedness,
+            index_direction=self._index_direction(hand),
         )
 
     def _extended_fingers(self, hand: NormalizedHand) -> int:
@@ -143,3 +161,14 @@ class StaticHandPoseRecognizer:
         thumb = landmarks[THUMB_TIP]
         index = landmarks[INDEX_TIP]
         return dist((thumb.x, thumb.y, thumb.z), (index.x, index.y, index.z))
+
+    @staticmethod
+    def _index_direction(hand: NormalizedHand) -> str | None:
+        landmarks = hand.landmarks.landmarks
+        index_tip = landmarks[INDEX_TIP]
+        index_mcp = landmarks[INDEX_MCP]
+        dx = index_tip.x - index_mcp.x
+        dy = index_tip.y - index_mcp.y
+        if abs(dx) < 0.12 or abs(dx) < abs(dy) * 1.25:
+            return None
+        return "right" if dx > 0 else "left"

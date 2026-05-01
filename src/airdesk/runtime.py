@@ -8,6 +8,8 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from airdesk.actions.base import ActionTarget
+from airdesk.gestures.base import CompositeGestureRecognizer, GestureRecognizer
+from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.modes.command import CommandModePolicy
 from airdesk.profiles.models import Profile
@@ -43,7 +45,7 @@ class AirdeskRuntime:
     tracker: HandTrackerBackend
     profile: Profile
     action_target: ActionTarget
-    recognizer: StaticHandPoseRecognizer = field(default_factory=StaticHandPoseRecognizer)
+    recognizer: GestureRecognizer = field(default_factory=lambda: _default_runtime_recognizer())
     policy: CommandModePolicy = field(default_factory=CommandModePolicy)
     event_writer: EventWriter | None = None
     session_metadata: dict[str, Any] = field(default_factory=dict)
@@ -198,4 +200,14 @@ def _with_session_id(event: EventLogEntry, session_id: str) -> EventLogEntry:
         timestamp=event.timestamp,
         payload=event.payload,
         session_id=session_id,
+    )
+
+
+def _default_runtime_recognizer() -> CompositeGestureRecognizer:
+    static_recognizer = StaticHandPoseRecognizer()
+    return CompositeGestureRecognizer(
+        recognizers=(
+            static_recognizer,
+            IntentGatedSwipeRecognizer(pose_recognizer=static_recognizer),
+        )
     )

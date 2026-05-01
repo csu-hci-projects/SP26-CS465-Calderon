@@ -35,6 +35,18 @@ def make_hand() -> Callable[[str], NormalizedHand]:
                 landmarks[index] = Landmark(x, 0.25, 0.0)
             landmarks[4] = Landmark(0.36, 0.26, 0.0)
             landmarks[8] = Landmark(0.36, 0.26, 0.0)
+        elif pose == "point_left":
+            landmarks[8] = Landmark(0.18, 0.55, 0.0)
+            landmarks[12] = Landmark(0.48, 0.66, 0.0)
+            landmarks[16] = Landmark(0.57, 0.66, 0.0)
+            landmarks[20] = Landmark(0.66, 0.66, 0.0)
+            landmarks[4] = Landmark(0.42, 0.63, 0.0)
+        elif pose == "point_right":
+            landmarks[8] = Landmark(0.72, 0.55, 0.0)
+            landmarks[12] = Landmark(0.48, 0.66, 0.0)
+            landmarks[16] = Landmark(0.57, 0.66, 0.0)
+            landmarks[20] = Landmark(0.66, 0.66, 0.0)
+            landmarks[4] = Landmark(0.42, 0.63, 0.0)
         else:
             raise ValueError(f"unknown synthetic pose: {pose}")
 

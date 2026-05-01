@@ -15,6 +15,8 @@ from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import HYPRLAND_DISPATCH
 from airdesk.analysis.recording import analyze_recording, format_analysis
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
+from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
@@ -599,8 +601,18 @@ def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:
         "open_palm": 0,
         "fist": 0,
         "pinch": 0,
+        "swipe_left": 0,
+        "swipe_right": 0,
+        "point_left": 0,
+        "point_right": 0,
     }
-    recognizer = StaticHandPoseRecognizer()
+    static_recognizer = StaticHandPoseRecognizer()
+    recognizer = CompositeGestureRecognizer(
+        recognizers=(
+            static_recognizer,
+            IntentGatedSwipeRecognizer(pose_recognizer=static_recognizer),
+        )
+    )
     for record in iter_recording(path):
         if record.kind == "tracking_frame":
             assert isinstance(record.payload, TrackingFrame)

@@ -7,11 +7,21 @@ from math import hypot
 from pathlib import Path
 from statistics import fmean, pstdev
 
+from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.recording.jsonl import iter_recording
 from airdesk.state.types import TrackingFrame
 
-PRIMITIVES = ("open_palm", "fist", "pinch")
+CANDIDATES = (
+    "open_palm",
+    "fist",
+    "pinch",
+    "swipe_left",
+    "swipe_right",
+    "point_left",
+    "point_right",
+)
 JITTER_LANDMARKS = (0, 9)
 
 
@@ -36,7 +46,7 @@ class RecordingAnalysis:
                 round(self.average_fps, 2) if self.average_fps is not None else "unknown"
             ),
         }
-        for name in PRIMITIVES:
+        for name in CANDIDATES:
             data[f"{name}_count"] = self.candidate_counts.get(name, 0)
             data[f"{name}_longest_run"] = self.longest_runs.get(name, 0)
         for name, value in self.landmark_jitter.items():
@@ -46,12 +56,18 @@ class RecordingAnalysis:
 
 def analyze_recording(path: Path) -> RecordingAnalysis:
     """Analyze frame timing, hand presence, primitive candidates, and simple jitter."""
-    recognizer = StaticHandPoseRecognizer()
+    static_recognizer = StaticHandPoseRecognizer()
+    recognizer = CompositeGestureRecognizer(
+        recognizers=(
+            static_recognizer,
+            IntentGatedSwipeRecognizer(pose_recognizer=static_recognizer),
+        )
+    )
     frames: list[TrackingFrame] = []
     event_count = 0
-    candidate_counts = {name: 0 for name in PRIMITIVES}
-    longest_runs = {name: 0 for name in PRIMITIVES}
-    current_runs = {name: 0 for name in PRIMITIVES}
+    candidate_counts = {name: 0 for name in CANDIDATES}
+    longest_runs = {name: 0 for name in CANDIDATES}
+    current_runs = {name: 0 for name in CANDIDATES}
     positions: dict[int, list[tuple[float, float]]] = {index: [] for index in JITTER_LANDMARKS}
 
     for record in iter_recording(path):
@@ -63,7 +79,7 @@ def analyze_recording(path: Path) -> RecordingAnalysis:
         frames.append(frame)
 
         frame_candidates = {candidate.name for candidate in recognizer.recognize(frame)}
-        for name in PRIMITIVES:
+        for name in CANDIDATES:
             if name in frame_candidates:
                 candidate_counts[name] += 1
                 current_runs[name] += 1
