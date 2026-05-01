@@ -53,8 +53,10 @@ Current next sprint: see `sprint-3.md`.
 - [ ] Analyze deliberate samples and update tracking observations
 - [ ] Add runtime `--events-out` JSONL logging
 - [ ] Add session start/finish runtime events
-- [ ] Add stateful recognizer foundation for temporal gestures
-- [ ] Detect swipe left/right from normalized landmark motion
+- [x] Research dynamic gesture model options and document AirDesk strategy
+- [ ] Add intent-gated phrase recognizer foundation for temporal gestures
+- [ ] Detect flick/swipe left/right from normalized landmark motion
+- [ ] Add continuous positive and negative recording protocol for dynamic gestures
 - [ ] Decide whether point left/right is reliable enough for Sprint 3
 - [ ] Show command-mode state in live `run --show` preview
 - [ ] Add pause/kill-switch behavior before real execution

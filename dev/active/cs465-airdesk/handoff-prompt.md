@@ -28,12 +28,13 @@ Read these files first:
 2. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/plan.md`
 3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
 4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
-5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
-6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
-7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
-8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
-9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
-10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/dynamic-gesture-research.md`
+6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
+7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
+8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
+9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
+10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
+11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 Current preferred research question:
 
@@ -159,8 +160,9 @@ Current Sprint 3 direction:
 - make live command mode observable, logged, and pilot-safe
 - start by recording/analyzing the recommended deliberate samples and documenting observed FPS, false positives, false negatives, and jitter
 - add runtime `--events-out` JSONL logs with session start/end metadata and gesture/mode/action events
-- add a stateful recognizer foundation for temporal gestures
-- implement or explicitly defer swipe-left/right and point-left/right based on replayable sample behavior
+- dynamic gesture research conclusion: do not bet Sprint 3 on a standalone LSTM; use intent-gated gesture phrases with rule/DTW baselines first, then compare LSTM/TCN once phase-labeled continuous data exists
+- add a stateful phrase recognizer foundation for temporal gestures
+- implement or explicitly defer flick/swipe-left/right and point-left/right based on replayable sample behavior
 - show command-mode state in live `run --show` preview
 - add pause/kill-switch behavior before any real action execution
 - keep dry-run as the default and expose real Hyprland dispatch only through guarded explicit opt-in

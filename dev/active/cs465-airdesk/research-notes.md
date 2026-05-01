@@ -122,6 +122,10 @@ References:
 
 ## Gesture Recognition Research
 
+See also:
+
+- `dynamic-gesture-research.md` for the Sprint 3 research spike comparing LSTM, TCN, Transformer, ST-GCN, DTW/template matching, and intent-gated gesture phrases.
+
 ### Main Insight
 
 The first hard problem is not just classification. It is gesture spotting:
@@ -135,20 +139,21 @@ The first hard problem is not just classification. It is gesture spotting:
 ### Recommended Progression
 
 1. Rule-based recognizers for interpretable primitives.
-2. Template/DTW recognizers for personalized motion gestures.
-3. Personal ML models trained on AirDesk logs.
-4. Broader pretrained/fine-tuned models after the system has a stable data format.
+2. Intent-gated phrase recognizers for dynamic commands.
+3. Template/DTW recognizers for personalized wrist flicks and conductor-like motions.
+4. Causal TCN or LSTM/GRU baselines trained on phase-labeled continuous logs.
+5. ST-GCN / graph transformer models after the system has enough labeled skeleton data.
 
-### Why Not LSTM First
+### Why Not LSTM Alone
 
-An LSTM/GRU/TCN may become useful, but starting there creates problems:
+An LSTM/GRU/TCN may become useful, but using a classifier without an intent/spotting layer creates problems:
 
 - requires labeled temporal data
 - makes false activations harder to debug
 - complicates the research prototype
 - may classify clean clips while failing in continuous real-time use
 
-The stronger path is to build recording, replay, labeling, and rule/template baselines first. Then ML has something solid to beat.
+The stronger path is to build recording, replay, labeling, phase-aware gesture phrases, and rule/template baselines first. Then ML has something solid to beat.
 
 ## Hyprland / Wayland Research
 

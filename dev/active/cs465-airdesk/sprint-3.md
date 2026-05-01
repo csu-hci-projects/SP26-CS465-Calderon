@@ -23,7 +23,7 @@ Sprint 2 did not yet prove:
 - whether live command-mode feedback is clear enough,
 - or whether real Hyprland dispatch should be enabled beyond a guarded local pilot.
 
-Sprint 3 should therefore close the measurement loop, add the first temporal gesture recognizer, improve live status feedback, and introduce opt-in real Hyprland execution only after dry-run behavior is observable and logged.
+Sprint 3 should therefore close the measurement loop, add the first intent-gated gesture phrase recognizer, improve live status feedback, and introduce opt-in real Hyprland execution only after dry-run behavior is observable and logged.
 
 ## Sprint Theme
 
@@ -39,7 +39,8 @@ AirDesk should still be framed as a secondary input layer for command-like deskt
 - Require explicit opt-in before real desktop actions.
 - Treat recordings and logs as research data and debugging infrastructure.
 - Prefer a small reliable gesture vocabulary over a flashy broad one.
-- Build the temporal recognizer as a backend-independent AirDesk layer over normalized landmarks.
+- Build dynamic recognition as a backend-independent AirDesk layer over normalized landmarks.
+- Treat "spotting intention" as separate from "classifying a motion clip."
 
 ## Non-Goals
 
@@ -73,7 +74,9 @@ Keep Sprint 3's usable vocabulary small:
 - swipe left/right: workspace navigation candidate
 - point left/right: focus movement candidate if static pointing is stable enough
 
-The implementation should support stateful recognizers because dynamic gestures depend on motion over time. Avoid jumping to ML. Start with interpretable rules and replayable synthetic tests.
+The implementation should support stateful phrase recognizers because dynamic gestures depend on motion over time and on intent. Avoid betting Sprint 3 on a standalone LSTM. Start with interpretable rules, DTW/template baselines, and replayable synthetic tests; use those logs to decide when a TCN/LSTM comparison is justified.
+
+See `dynamic-gesture-research.md` for the full model comparison.
 
 ### Runtime Logging Strategy
 
@@ -168,16 +171,18 @@ Acceptance criteria:
 - Session finish event includes frame count, event count, action count, interruption status, and duration.
 - Tests cover log creation over replay backend.
 
-### 3. Stateful Gesture Recognizer Foundation
+### 3. Intent-Gated Gesture Phrase Foundation
 
 Acceptance criteria:
 
-- Add a recognizer abstraction that can combine stateless pose recognizers and stateful temporal recognizers.
-- Add swipe-left and swipe-right recognition over a short landmark history.
+- Add a recognizer abstraction that can combine stateless pose recognizers and stateful phrase recognizers.
+- Add explicit gesture phases such as background, armed, stroke, release, confirmed, and canceled.
+- Add pinch/flick or open-palm/impulse recognition over a short landmark history.
 - Keep gesture output as `GestureCandidate` so existing policy/profile/runtime code continues to work.
-- Add synthetic tests for left/right swipes.
+- Add synthetic tests for left/right flicks or swipes.
 - Add replay analysis counts for new dynamic candidates.
 - Do not couple the recognizer to MediaPipe internals.
+- Do not train an ML model until AirDesk has continuous positive and negative recordings.
 
 ### 4. Pointing Gesture Spike
 
@@ -241,8 +246,8 @@ Acceptance criteria:
 1. Record and analyze the five deliberate samples.
 2. Update tracking notes with actual sample outcomes.
 3. Add runtime event logging over replay backend.
-4. Add stateful recognizer foundation and synthetic swipe tests.
-5. Add swipe recognition to replay analysis and runtime.
+4. Add intent-gated phrase recognizer foundation and synthetic flick/swipe tests.
+5. Add dynamic candidate recognition to replay analysis and runtime.
 6. Add command-mode status feedback for `run --show`.
 7. Add pause/kill switch.
 8. Add guarded `--execute` path using Hyprland action target.

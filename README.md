@@ -12,6 +12,7 @@ Start here:
 - `dev/active/cs465-airdesk/plan.md` - research plan, prototype scope, study design
 - `dev/active/cs465-airdesk/architecture.md` - proposed system architecture and package boundaries
 - `dev/active/cs465-airdesk/research-notes.md` - technical research notes and current working positions
+- `dev/active/cs465-airdesk/dynamic-gesture-research.md` - dynamic gesture recognition research and model strategy
 - `dev/active/cs465-airdesk/sprint-0.md` - first implementation sprint plan and acceptance criteria
 - `dev/active/cs465-airdesk/sprint-1.md` - live camera/tracking/recording sprint plan
 - `dev/active/cs465-airdesk/sprint-2.md` - tracking-quality and dry-run command-mode plan
