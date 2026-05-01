@@ -23,6 +23,8 @@ HAND_LANDMARKER_MODEL_URL = (
     "float16/1/hand_landmarker.task"
 )
 DEFAULT_HAND_LANDMARKER_MODEL = Path("data/models/hand_landmarker.task")
+DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS = 1
+DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE = 0.5
 PREVIEW_WINDOW_NAME = "AirDesk live view"
 
 HAND_CONNECTIONS = (
@@ -59,10 +61,10 @@ class MediaPipeHandTrackerBackend:
     auto_download_model: bool = True
     camera_settings: CameraSettings = field(default_factory=CameraSettings)
     max_frames: int | None = None
-    max_num_hands: int = 2
-    min_detection_confidence: float = 0.5
-    min_hand_presence_confidence: float = 0.5
-    min_tracking_confidence: float = 0.5
+    max_num_hands: int = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS
+    min_detection_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
+    min_hand_presence_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
+    min_tracking_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
     show: bool = False
     preview_mirror: bool = True
     preview_gestures: bool = True

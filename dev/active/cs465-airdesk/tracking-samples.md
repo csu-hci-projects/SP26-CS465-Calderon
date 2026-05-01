@@ -60,6 +60,37 @@ uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fou
 uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --extended-threshold 0.06
 ```
 
+## MediaPipe Runtime Tuning
+
+The current backend uses MediaPipe Tasks Hand Landmarker. The old `mp.solutions.hands` style `model_complexity` knob is not exposed here; model selection is done by swapping the `.task` bundle with `--model-path`, while runtime behavior is tuned with hand count and confidence thresholds.
+
+Start with the fast single-hand path:
+
+```bash
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --max-num-hands 1
+```
+
+Compare against two-hand tracking before enabling it by default:
+
+```bash
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --max-num-hands 2
+```
+
+Then test threshold trade-offs:
+
+```bash
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --min-detection-confidence 0.4 --min-presence-confidence 0.4 --min-tracking-confidence 0.4
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --min-detection-confidence 0.7 --min-presence-confidence 0.7 --min-tracking-confidence 0.7
+```
+
+Lower thresholds may keep hands present through motion but can admit shakier detections. Higher thresholds may reduce false positives but can drop hands during fast movement. Record the FPS, hand-present frames, lighting, and visible jitter for each setup.
+
+If a heavier or alternate Hand Landmarker `.task` bundle is available, keep it in ignored `data/models/` and compare it directly:
+
+```bash
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --model-path data/models/hand_landmarker.task
+```
+
 ## Recommended Samples
 
 Each sample should be 5-10 seconds:

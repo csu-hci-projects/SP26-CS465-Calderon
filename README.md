@@ -37,6 +37,7 @@ uv sync --dev --extra live
 uv run airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG
 uv run airdesk view --device /dev/video0
 uv run airdesk tune --device /dev/video0 --max-frames 300 --show
+uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120
 uv run airdesk track --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --no-show
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --out data/recordings/sample.jsonl
 uv run airdesk replay data/recordings/sample.jsonl
@@ -44,6 +45,8 @@ uv run airdesk analyze data/recordings/sample.jsonl
 ```
 
 The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model bundle into ignored `data/models/` on first use.
+MediaPipe tuning flags include `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`.
+The CLI defaults to one hand for lower latency; use `--max-num-hands 2` when comparing two-hand tracking.
 
 Useful safe commands:
 

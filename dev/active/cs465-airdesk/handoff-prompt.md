@@ -149,6 +149,8 @@ Current third sprint direction:
 - add a safe `run` path over replay/live backends that routes gestures to `DryRunActionTarget`
 - do not execute real Hyprland commands from live gestures until reliability data supports it
 - current camera finding: `/dev/video0` needs OpenCV index normalization plus `--fourcc MJPG` to honor `640x480 @ 30 FPS`
-- next best task: use the mirrored `airdesk view --device /dev/video0` to position the hand and inspect MediaPipe/gesture overlays, then `airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show` for live primitive tuning
+- MediaPipe Tasks tuning is now exposed through `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`; use `airdesk benchmark` to compare configurations instead of guessing
+- current CLI default is one tracked hand for latency; test `--max-num-hands 2` only when the interaction needs two hands
+- next best task: benchmark/tune the mirrored live view with deliberate hand motion, then record the recommended open palm, fist, pinch, no-hand, and normal desk motion samples
 
 ---

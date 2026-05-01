@@ -316,6 +316,8 @@ Updated: 2026-04-30
 - `airdesk analyze` reports frame counts, hand-present frames, average FPS, primitive candidate counts, longest candidate runs, and simple landmark jitter.
 - `airdesk tune` runs the live backend and prints per-frame primitive features for immediate threshold tuning.
 - `airdesk view` opens a mirrored live webcam preview with MediaPipe landmarks, skeleton, bounding box, hand count, gesture indicators, and handedness/confidence labels.
+- `airdesk benchmark` compares live backend configurations by reporting frame count, hand-present frames, average FPS, model path, hand count, and MediaPipe confidence thresholds.
+- MediaPipe Tasks Hand Landmarker tuning is exposed through `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`; the old `model_complexity` flag is not part of this Tasks API path.
 - `airdesk run --backend replay ... --dry-run` routes replayed frames through recognition, command-mode policy, profile binding resolution, and `DryRunActionTarget`.
 - Real Hyprland execution remains out of scope for Sprint 2.
 

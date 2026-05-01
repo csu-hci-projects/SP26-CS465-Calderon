@@ -60,6 +60,13 @@ Sprint 1 implementation note:
   `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`
 - A two-frame smoke test on `/dev/video0` ran the pipeline and produced replayable JSONL, but detected zero hands because no hand was intentionally placed in frame during the run.
 
+Sprint 2 implementation note:
+
+- The Tasks API does not expose the older `model_complexity` flag for Hand Landmarker.
+- AirDesk now exposes the knobs that Tasks supports: `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`.
+- CLI live commands default to one hand because lower latency matters more than two-hand recognition until the gesture vocabulary requires both hands.
+- Use `airdesk benchmark` to compare model bundles, hand count, confidence thresholds, camera modes, hand-present frames, and average FPS before changing defaults.
+
 References:
 
 - https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/python

@@ -32,6 +32,8 @@ Current next sprint: see `sprint-2.md`.
 - [x] Open webcam reliably
 - [x] Enumerate camera modes and identify stable resolution/FPS options
 - [x] Tune webcam exposure/focus/FPS settings where possible
+- [x] Expose MediaPipe model/threshold/hand-count tuning knobs
+- [x] Add live backend benchmark command for FPS and hand-present frames
 - [x] Run MediaPipe hand tracking locally
 - [x] Draw/debug 21 hand landmarks
 - [ ] Measure landmark stability under normal desk lighting

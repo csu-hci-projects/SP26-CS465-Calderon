@@ -16,18 +16,60 @@ def test_cli_help_works() -> None:
 
 
 def test_tune_help_exposes_threshold_options() -> None:
-    result = CliRunner().invoke(app, ["tune", "--help"])
+    result = CliRunner().invoke(app, ["tune", "--help"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0
     assert "--extended-threshold" in result.stdout
     assert "--pinch-threshold" in result.stdout
+    assert "--max-num-hands" in result.stdout
+    assert "--min-tracking-confidence" in result.stdout
 
 
 def test_view_help_describes_live_preview() -> None:
-    result = CliRunner().invoke(app, ["view", "--help"])
+    result = CliRunner().invoke(app, ["view", "--help"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0
     assert "live webcam preview" in result.stdout
+    assert "--model-path" in result.stdout
+    assert "--max-num-hands" in result.stdout
+
+
+def test_benchmark_help_exposes_mediapipe_tuning_options() -> None:
+    result = CliRunner().invoke(app, ["benchmark", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--model-path" in result.stdout
+    assert "--max-num-hands" in result.stdout
+    assert "--min-detection-confidence" in result.stdout
+    assert "--min-presence-confidence" in result.stdout
+    assert "--min-tracking-confidence" in result.stdout
+
+
+def test_benchmark_replay_reports_frame_counts() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "benchmark",
+            "--backend",
+            "replay",
+            "--device",
+            "tests/fixtures/replay-one-frame.jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "frames=1" in result.stdout
+    assert "hand_frames=0" in result.stdout
+    assert "average_fps=unknown" in result.stdout
+
+
+def test_run_help_exposes_live_tuning_options() -> None:
+    result = CliRunner().invoke(app, ["run", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--model-path" in result.stdout
+    assert "--max-num-hands" in result.stdout
+    assert "--min-tracking-confidence" in result.stdout
 
 
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:
@@ -61,4 +103,5 @@ def test_record_command_writes_metadata_events_with_label(tmp_path: Path) -> Non
     records = iter_recording(output)
     events = [record.payload for record in records if record.kind == "event"]
     assert events[0].payload["label"] == "cli-test"
+    assert events[0].payload["mediapipe"]["max_num_hands"] == 1
     assert events[-1].payload["frames"] == 1

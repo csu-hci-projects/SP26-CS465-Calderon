@@ -5,6 +5,7 @@ from __future__ import annotations
 import glob
 import platform
 from pathlib import Path
+from statistics import fmean
 from typing import Annotated
 
 import typer
@@ -20,7 +21,11 @@ from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.runtime import AirdeskRuntime, format_runtime_summary
 from airdesk.state.types import ActionRequest, EventLogEntry, TrackingFrame, utc_timestamp
 from airdesk.tracking.interfaces import HandTrackerBackend
-from airdesk.tracking.mediapipe import DEFAULT_HAND_LANDMARKER_MODEL
+from airdesk.tracking.mediapipe import (
+    DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    DEFAULT_HAND_LANDMARKER_MODEL,
+)
 from airdesk.tracking.replay import ReplayHandTrackerBackend
 
 app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CLI.")
@@ -72,6 +77,22 @@ def track(
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
     ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -90,6 +111,10 @@ def track(
         model_path=model_path,
         auto_download_model=auto_download_model,
         preview_mirror=mirror,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
     )
     recognizer = StaticHandPoseRecognizer()
     try:
@@ -128,6 +153,22 @@ def tune(
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
     ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -148,6 +189,10 @@ def tune(
         preview_mirror=mirror,
         preview_extended_threshold=extended_threshold,
         preview_pinch_threshold=pinch_threshold,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
     )
     recognizer = StaticHandPoseRecognizer(
         extended_threshold=extended_threshold,
@@ -189,6 +234,22 @@ def view(
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
     ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -206,6 +267,10 @@ def view(
         model_path=model_path,
         auto_download_model=auto_download_model,
         preview_mirror=mirror,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
     )
     typer.echo("Opening AirDesk live view. Press q or esc in the preview window to quit.")
     try:
@@ -239,6 +304,22 @@ def record(
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
     ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -255,6 +336,10 @@ def record(
         camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
     )
     frame_count = 0
     interrupted = False
@@ -273,6 +358,12 @@ def record(
                         "duration": duration,
                         "label": label,
                         "model_path": str(model_path),
+                        "mediapipe": {
+                            "max_num_hands": max_num_hands,
+                            "min_detection_confidence": min_detection_confidence,
+                            "min_presence_confidence": min_presence_confidence,
+                            "min_tracking_confidence": min_tracking_confidence,
+                        },
                         "camera_settings": CameraSettings(
                             width=width,
                             height=height,
@@ -320,6 +411,83 @@ def record(
 
 
 @app.command()
+def benchmark(
+    backend: Annotated[str, typer.Option(help="Tracking backend to benchmark.")] = "mediapipe",
+    device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")
+    ] = "MJPG",
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int, typer.Option(help="Frames to benchmark.")] = 120,
+) -> None:
+    """Benchmark live tracking FPS and hand-present frames for a configuration."""
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=max_frames,
+        show=False,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+    timestamps: list[float] = []
+    hand_frames = 0
+    try:
+        tracker.start()
+        for frame in tracker.frames():
+            timestamps.append(frame.timestamp)
+            if frame.hands:
+                hand_frames += 1
+    except KeyboardInterrupt:
+        typer.echo("interrupted")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
+
+    average_fps = _average_fps_from_timestamps(timestamps)
+    fps_text = f"{average_fps:.2f}" if average_fps is not None else "unknown"
+    typer.echo(
+        f"frames={len(timestamps)} hand_frames={hand_frames} average_fps={fps_text} "
+        f"model_path={model_path} max_num_hands={max_num_hands} "
+        f"min_detection={min_detection_confidence:.2f} "
+        f"min_presence={min_presence_confidence:.2f} "
+        f"min_tracking={min_tracking_confidence:.2f}"
+    )
+
+
+@app.command()
 def run(
     backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "replay",
     recording: Annotated[Path | None, typer.Option(help="Replay JSONL recording path.")] = None,
@@ -336,6 +504,30 @@ def run(
     height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
     fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
     fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
 ) -> None:
@@ -350,6 +542,12 @@ def run(
         max_frames=max_frames,
         show=show,
         camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
     )
     runtime = AirdeskRuntime(
         tracker=tracker,
@@ -431,6 +629,19 @@ def _instant_fps(previous_timestamp: float | None, timestamp: float) -> float | 
     return 1.0 / elapsed
 
 
+def _average_fps_from_timestamps(timestamps: list[float]) -> float | None:
+    if len(timestamps) < 2:
+        return None
+    intervals = [
+        later - earlier
+        for earlier, later in zip(timestamps, timestamps[1:], strict=False)
+        if later > earlier
+    ]
+    if not intervals:
+        return None
+    return 1.0 / fmean(intervals)
+
+
 def _make_tracker(
     *,
     backend: str,
@@ -440,6 +651,10 @@ def _make_tracker(
     camera_settings: CameraSettings | None = None,
     model_path: Path = DEFAULT_HAND_LANDMARKER_MODEL,
     auto_download_model: bool = True,
+    max_num_hands: int = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     preview_mirror: bool = True,
     preview_extended_threshold: float = 0.08,
     preview_pinch_threshold: float = 0.06,
@@ -453,6 +668,10 @@ def _make_tracker(
             auto_download_model=auto_download_model,
             camera_settings=camera_settings or CameraSettings(),
             max_frames=max_frames,
+            max_num_hands=max_num_hands,
+            min_detection_confidence=min_detection_confidence,
+            min_hand_presence_confidence=min_presence_confidence,
+            min_tracking_confidence=min_tracking_confidence,
             show=show,
             preview_mirror=preview_mirror,
             preview_extended_threshold=preview_extended_threshold,
