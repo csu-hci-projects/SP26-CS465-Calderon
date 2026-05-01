@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: see `sprint-2.md`.
+Current next sprint: see `sprint-3.md`.
 
 ## Phase 0: Project Setup
 
@@ -46,6 +46,22 @@ Current next sprint: see `sprint-2.md`.
 - [x] Detect pinch start/hold/release
 - [x] Add gesture confidence and cooldown
 - [ ] Compare at least one alternative hand tracking backend if MediaPipe is unstable
+
+## Sprint 3: Pilot-Safe Live Command Mode
+
+- [ ] Record deliberate open palm, fist, pinch, no-hand, and normal desk motion samples
+- [ ] Analyze deliberate samples and update tracking observations
+- [ ] Add runtime `--events-out` JSONL logging
+- [ ] Add session start/finish runtime events
+- [ ] Add stateful recognizer foundation for temporal gestures
+- [ ] Detect swipe left/right from normalized landmark motion
+- [ ] Decide whether point left/right is reliable enough for Sprint 3
+- [ ] Show command-mode state in live `run --show` preview
+- [ ] Add pause/kill-switch behavior before real execution
+- [ ] Add guarded opt-in Hyprland execution path
+- [ ] Verify safe Hyprland dispatchers manually
+- [ ] Add Caden-only pilot protocol
+- [ ] Run `ruff`, `pytest`, replay smoke, and live dry-run smoke
 
 ## Phase 1.5: Sensor Backend Experiments
 

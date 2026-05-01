@@ -31,8 +31,9 @@ Read these files first:
 5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
 6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
 7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
-8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
-9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
+9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
+10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 Current preferred research question:
 
@@ -139,10 +140,10 @@ Current second sprint direction:
 - replay recorded tracking streams through static recognizers
 - document real-camera tracking quality before deciding whether Sprint 2 should build command-mode policy or tracking robustness
 
-Current third sprint direction:
+Sprint 2 outcome and carryover:
 
 - improve camera probing/control with requested width, height, FPS, and FOURCC
-- record deliberate hand-in-frame samples for open palm, fist, pinch, no-hand, and normal desk motion
+- carry over deliberate hand-in-frame samples for open palm, fist, pinch, no-hand, and normal desk motion
 - analyze replayed recordings for FPS, hand presence, primitive counts, candidate runs, and simple landmark jitter
 - implement command-mode state policy in dry-run only
 - resolve profile bindings with confidence thresholds and cooldowns
@@ -152,5 +153,17 @@ Current third sprint direction:
 - MediaPipe Tasks tuning is now exposed through `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`; use `airdesk benchmark` to compare configurations instead of guessing
 - current CLI default is one tracked hand for latency; test `--max-num-hands 2` only when the interaction needs two hands
 - next best task: benchmark/tune the mirrored live view with deliberate hand motion, then record the recommended open palm, fist, pinch, no-hand, and normal desk motion samples
+
+Current Sprint 3 direction:
+
+- make live command mode observable, logged, and pilot-safe
+- start by recording/analyzing the recommended deliberate samples and documenting observed FPS, false positives, false negatives, and jitter
+- add runtime `--events-out` JSONL logs with session start/end metadata and gesture/mode/action events
+- add a stateful recognizer foundation for temporal gestures
+- implement or explicitly defer swipe-left/right and point-left/right based on replayable sample behavior
+- show command-mode state in live `run --show` preview
+- add pause/kill-switch behavior before any real action execution
+- keep dry-run as the default and expose real Hyprland dispatch only through guarded explicit opt-in
+- keep Sprint 3 focused on command gestures; cursor mode remains a later separate sprint
 
 ---

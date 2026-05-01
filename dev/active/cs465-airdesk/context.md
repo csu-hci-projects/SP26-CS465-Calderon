@@ -2,7 +2,7 @@
 
 ## Date
 
-2026-04-30
+2026-05-01
 
 ## Project Summary
 
@@ -179,3 +179,19 @@ Reason:
 - the point engine ideas were mostly output/art-style driven
 - AirDesk is directly about input, interaction technique, user performance, and situational usability
 - the prototype may remain useful after the class
+
+## Current Implementation State
+
+Sprint 2 established a working live and replay foundation:
+
+- OpenCV camera probing can request width, height, FPS, and FOURCC.
+- `/dev/video0` works at `640x480 @ 30 FPS` with MJPG when normalized to OpenCV camera index `0`.
+- MediaPipe Tasks Hand Landmarker is backend zero and remains replaceable behind the tracking interface.
+- Live preview is mirrored by default and shows landmarks, skeleton, bounding boxes, handedness/confidence, hand count, and gesture indicators.
+- MediaPipe model path, hand count, and confidence thresholds are CLI-tunable.
+- JSONL recording/replay and replay analysis are available.
+- Command-mode policy, profile binding resolution, and dry-run runtime routing are implemented.
+
+Current next step:
+
+> Sprint 3 should make live command mode observable, logged, and pilot-safe before real desktop actions are used beyond explicit local testing.
