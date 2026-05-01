@@ -33,8 +33,11 @@ Read these files first:
 7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
 8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
 9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
-10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
-11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-4.md`
+11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-5.md`
+12. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
+13. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+14. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/context-reset-prompt.md`
 
 Current preferred research question:
 
@@ -167,5 +170,24 @@ Current Sprint 3 direction:
 - add pause/kill-switch behavior before any real action execution
 - keep dry-run as the default and expose real Hyprland dispatch only through guarded explicit opt-in
 - keep Sprint 3 focused on command gestures; cursor mode remains a later separate sprint
+
+Current Sprint 4 direction:
+
+- build the dataset, labeling, and model-evaluation loop
+- define labels for continuous sessions, including event labels and phase labels
+- export deterministic landmark-derived features from replayable JSONL recordings
+- implement DTW/template recognizer for personalized conductor-like gestures
+- compare rule, DTW, LSTM/GRU, and causal TCN only after enough labeled continuous data exists
+- select the recognizer that minimizes false activations and latency for Sprint 5
+
+Current Sprint 5 direction:
+
+- create study tooling and paper-ready evidence
+- define a Caden-only pilot protocol
+- add study/trial JSONL logging and CSV/summary export
+- integrate runtime logs with study sessions/tasks
+- run keyboard/mouse baseline and AirDesk dry-run pilot conditions
+- optionally run guarded execute mode only if Sprint 3/4 evidence supports it
+- scaffold the CS465 paper with limitations and narrow evidence-based claims
 
 ---

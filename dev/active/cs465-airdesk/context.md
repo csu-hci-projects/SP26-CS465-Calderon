@@ -195,3 +195,39 @@ Sprint 2 established a working live and replay foundation:
 Current next step:
 
 > Sprint 3 should make live command mode observable, logged, and pilot-safe before real desktop actions are used beyond explicit local testing.
+
+## Current Roadmap
+
+### Sprint 3: Pilot-Safe Live Command Mode
+
+Build the live command loop:
+
+- runtime event logs,
+- continuous positive/negative recordings,
+- intent-gated phrase recognizer foundation,
+- rule/DTW dynamic gesture baselines,
+- live command-state feedback,
+- pause/kill switch,
+- guarded opt-in Hyprland execution only if dry-run behavior supports it.
+
+### Sprint 4: Gesture Dataset, Labeling, and Model Evaluation
+
+Turn recordings into evidence:
+
+- label schema and CLI,
+- feature extraction,
+- DTW/template recognizer,
+- optional LSTM/GRU and causal TCN baselines,
+- continuous-stream evaluation metrics,
+- model-selection decision for the pilot.
+
+### Sprint 5: Study Tooling, Pilot, and Paper Evidence
+
+Turn the prototype into class-ready evidence:
+
+- pilot protocol,
+- study event logging,
+- baseline task workflow,
+- CSV/summary export,
+- Caden-only pilot,
+- paper outline and limitations.

@@ -65,6 +65,39 @@ Current next sprint: see `sprint-3.md`.
 - [ ] Add Caden-only pilot protocol
 - [ ] Run `ruff`, `pytest`, replay smoke, and live dry-run smoke
 
+## Sprint 4: Gesture Dataset, Labeling, and Model Evaluation
+
+- [ ] Define continuous gesture label schema
+- [ ] Add `airdesk label init`
+- [ ] Add `airdesk label validate`
+- [ ] Add deterministic feature extraction from tracking frames
+- [ ] Add feature export command
+- [ ] Add DTW/template recognizer for personalized dynamic gestures
+- [ ] Add gesture evaluation metrics for continuous sessions
+- [ ] Add `airdesk gesture evaluate`
+- [ ] Prototype LSTM/GRU baseline if labeled data volume is enough
+- [ ] Prototype causal TCN baseline if labeled data volume is enough
+- [ ] Compare rule, DTW, LSTM/GRU, and TCN on the same sessions
+- [ ] Document model-selection decision for Sprint 5
+- [ ] Update dynamic gesture protocol and research notes
+- [ ] Run `ruff`, `pytest`, and replay evaluation smoke
+
+## Sprint 5: Study Tooling, Pilot, and Paper Evidence
+
+- [ ] Add `studies/pilot-0.md`
+- [ ] Define study/trial event schema
+- [ ] Add study session/task logging CLI
+- [ ] Add study CSV/summary export
+- [ ] Integrate runtime logs with study session/task IDs
+- [ ] Document keyboard/mouse baseline workflow
+- [ ] Run Caden-only baseline pilot
+- [ ] Run Caden-only AirDesk dry-run pilot
+- [ ] Optionally run guarded execute-mode pilot if safe
+- [ ] Summarize pilot results and design failures
+- [ ] Add paper outline with results placeholders
+- [ ] Update README/tasks/handoff
+- [ ] Run `ruff`, `pytest`, replay smoke, and study CLI smoke
+
 ## Phase 1.5: Sensor Backend Experiments
 
 - [ ] Investigate OpenVINO hand tracking viability

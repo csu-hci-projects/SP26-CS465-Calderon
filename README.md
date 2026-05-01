@@ -17,9 +17,12 @@ Start here:
 - `dev/active/cs465-airdesk/sprint-1.md` - live camera/tracking/recording sprint plan
 - `dev/active/cs465-airdesk/sprint-2.md` - tracking-quality and dry-run command-mode plan
 - `dev/active/cs465-airdesk/sprint-3.md` - pilot-safe live command-mode plan
+- `dev/active/cs465-airdesk/sprint-4.md` - gesture dataset, labeling, and model-evaluation plan
+- `dev/active/cs465-airdesk/sprint-5.md` - study tooling, pilot, and paper-evidence plan
 - `dev/active/cs465-airdesk/tracking-samples.md` - local tracking sample protocol
 - `dev/active/cs465-airdesk/tasks.md` - implementation and paper checklist
 - `dev/active/cs465-airdesk/handoff-prompt.md` - prompt for a fresh agent
+- `dev/active/cs465-airdesk/context-reset-prompt.md` - concise prompt for clearing context and restarting
 
 ## Development
 
