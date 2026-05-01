@@ -16,6 +16,31 @@ HAND_LANDMARKER_MODEL_URL = (
     "float16/1/hand_landmarker.task"
 )
 DEFAULT_HAND_LANDMARKER_MODEL = Path("data/models/hand_landmarker.task")
+PREVIEW_WINDOW_NAME = "AirDesk live view"
+
+HAND_CONNECTIONS = (
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (5, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (9, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (13, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),
+    (0, 17),
+)
 
 
 @dataclass
@@ -118,8 +143,8 @@ class MediaPipeHandTrackerBackend:
                 )
                 hands = normalized_hands_from_mediapipe_results(results)
 
-                if self.show:
-                    self._draw_debug_image(image, hands)
+                if self.show and not self._draw_debug_image(image, hands):
+                    break
 
                 yield TrackingFrame(
                     timestamp=captured.metadata.timestamp,
@@ -130,15 +155,69 @@ class MediaPipeHandTrackerBackend:
         finally:
             self.stop()
 
-    def _draw_debug_image(self, image: Any, hands: tuple[NormalizedHand, ...]) -> None:
+    def _draw_debug_image(self, image: Any, hands: tuple[NormalizedHand, ...]) -> bool:
         assert self._cv2 is not None
         height, width = image.shape[:2]
+        self._draw_header(image, hands)
         for hand in hands:
-            for landmark in hand.landmarks.landmarks:
-                center = (int(landmark.x * width), int(landmark.y * height))
-                self._cv2.circle(image, center, 3, (0, 255, 0), -1)
-        self._cv2.imshow("AirDesk tracking", image)
-        self._cv2.waitKey(1)
+            self._draw_hand_overlay(image, hand, width=width, height=height)
+        self._cv2.imshow(PREVIEW_WINDOW_NAME, image)
+        key = self._cv2.waitKey(1) & 0xFF
+        return key not in (27, ord("q"))
+
+    def _draw_header(self, image: Any, hands: tuple[NormalizedHand, ...]) -> None:
+        assert self._cv2 is not None
+        text = f"AirDesk live view | hands={len(hands)} | q/esc quits"
+        self._cv2.rectangle(image, (0, 0), (image.shape[1], 34), (20, 20, 20), -1)
+        self._cv2.putText(
+            image,
+            text,
+            (10, 23),
+            self._cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (240, 240, 240),
+            2,
+            self._cv2.LINE_AA,
+        )
+
+    def _draw_hand_overlay(
+        self,
+        image: Any,
+        hand: NormalizedHand,
+        *,
+        width: int,
+        height: int,
+    ) -> None:
+        assert self._cv2 is not None
+        landmarks = hand.landmarks.landmarks
+        color = (0, 255, 0)
+        muted = (0, 150, 255)
+        for start, end in HAND_CONNECTIONS:
+            if start >= len(landmarks) or end >= len(landmarks):
+                continue
+            self._cv2.line(
+                image,
+                pixel_point(landmarks[start], width=width, height=height),
+                pixel_point(landmarks[end], width=width, height=height),
+                muted,
+                2,
+            )
+        for landmark in landmarks:
+            self._cv2.circle(image, pixel_point(landmark, width=width, height=height), 3, color, -1)
+
+        x_min, y_min, x_max, y_max = bbox_pixels(hand.bbox, width=width, height=height)
+        self._cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
+        label = hand_label(hand)
+        self._cv2.putText(
+            image,
+            label,
+            (x_min, max(55, y_min - 8)),
+            self._cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            color,
+            2,
+            self._cv2.LINE_AA,
+        )
 
 
 def normalized_hands_from_mediapipe_results(results: Any) -> tuple[NormalizedHand, ...]:
@@ -202,6 +281,34 @@ def ensure_hand_landmarker_model(
     path.parent.mkdir(parents=True, exist_ok=True)
     urlretrieve(HAND_LANDMARKER_MODEL_URL, path)
     return path
+
+
+def pixel_point(landmark: Landmark, *, width: int, height: int) -> tuple[int, int]:
+    """Convert a normalized landmark to image pixel coordinates."""
+    x = min(width - 1, max(0, round(landmark.x * width)))
+    y = min(height - 1, max(0, round(landmark.y * height)))
+    return x, y
+
+
+def bbox_pixels(
+    bbox: tuple[float, float, float, float],
+    *,
+    width: int,
+    height: int,
+) -> tuple[int, int, int, int]:
+    """Convert a normalized hand bounding box to pixel coordinates."""
+    x_min = min(width - 1, max(0, round(bbox[0] * width)))
+    y_min = min(height - 1, max(0, round(bbox[1] * height)))
+    x_max = min(width - 1, max(0, round(bbox[2] * width)))
+    y_max = min(height - 1, max(0, round(bbox[3] * height)))
+    return x_min, y_min, x_max, y_max
+
+
+def hand_label(hand: NormalizedHand) -> str:
+    """Return a compact label for preview overlays."""
+    confidence = f"{hand.confidence:.2f}" if hand.confidence is not None else "?"
+    handedness = hand.handedness or "hand"
+    return f"{handedness} {confidence}"
 
 
 def _landmark_points(landmarks: Any) -> list[Any]:

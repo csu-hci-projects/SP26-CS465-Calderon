@@ -23,6 +23,13 @@ def test_tune_help_exposes_threshold_options() -> None:
     assert "--pinch-threshold" in result.stdout
 
 
+def test_view_help_describes_live_preview() -> None:
+    result = CliRunner().invoke(app, ["view", "--help"])
+
+    assert result.exit_code == 0
+    assert "live webcam preview" in result.stdout
+
+
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:
     result = CliRunner().invoke(app, ["replay", "tests/fixtures/replay-one-frame.jsonl"])
 

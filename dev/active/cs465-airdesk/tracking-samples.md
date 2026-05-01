@@ -28,7 +28,15 @@ Prefer the lowest resolution that keeps the hand landmarks stable.
 
 ## Live Tuning
 
-Use this while moving through open palm, fist, and pinch:
+Use the live view first to position your hand and inspect MediaPipe overlays:
+
+```bash
+uv run airdesk view --device /dev/video0
+```
+
+The preview shows the camera frame, hand landmarks, hand skeleton, bounding box, handedness/confidence label, and hand count. Press `q` or `esc` in the preview window to quit.
+
+Then use numeric tuning while moving through open palm, fist, and pinch:
 
 ```bash
 uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show

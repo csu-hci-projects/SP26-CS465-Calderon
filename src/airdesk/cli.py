@@ -170,6 +170,50 @@ def tune(
 
 
 @app.command()
+def view(
+    backend: Annotated[str, typer.Option(help="Tracking backend to view.")] = "mediapipe",
+    device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")
+    ] = "MJPG",
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+) -> None:
+    """Open a live webcam preview with MediaPipe hand overlays."""
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=max_frames,
+        show=True,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+    )
+    typer.echo("Opening AirDesk live view. Press q or esc in the preview window to quit.")
+    try:
+        tracker.start()
+        for _frame in tracker.frames():
+            pass
+    except KeyboardInterrupt:
+        typer.echo("interrupted")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
+
+
+@app.command()
 def record(
     out: Annotated[Path, typer.Option(help="Output JSONL recording path.")],
     backend: Annotated[str, typer.Option(help="Tracking backend to record.")] = "mediapipe",

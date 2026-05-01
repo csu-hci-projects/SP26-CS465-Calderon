@@ -315,6 +315,7 @@ Updated: 2026-04-30
 - `airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG` now reports `640x480 @ 30 FPS`.
 - `airdesk analyze` reports frame counts, hand-present frames, average FPS, primitive candidate counts, longest candidate runs, and simple landmark jitter.
 - `airdesk tune` runs the live backend and prints per-frame primitive features for immediate threshold tuning.
+- `airdesk view` opens a live webcam preview with MediaPipe landmarks, skeleton, bounding box, hand count, and handedness/confidence labels.
 - `airdesk run --backend replay ... --dry-run` routes replayed frames through recognition, command-mode policy, profile binding resolution, and `DryRunActionTarget`.
 - Real Hyprland execution remains out of scope for Sprint 2.
 
