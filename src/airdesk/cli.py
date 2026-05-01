@@ -27,6 +27,7 @@ from airdesk.tracking.mediapipe import (
     DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
     DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     DEFAULT_HAND_LANDMARKER_MODEL,
+    MediaPipeHandTrackerBackend,
 )
 from airdesk.tracking.replay import ReplayHandTrackerBackend
 
@@ -534,6 +535,10 @@ def run(
         Path | None,
         typer.Option(help="Write runtime events as JSONL."),
     ] = None,
+    pause_on_start: Annotated[
+        bool,
+        typer.Option(help="Start runtime paused so gestures cannot request actions."),
+    ] = False,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
 ) -> None:
@@ -563,11 +568,13 @@ def run(
             profile=loaded_profile,
             action_target=DryRunActionTarget(),
             event_writer=event_writer,
+            paused=pause_on_start,
             session_metadata={
                 "backend": backend,
                 "source": source,
                 "profile_path": str(profile),
                 "dry_run": dry_run,
+                "paused_at_start": pause_on_start,
                 "show": show,
                 "max_frames": max_frames,
                 "camera": {
@@ -587,10 +594,28 @@ def run(
                 },
             },
         )
+        _attach_runtime_preview_controls(tracker, runtime)
         typer.echo(format_runtime_summary(runtime.run()))
     finally:
         if event_writer is not None:
             event_writer.close()
+
+
+def _attach_runtime_preview_controls(
+    tracker: HandTrackerBackend,
+    runtime: AirdeskRuntime,
+) -> None:
+    if not isinstance(tracker, MediaPipeHandTrackerBackend):
+        return
+    tracker.preview_status_provider = runtime.status_text
+
+    def handle_key(key: int) -> bool:
+        if key == ord("p"):
+            runtime.toggle_pause()
+            return True
+        return False
+
+    tracker.preview_key_handler = handle_key
 
 
 def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:

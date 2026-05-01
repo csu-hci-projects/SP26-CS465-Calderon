@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -70,6 +70,8 @@ class MediaPipeHandTrackerBackend:
     preview_gestures: bool = True
     preview_extended_threshold: float = 0.08
     preview_pinch_threshold: float = 0.06
+    preview_status_provider: Callable[[], str] | None = None
+    preview_key_handler: Callable[[int], bool] | None = None
     name: str = "mediapipe"
 
     def __post_init__(self) -> None:
@@ -185,6 +187,8 @@ class MediaPipeHandTrackerBackend:
         self._draw_gesture_strip(display_image, candidates)
         self._cv2.imshow(PREVIEW_WINDOW_NAME, display_image)
         key = self._cv2.waitKey(1) & 0xFF
+        if self.preview_key_handler is not None and key not in (255, -1):
+            self.preview_key_handler(key)
         return key not in (27, ord("q"))
 
     def _draw_header(
@@ -198,7 +202,7 @@ class MediaPipeHandTrackerBackend:
         mirror = "mirror" if self.preview_mirror else "camera"
         text = (
             f"AirDesk live view | {mirror} | hands={len(hands)} | "
-            f"gestures={gesture_count} | q/esc quits"
+            f"gestures={gesture_count} | p pauses | q/esc quits"
         )
         self._cv2.rectangle(image, (0, 0), (image.shape[1], 34), (20, 20, 20), -1)
         self._cv2.putText(
@@ -208,6 +212,19 @@ class MediaPipeHandTrackerBackend:
             self._cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (240, 240, 240),
+            2,
+            self._cv2.LINE_AA,
+        )
+        if self.preview_status_provider is None:
+            return
+        status = self.preview_status_provider()
+        self._cv2.putText(
+            image,
+            f"runtime: {status}",
+            (10, 58),
+            self._cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 255, 255) if "paused" in status else (240, 240, 240),
             2,
             self._cv2.LINE_AA,
         )

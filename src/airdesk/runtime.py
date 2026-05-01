@@ -31,6 +31,15 @@ class RuntimeSummary:
     results: tuple[ActionResult, ...] = ()
 
 
+@dataclass(frozen=True)
+class RuntimeStatus:
+    """Small status surface for live preview and tests."""
+
+    state: str = "idle"
+    detail: str = ""
+    paused: bool = False
+
+
 class EventWriter(Protocol):
     """Sink for runtime events."""
 
@@ -50,6 +59,9 @@ class AirdeskRuntime:
     event_writer: EventWriter | None = None
     session_metadata: dict[str, Any] = field(default_factory=dict)
     session_id: str = field(default_factory=lambda: str(uuid4()))
+    paused: bool = False
+    status: RuntimeStatus = field(default_factory=RuntimeStatus)
+    _pending_events: list[EventLogEntry] = field(default_factory=list, init=False)
 
     def run(self) -> RuntimeSummary:
         results: list[ActionResult] = []
@@ -68,11 +80,14 @@ class AirdeskRuntime:
                 self.event_writer.write_event(event)
 
         emit(self._session_start_event(started_at))
+        self._set_status("paused" if self.paused else "idle")
         try:
             self.tracker.start()
             for frame in self.tracker.frames():
                 frame_count += 1
                 for event in self._process_frame(frame, resolver, results):
+                    emit(event)
+                for event in self._drain_pending_events():
                     emit(event)
         except KeyboardInterrupt:
             interrupted = True
@@ -101,6 +116,35 @@ class AirdeskRuntime:
             results=tuple(results),
         )
 
+    def set_paused(self, paused: bool) -> EventLogEntry | None:
+        """Set paused state and return an event when the state changed."""
+        if self.paused == paused:
+            return None
+        self.paused = paused
+        self._set_status("paused" if paused else "idle", "keyboard_toggle")
+        event = EventLogEntry(
+            event_type="runtime_paused" if paused else "runtime_resumed",
+            timestamp=utc_timestamp(),
+            payload={"paused": paused, "reason": "keyboard_toggle"},
+            session_id=self.session_id,
+        )
+        self._pending_events.append(event)
+        return event
+
+    def toggle_pause(self) -> bool:
+        """Toggle paused state for preview key handlers."""
+        self.set_paused(not self.paused)
+        return self.paused
+
+    def status_text(self) -> str:
+        """Return compact live status text."""
+        return format_runtime_status(self.status)
+
+    def _drain_pending_events(self) -> list[EventLogEntry]:
+        events = self._pending_events
+        self._pending_events = []
+        return events
+
     def _process_frame(
         self,
         frame: TrackingFrame,
@@ -123,7 +167,25 @@ class AirdeskRuntime:
             profile_id=self.profile.profile_id,
         )
         emitted.extend(mode_events)
+        self._update_status_from_events(mode_events)
+        if self.paused:
+            if confirmations:
+                self._set_status("paused", "action_suppressed")
+                emitted.append(
+                    EventLogEntry(
+                        event_type="action_blocked",
+                        timestamp=utc_timestamp(),
+                        payload={
+                            "reason": "paused",
+                            "confirmations": [
+                                confirmation.to_dict() for confirmation in confirmations
+                            ],
+                        },
+                    )
+                )
+            return emitted
         for confirmation in confirmations:
+            self._set_status("confirmed", confirmation.candidate.name)
             emitted.append(
                 EventLogEntry(
                     event_type="gesture_confirmed",
@@ -141,8 +203,10 @@ class AirdeskRuntime:
                     payload=request.to_dict(),
                 )
             )
+            self._set_status("action_requested", request.command)
             result = self.action_target.execute(request)
             results.append(result)
+            self._set_status("action_executed" if result.ok else "blocked", result.message)
             emitted.append(
                 EventLogEntry(
                     event_type="action_executed" if result.ok else "action_failed",
@@ -186,10 +250,27 @@ class AirdeskRuntime:
             },
         )
 
+    def _set_status(self, state: str, detail: str = "") -> None:
+        self.status = RuntimeStatus(state=state, detail=detail, paused=self.paused)
+
+    def _update_status_from_events(self, events: list[EventLogEntry]) -> None:
+        for event in events:
+            if event.event_type != "mode_changed":
+                continue
+            mode = str(event.payload.get("mode", "idle"))
+            reason = str(event.payload.get("reason", ""))
+            self._set_status("listening" if mode == "command" else "idle", reason)
+
 
 def format_runtime_summary(summary: RuntimeSummary) -> str:
     """Format a runtime summary for CLI output."""
     return f"frames={summary.frames} events={summary.events} actions={summary.actions}"
+
+
+def format_runtime_status(status: RuntimeStatus) -> str:
+    """Format runtime status for live preview overlays."""
+    prefix = "paused" if status.paused else status.state
+    return f"{prefix}: {status.detail}" if status.detail else prefix
 
 
 def _with_session_id(event: EventLogEntry, session_id: str) -> EventLogEntry:

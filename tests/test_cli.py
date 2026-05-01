@@ -71,6 +71,7 @@ def test_run_help_exposes_live_tuning_options() -> None:
     assert "--max-num-hands" in result.stdout
     assert "--min-tracking-confidence" in result.stdout
     assert "--events-out" in result.stdout
+    assert "--pause-on-start" in result.stdout
 
 
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
