@@ -62,7 +62,16 @@ uv run airdesk camera probe --device /dev/video0
 uv run airdesk profile validate configs/profiles/study-safe.toml
 uv run airdesk replay tests/fixtures/replay-one-frame.jsonl
 uv run airdesk run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --profile configs/profiles/study-safe.toml --dry-run --events-out data/logs/replay-dry-run.jsonl
+uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --profile configs/profiles/window-manager.toml --dry-run --show --events-out data/logs/live-window-manager-dry-run.jsonl
 uv run airdesk hyprland dry-run workspace r+1
 ```
+
+Sprint 3 guarded real execution is opt-in and allowlisted:
+
+```bash
+uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --profile configs/profiles/window-manager.toml --execute --allow-profile-execute --show --events-out data/logs/live-window-manager-execute.jsonl
+```
+
+Dry-run remains the default. Use `--pause-on-start` or press `p` in the live preview to suppress actions while tracking continues.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.

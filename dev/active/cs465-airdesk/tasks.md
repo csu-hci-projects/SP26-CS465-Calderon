@@ -54,16 +54,16 @@ Current next sprint: see `sprint-3.md`.
 - [x] Add runtime `--events-out` JSONL logging
 - [x] Add session start/finish runtime events
 - [x] Research dynamic gesture model options and document AirDesk strategy
-- [ ] Add intent-gated phrase recognizer foundation for temporal gestures
-- [ ] Detect flick/swipe left/right from normalized landmark motion
-- [ ] Add continuous positive and negative recording protocol for dynamic gestures
-- [ ] Decide whether point left/right is reliable enough for Sprint 3
-- [ ] Show command-mode state in live `run --show` preview
-- [ ] Add pause/kill-switch behavior before real execution
-- [ ] Add guarded opt-in Hyprland execution path
+- [x] Add intent-gated phrase recognizer foundation for temporal gestures
+- [x] Detect flick/swipe left/right from normalized landmark motion
+- [x] Add continuous positive and negative recording protocol for dynamic gestures
+- [x] Decide whether point left/right is reliable enough for Sprint 3
+- [x] Show command-mode state in live `run --show` preview
+- [x] Add pause/kill-switch behavior before real execution
+- [x] Add guarded opt-in Hyprland execution path
 - [ ] Verify safe Hyprland dispatchers manually
-- [ ] Add Caden-only pilot protocol
-- [ ] Run `ruff`, `pytest`, replay smoke, and live dry-run smoke
+- [x] Add Caden-only pilot protocol
+- [x] Run `ruff`, `pytest`, replay smoke, and live dry-run smoke
 
 ## Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
 

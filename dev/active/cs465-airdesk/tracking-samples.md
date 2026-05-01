@@ -110,6 +110,27 @@ uv run airdesk analyze data/recordings/open-palm-hold.jsonl
 uv run airdesk replay data/recordings/open-palm-hold.jsonl
 ```
 
+## Sprint 3 Dynamic Gesture Samples
+
+Collect continuous positive and negative streams before training or trusting a learned recognizer:
+
+```bash
+uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 10 --label swipe-left-positive --out data/recordings/swipe-left-positive.jsonl
+uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 10 --label swipe-right-positive --out data/recordings/swipe-right-positive.jsonl
+uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 15 --label normal-desk-motion-negative --out data/recordings/normal-desk-motion-negative.jsonl
+uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 15 --label aborted-gestures-negative --out data/recordings/aborted-gestures-negative.jsonl
+```
+
+Analyze both static and dynamic candidates:
+
+```bash
+uv run airdesk analyze data/recordings/swipe-left-positive.jsonl
+uv run airdesk replay data/recordings/swipe-left-positive.jsonl
+uv run airdesk run --backend replay --recording data/recordings/swipe-left-positive.jsonl --profile configs/profiles/window-manager.toml --dry-run --events-out data/logs/swipe-left-replay.jsonl
+```
+
+Record negative streams where hands enter/leave the frame, reach for the keyboard or mouse, and rest near the desk without intending a command. These are more important for false-activation evidence than clean isolated clips.
+
 ## Notes Template
 
 For each sample, write:
@@ -134,3 +155,10 @@ Initial Sprint 1 smoke tests:
 - A two-frame smoke recording replayed successfully with zero hands detected because no deliberate hand sample was recorded.
 
 Sprint 2 should replace this with deliberate hand-in-frame samples before real desktop execution is considered.
+
+Sprint 3 implementation notes:
+
+- `airdesk analyze` and `airdesk replay` now count `swipe_left`, `swipe_right`, `point_left`, and `point_right` candidates in addition to static primitives.
+- `point_left` and `point_right` are implemented as rule-based dry-run candidates and should remain lower priority than swipes until real sample logs show low false positives.
+- A bounded smoke on `/dev/video0` opened `640x480 @ 30 FPS MJPG` and ran one MediaPipe dry-run frame with `frames=1 events=2 actions=0`.
+- Real local sample results are still pending in this environment. Do not mark live reliability proven until Caden records and analyzes the recommended samples above.
