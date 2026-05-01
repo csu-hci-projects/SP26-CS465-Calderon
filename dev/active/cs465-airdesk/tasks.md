@@ -51,8 +51,8 @@ Current next sprint: see `sprint-3.md`.
 
 - [ ] Record deliberate open palm, fist, pinch, no-hand, and normal desk motion samples
 - [ ] Analyze deliberate samples and update tracking observations
-- [ ] Add runtime `--events-out` JSONL logging
-- [ ] Add session start/finish runtime events
+- [x] Add runtime `--events-out` JSONL logging
+- [x] Add session start/finish runtime events
 - [x] Research dynamic gesture model options and document AirDesk strategy
 - [ ] Add intent-gated phrase recognizer foundation for temporal gestures
 - [ ] Detect flick/swipe left/right from normalized landmark motion

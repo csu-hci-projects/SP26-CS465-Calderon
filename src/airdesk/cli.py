@@ -528,6 +528,10 @@ def run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
+    events_out: Annotated[
+        Path | None,
+        typer.Option(help="Write runtime events as JSONL."),
+    ] = None,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
 ) -> None:
@@ -549,12 +553,42 @@ def run(
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
     )
-    runtime = AirdeskRuntime(
-        tracker=tracker,
-        profile=load_profile(profile),
-        action_target=DryRunActionTarget(),
-    )
-    typer.echo(format_runtime_summary(runtime.run()))
+    loaded_profile = load_profile(profile)
+    event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
+    try:
+        runtime = AirdeskRuntime(
+            tracker=tracker,
+            profile=loaded_profile,
+            action_target=DryRunActionTarget(),
+            event_writer=event_writer,
+            session_metadata={
+                "backend": backend,
+                "source": source,
+                "profile_path": str(profile),
+                "dry_run": dry_run,
+                "show": show,
+                "max_frames": max_frames,
+                "camera": {
+                    "device": device,
+                    "width": width,
+                    "height": height,
+                    "fps": fps,
+                    "fourcc": fourcc,
+                },
+                "mediapipe": {
+                    "model_path": str(model_path),
+                    "auto_download_model": auto_download_model,
+                    "max_num_hands": max_num_hands,
+                    "min_detection_confidence": min_detection_confidence,
+                    "min_presence_confidence": min_presence_confidence,
+                    "min_tracking_confidence": min_tracking_confidence,
+                },
+            },
+        )
+        typer.echo(format_runtime_summary(runtime.run()))
+    finally:
+        if event_writer is not None:
+            event_writer.close()
 
 
 def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:

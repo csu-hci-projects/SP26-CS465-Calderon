@@ -70,6 +70,40 @@ def test_run_help_exposes_live_tuning_options() -> None:
     assert "--model-path" in result.stdout
     assert "--max-num-hands" in result.stdout
     assert "--min-tracking-confidence" in result.stdout
+    assert "--events-out" in result.stdout
+
+
+def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
+    output = tmp_path / "runtime-events.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--profile",
+            "configs/profiles/study-safe.toml",
+            "--events-out",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "frames=1" in result.stdout
+    records = iter_recording(output)
+    events = [record.payload for record in records if record.kind == "event"]
+    assert [event.event_type for event in events] == ["session_start", "session_finish"]
+    assert {event.session_id for event in events} == {events[0].session_id}
+    assert events[0].payload["backend"] == "replay"
+    assert events[0].payload["profile_id"] == "study-safe"
+    assert events[0].payload["dry_run"] is True
+    assert events[1].payload["frames"] == 1
+    assert events[1].payload["events"] == 2
+    assert events[1].payload["actions"] == 0
+    assert events[1].payload["interrupted"] is False
 
 
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:

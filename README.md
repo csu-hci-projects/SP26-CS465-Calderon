@@ -61,6 +61,7 @@ uv run airdesk camera list
 uv run airdesk camera probe --device /dev/video0
 uv run airdesk profile validate configs/profiles/study-safe.toml
 uv run airdesk replay tests/fixtures/replay-one-frame.jsonl
+uv run airdesk run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --profile configs/profiles/study-safe.toml --dry-run --events-out data/logs/replay-dry-run.jsonl
 uv run airdesk hyprland dry-run workspace r+1
 ```
 
