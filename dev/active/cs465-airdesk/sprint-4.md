@@ -2,27 +2,27 @@
 
 ## Purpose
 
-Sprint 4 should turn Sprint 3's runtime logs and dynamic gesture recordings into a real recognition evaluation pipeline.
+Sprint 4 should turn Sprint 3's runtime logs and dynamic gesture recordings into the first real dynamic-gesture training and evaluation pipeline.
 
 Sprint 3 is expected to produce:
 
 - runtime JSONL event logs,
 - continuous positive and negative gesture recordings,
 - an intent-gated phrase recognizer foundation,
-- rule/DTW baselines for small dynamic gestures,
+- rule/DTW scaffolding for small dynamic gestures,
 - live command feedback,
 - pause/kill-switch behavior,
 - and optionally guarded Hyprland execution.
 
 Sprint 4 should answer:
 
-> Which recognition approach actually works best for AirDesk's continuous desktop-control setting?
+> Can AirDesk's chosen causal TCN path recognize intentional dynamic gestures in continuous desktop-control sessions with low false activation and acceptable latency?
 
-The comparison should be evidence-based and use the same recorded sessions across recognizers. Do not optimize isolated clip accuracy alone. AirDesk needs low false activations, acceptable latency, and a feeling of intentional control.
+The evaluation should be evidence-based and use continuous sessions with background motion, aborted gestures, and chained gestures. Do not optimize isolated clip accuracy alone. AirDesk needs low false activations, acceptable latency, and a feeling of intentional control.
 
 ## Sprint Theme
 
-> Build the dataset, labeling, and model-evaluation loop.
+> Build the dataset, labeling, feature pipeline, and first causal TCN recognizer.
 
 ## Product / Research Stance
 
@@ -30,7 +30,8 @@ The comparison should be evidence-based and use the same recorded sessions acros
 - Preserve dry-run as the default for model experiments.
 - Treat user-specific calibration as acceptable for the personal prototype.
 - Do not pretend a model is better because it has high isolated accuracy.
-- Compare models on continuous streams with negative/background motion.
+- Evaluate the causal TCN on continuous streams with negative/background motion.
+- Do not spend this sprint comparing every model family.
 - Keep model training optional at runtime; AirDesk should still work without ML dependencies.
 
 ## Non-Goals
@@ -48,31 +49,26 @@ Do not attempt these in Sprint 4:
 
 ## Key Decisions
 
-### Model Comparison Strategy
+### Model Strategy
 
-Sprint 4 should compare recognizers behind the same AirDesk interface:
+Sprint 4 should build one primary learned recognizer behind the AirDesk interface:
 
 1. **Rule phrase recognizer**
-   - current baseline
+   - safety/debug scaffold
    - interpretable and fast
-   - useful for safety gates and debugging
+   - useful for intent gates, cooldowns, and failure analysis
 
 2. **DTW/template recognizer**
-   - likely best low-data personal recognizer
+   - low-data fallback and calibration tool
    - good for "conducting" gestures with variable speed
    - supports per-user calibration
 
-3. **LSTM/GRU baseline**
-   - familiar and lightweight
-   - included because Caden has prior experience
-   - not assumed to solve spotting alone
-
-4. **Causal TCN baseline**
-   - preferred first learned model candidate
+3. **Causal TCN**
+   - primary learned-model bet
    - good for framewise phase/state prediction
    - likely easier to train/evaluate than Transformer for small data
 
-ST-GCN and graph transformers should remain research notes unless the dataset grows enough to justify them.
+LSTM/GRU should be deferred unless the causal TCN path disappoints or a later comparison becomes worth the time. ST-GCN and graph transformers should remain research notes unless the dataset grows enough to justify them.
 
 ### Labeling Strategy
 
@@ -140,11 +136,11 @@ By the end of Sprint 4, these commands should exist or be expanded:
 airdesk label init data/recordings/live-window-manager-dry-run.jsonl --out data/labels/live-window-manager-dry-run.labels.json
 airdesk label validate data/labels/live-window-manager-dry-run.labels.json
 airdesk features export data/recordings/live-window-manager-dry-run.jsonl --labels data/labels/live-window-manager-dry-run.labels.json --out data/features/live-window-manager-dry-run.parquet
-airdesk gesture calibrate --kind dtw --recordings data/recordings/*.jsonl --labels data/labels/*.json --out data/models/gestures/caden-dtw.json
 airdesk gesture evaluate --recordings data/recordings/*.jsonl --labels data/labels/*.json --recognizer rule
-airdesk gesture evaluate --recordings data/recordings/*.jsonl --labels data/labels/*.json --recognizer dtw --model data/models/gestures/caden-dtw.json
 airdesk gesture train --model-type tcn --features data/features/*.parquet --out data/models/gestures/tcn.pt
 airdesk gesture evaluate --recordings data/recordings/*.jsonl --labels data/labels/*.json --recognizer tcn --model data/models/gestures/tcn.pt
+airdesk gesture calibrate --kind dtw --recordings data/recordings/*.jsonl --labels data/labels/*.json --out data/models/gestures/caden-dtw.json
+airdesk gesture evaluate --recordings data/recordings/*.jsonl --labels data/labels/*.json --recognizer dtw --model data/models/gestures/caden-dtw.json
 ```
 
 Exact file formats can change if a simpler JSONL/CSV path is better, but the command responsibilities should stay.
@@ -186,7 +182,7 @@ Acceptance criteria:
 - Export features to a simple checked format.
 - Tests cover feature extraction on synthetic hands and replay fixtures.
 
-### 4. DTW / Template Recognizer
+### 4. Rule / DTW Fallbacks
 
 Acceptance criteria:
 
@@ -195,25 +191,26 @@ Acceptance criteria:
 - Support per-user calibration from labeled recordings.
 - Evaluate DTW on continuous replay streams.
 - Tests cover matching variable-speed synthetic gestures.
+- Document that DTW is fallback/calibration, not the primary Sprint 4 model bet.
 
-### 5. Learned Model Baselines
+### 5. Causal TCN Recognizer
 
 Acceptance criteria:
 
 - Add optional ML dependencies only if needed.
-- Train or prototype an LSTM/GRU baseline.
-- Train or prototype a causal TCN baseline.
+- Train or prototype a small causal TCN.
 - Models consume exported AirDesk features, not raw video.
 - Training is reproducible from ignored local data.
 - Model inference can run over replay streams.
-- If ML implementation is too large for Sprint 4, document the exact deferred scope and still complete DTW/evaluation.
+- LSTM/GRU is explicitly deferred unless the TCN path fails.
+- If ML implementation is too large for Sprint 4, document the exact blocker and still complete labels/features/evaluation.
 
 ### 6. Evaluation Harness
 
 Acceptance criteria:
 
 - Add `airdesk gesture evaluate`.
-- Evaluate rule, DTW, and learned recognizers on the same sessions.
+- Evaluate rule, DTW fallback, and causal TCN recognizers on the same sessions.
 - Report false activations, missed gestures, latency, repeated fires, segmental F1, and stream edit distance where practical.
 - Export results to JSON or CSV for study/paper use.
 - Tests cover metric calculations.
@@ -238,10 +235,10 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Document a Sprint 4 decision:
-  - which recognizer should drive Sprint 5 pilot tasks,
+  - whether causal TCN should drive Sprint 5 pilot tasks,
   - which gestures are stable enough,
   - which gestures are deferred,
-  - whether learned models beat rule/DTW baselines.
+  - whether rule/DTW fallback remains safer than TCN for any command.
 - Update `research-notes.md`, `tasks.md`, and handoff docs.
 
 ## Recommended Implementation Order
@@ -250,13 +247,12 @@ Acceptance criteria:
 2. Add label init/validate CLI.
 3. Add feature extraction and export.
 4. Add evaluation metric utilities.
-5. Implement DTW/template recognizer.
-6. Evaluate rule/DTW over synthetic and recorded sessions.
-7. Add LSTM/GRU baseline if data volume is enough.
-8. Add TCN baseline if data volume is enough.
-9. Compare recognizers on continuous logs.
-10. Document model selection decision.
-11. Run `ruff`, `pytest`, and replay evaluation smoke commands.
+5. Evaluate the current rule phrase recognizer over synthetic and recorded sessions.
+6. Implement the causal TCN training/inference path.
+7. Evaluate the TCN on continuous logs.
+8. Add DTW/template fallback only where it improves calibration or safety.
+9. Document the Sprint 5 recognizer decision.
+10. Run `ruff`, `pytest`, and replay evaluation smoke commands.
 
 ## Risks and Mitigations
 
@@ -264,13 +260,13 @@ Acceptance criteria:
 
 Risk:
 
-- Learned models may look promising but overfit.
+- The causal TCN may look promising but overfit.
 
 Mitigation:
 
-- Treat DTW/template as the likely Sprint 4 fallback.
+- Treat rule/DTW as the Sprint 4 fallback.
 - Collect background/negative data first.
-- Use ML only if it beats simpler baselines on held-out continuous sessions.
+- Use the TCN only if it beats simpler fallbacks on held-out continuous sessions.
 
 ### Labeling Becomes a Time Sink
 
@@ -313,10 +309,11 @@ Sprint 4 is done when:
 
 - continuous gesture labels have a schema and CLI validation,
 - features can be exported from recordings,
-- rule and DTW recognizers can be evaluated on continuous sessions,
-- LSTM/TCN baselines are implemented or explicitly deferred with rationale,
+- rule and DTW fallback recognizers can be evaluated on continuous sessions,
+- a causal TCN prototype is implemented or explicitly blocked with rationale,
+- LSTM/GRU remains explicitly deferred unless the TCN path fails,
 - evaluation metrics report false activations and latency,
-- a model-selection decision is documented,
+- a Sprint 5 recognizer decision is documented,
 - README/tasks/handoff are updated,
 - `uv run ruff check .` passes,
 - `uv run pytest` passes.
@@ -339,6 +336,6 @@ Stay in recognition robustness:
 - improve DTW features,
 - postpone real execution.
 
-### Path C: Rule/DTW Works But ML Does Not
+### Path C: Rule/DTW Works But TCN Does Not
 
-Use rule/DTW for the study prototype and frame ML as future work.
+Use rule/DTW for the study prototype and frame learned dynamic recognition as future work.

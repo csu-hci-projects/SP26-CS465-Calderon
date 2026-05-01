@@ -38,7 +38,7 @@ Build a local daemon or app that:
 7. Shows a minimal status overlay or log of the current gesture / command / confidence.
 8. Records enough data for replay, debugging, study instrumentation, and future training.
 
-The first implementation should be rule-based. Do not train a neural network until AirDesk has enough recorded/labeled data and a rule/template baseline to beat.
+The first implementation should be rule-based. Do not train a neural network until AirDesk has enough recorded/labeled data and rule/DTW fallback behavior to beat.
 
 ## Architecture Strategy
 
@@ -85,9 +85,10 @@ The normalized hand/body state should hide backend differences from gesture reco
 Recognition should evolve in layers:
 
 1. **Rule-based primitives**: open palm, fist, pinch, point, swipe, push, hold, dwell.
-2. **Template / DTW recognizers**: personalized motion gestures and custom paths.
-3. **Personal ML models**: static and temporal classifiers trained from AirDesk logs.
-4. **General ML models**: public datasets or pretrained/fine-tuned models after the data model is stable.
+2. **Intent-gated gesture phrases**: dynamic commands framed as preparation, stroke, commit, release, cooldown, or abort.
+3. **Template / DTW fallback**: personalized motion gestures and custom paths for calibration and safety fallback.
+4. **Personal ML models**: a small causal TCN trained from phase-labeled AirDesk logs as the first learned temporal recognizer.
+5. **Alternative ML models**: LSTM/GRU, ST-GCN, Transformer, or public-dataset approaches only after the causal TCN path is tested.
 
 The first hard problem is gesture spotting, not just classification:
 
@@ -470,4 +471,4 @@ Mitigations:
 - evaluate command mode first, then treat cursor/text as separate slices
 - keep tracking, recognition, modes, profiles, and actions as separate modules
 - add recording/replay before serious recognizer iteration
-- use ML after rule/template baselines and real logs exist
+- train the causal TCN after rule/DTW fallback behavior and real logs exist

@@ -124,7 +124,7 @@ References:
 
 See also:
 
-- `dynamic-gesture-research.md` for the Sprint 3 research spike comparing LSTM, TCN, Transformer, ST-GCN, DTW/template matching, and intent-gated gesture phrases.
+- `dynamic-gesture-research.md` for the Sprint 3 research spike and the decision to bet on intent-gated gesture phrases plus a causal TCN, with rule/DTW as scaffolding/fallback.
 
 ### Main Insight
 
@@ -140,20 +140,21 @@ The first hard problem is not just classification. It is gesture spotting:
 
 1. Rule-based recognizers for interpretable primitives.
 2. Intent-gated phrase recognizers for dynamic commands.
-3. Template/DTW recognizers for personalized wrist flicks and conductor-like motions.
-4. Causal TCN or LSTM/GRU baselines trained on phase-labeled continuous logs.
-5. ST-GCN / graph transformer models after the system has enough labeled skeleton data.
+3. Template/DTW fallback for personalized wrist flicks and conductor-like motions.
+4. A small causal TCN trained on phase-labeled continuous logs.
+5. LSTM/GRU only if TCN disappoints or a later comparison is worth the time.
+6. ST-GCN / graph transformer models after the system has enough labeled skeleton data.
 
-### Why Not LSTM Alone
+### Why Causal TCN, Not LSTM First
 
-An LSTM/GRU/TCN may become useful, but using a classifier without an intent/spotting layer creates problems:
+A learned temporal model may become useful, but using a classifier without an intent/spotting layer creates problems:
 
 - requires labeled temporal data
 - makes false activations harder to debug
 - complicates the research prototype
 - may classify clean clips while failing in continuous real-time use
 
-The stronger path is to build recording, replay, labeling, phase-aware gesture phrases, and rule/template baselines first. Then ML has something solid to beat.
+The stronger path is to build recording, replay, labeling, phase-aware gesture phrases, and rule/DTW fallback first. Then train one primary learned model: a causal TCN over normalized AirDesk features. LSTM/GRU should stay deferred unless the TCN path fails.
 
 ## Hyprland / Wayland Research
 

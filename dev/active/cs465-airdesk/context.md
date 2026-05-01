@@ -205,21 +205,22 @@ Build the live command loop:
 - runtime event logs,
 - continuous positive/negative recordings,
 - intent-gated phrase recognizer foundation,
-- rule/DTW dynamic gesture baselines,
+- rule/DTW dynamic gesture scaffolding,
 - live command-state feedback,
 - pause/kill switch,
 - guarded opt-in Hyprland execution only if dry-run behavior supports it.
 
-### Sprint 4: Gesture Dataset, Labeling, and Model Evaluation
+### Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
 
 Turn recordings into evidence:
 
 - label schema and CLI,
 - feature extraction,
-- DTW/template recognizer,
-- optional LSTM/GRU and causal TCN baselines,
+- train and evaluate one small causal TCN over AirDesk features,
+- rule/DTW fallback for safety, calibration, and debugging,
+- LSTM/GRU deferred unless the TCN path fails,
 - continuous-stream evaluation metrics,
-- model-selection decision for the pilot.
+- Sprint 5 recognizer decision for the pilot.
 
 ### Sprint 5: Study Tooling, Pilot, and Paper Evidence
 

@@ -52,8 +52,9 @@ Prototype idea:
 - OpenVINO/Kinect/recorded replay as important alternatives
 - normalized hand/body state model
 - rule-based gesture recognizers first
-- template/DTW recognizers second
-- personal ML models later after collecting real data
+- intent-gated phrase recognizers for dynamic commands
+- template/DTW fallback for calibration and safety
+- causal TCN as the first learned temporal recognizer after collecting phase-labeled real data
 - clutch gesture: open palm held for ~300 ms enters listening mode
 - modes: command, cursor, text/virtual-keyboard, media, window-manager, presentation, accessibility
 - profiles: window manager, media/kitchen, presentation, cursor, virtual keyboard, hybrid keyboard+hands, accessibility, study safe, experimental
@@ -163,7 +164,7 @@ Current Sprint 3 direction:
 - make live command mode observable, logged, and pilot-safe
 - start by recording/analyzing the recommended deliberate samples and documenting observed FPS, false positives, false negatives, and jitter
 - add runtime `--events-out` JSONL logs with session start/end metadata and gesture/mode/action events
-- dynamic gesture research conclusion: do not bet Sprint 3 on a standalone LSTM; use intent-gated gesture phrases with rule/DTW baselines first, then compare LSTM/TCN once phase-labeled continuous data exists
+- dynamic gesture research conclusion: AirDesk's primary learned-model bet is intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous data; rule/DTW is scaffolding/fallback; LSTM/GRU is deferred unless TCN disappoints
 - add a stateful phrase recognizer foundation for temporal gestures
 - implement or explicitly defer flick/swipe-left/right and point-left/right based on replayable sample behavior
 - show command-mode state in live `run --show` preview
@@ -173,12 +174,13 @@ Current Sprint 3 direction:
 
 Current Sprint 4 direction:
 
-- build the dataset, labeling, and model-evaluation loop
+- build the dataset, labeling, feature pipeline, and first causal TCN recognizer
 - define labels for continuous sessions, including event labels and phase labels
 - export deterministic landmark-derived features from replayable JSONL recordings
-- implement DTW/template recognizer for personalized conductor-like gestures
-- compare rule, DTW, LSTM/GRU, and causal TCN only after enough labeled continuous data exists
-- select the recognizer that minimizes false activations and latency for Sprint 5
+- implement rule/DTW fallback for personalized conductor-like gestures where useful
+- train/evaluate a small causal TCN on continuous sessions
+- do not spend Sprint 4 comparing many model families
+- select whether TCN or the rule/DTW fallback is safe enough for Sprint 5
 
 Current Sprint 5 direction:
 

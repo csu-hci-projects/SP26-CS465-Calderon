@@ -18,13 +18,14 @@ Before doing anything:
 
 1. Check `git status`.
 2. Do not discard user changes.
-3. Read the active docs listed below.
-4. Plan before editing.
-5. Use `apply_patch` for manual file edits.
-6. Add or update tests alongside implementation.
-7. Run `ruff` and `pytest` before finishing.
-8. Commit meaningful chunks.
-9. Push commits to `origin/main` when the chunk is complete.
+3. Read `/home/caden/projects/AirDesk/AGENTS.md`.
+4. Read the active docs listed below.
+5. Plan before editing.
+6. Use `apply_patch` for manual file edits.
+7. Add or update tests alongside implementation.
+8. Run `ruff` and `pytest` before finishing.
+9. Commit meaningful chunks.
+10. Push commits to `origin/main` when the chunk is complete.
 
 ## Project Summary
 
@@ -92,19 +93,20 @@ Important live findings:
 
 ## Dynamic Gesture Strategy
 
-Do not jump straight to "train an LSTM."
+Do not jump straight to "train an LSTM," and do not spend the next sprint comparing every model family.
 
 The current research conclusion is:
 
-> Use intent-gated gesture phrases with rule/DTW baselines now, then train/evaluate a causal TCN on phase-labeled continuous data. LSTM/GRU should be included as a baseline, not the primary bet.
+> AirDesk's best current bet is intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous landmark features.
 
 Why:
 
 - continuous OS input is a gesture spotting and intent problem,
 - isolated clip accuracy is misleading,
 - rolling buffers create boundary, chaining, and false activation issues,
-- DTW/template matching is strong for low-data personalized conductor-like gestures,
-- TCN is the preferred first learned model once continuous phase-labeled logs exist,
+- rule/DTW recognizers are useful as safety/debug scaffolding, low-data fallback, and calibration tools,
+- causal TCN is the preferred first learned model once continuous phase-labeled logs exist,
+- LSTM/GRU is deferred unless the causal TCN path fails or a later comparison is worth the time,
 - ST-GCN/Transformer are later options after dataset growth.
 
 The target feel is "conducting a choir for your computer": subtle, low-fatigue, intentional wrist/finger phrases, not dragging the whole arm across the screen.
@@ -131,11 +133,11 @@ Main tasks:
 - add guarded opt-in Hyprland execution,
 - add Caden-only pilot protocol.
 
-### Sprint 4: Gesture Dataset, Labeling, and Model Evaluation
+### Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
 
 Goal:
 
-Build the dataset, labeling, and model-evaluation loop.
+Build the dataset, labeling, feature pipeline, and first causal TCN recognizer.
 
 Main tasks:
 
@@ -143,10 +145,11 @@ Main tasks:
 - add `airdesk label init` and `airdesk label validate`,
 - add deterministic feature extraction,
 - export features,
-- add DTW/template recognizer,
 - add `airdesk gesture evaluate`,
-- compare rule, DTW, LSTM/GRU, and causal TCN if enough data exists,
-- document model-selection decision for Sprint 5.
+- train/evaluate one small causal TCN on continuous sessions,
+- keep rule/DTW as fallback/calibration rather than the main bet,
+- explicitly defer LSTM/GRU unless TCN disappoints,
+- document the Sprint 5 recognizer decision.
 
 ### Sprint 5: Study Tooling, Pilot, and Paper Evidence
 

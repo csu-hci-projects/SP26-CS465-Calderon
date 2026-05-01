@@ -74,9 +74,9 @@ Keep Sprint 3's usable vocabulary small:
 - swipe left/right: workspace navigation candidate
 - point left/right: focus movement candidate if static pointing is stable enough
 
-The implementation should support stateful phrase recognizers because dynamic gestures depend on motion over time and on intent. Avoid betting Sprint 3 on a standalone LSTM. Start with interpretable rules, DTW/template baselines, and replayable synthetic tests; use those logs to decide when a TCN/LSTM comparison is justified.
+The implementation should support stateful phrase recognizers because dynamic gestures depend on motion over time and on intent. Avoid betting Sprint 3 on a standalone LSTM. Start with interpretable rules, DTW/template fallback, and replayable synthetic tests; use those logs to train and evaluate a causal TCN in Sprint 4. Defer LSTM/GRU unless the TCN path disappoints.
 
-See `dynamic-gesture-research.md` for the full model comparison.
+See `dynamic-gesture-research.md` for the full dynamic-gesture strategy.
 
 ### Runtime Logging Strategy
 

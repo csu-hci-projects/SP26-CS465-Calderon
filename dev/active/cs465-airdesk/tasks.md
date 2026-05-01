@@ -65,20 +65,20 @@ Current next sprint: see `sprint-3.md`.
 - [ ] Add Caden-only pilot protocol
 - [ ] Run `ruff`, `pytest`, replay smoke, and live dry-run smoke
 
-## Sprint 4: Gesture Dataset, Labeling, and Model Evaluation
+## Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
 
 - [ ] Define continuous gesture label schema
 - [ ] Add `airdesk label init`
 - [ ] Add `airdesk label validate`
 - [ ] Add deterministic feature extraction from tracking frames
 - [ ] Add feature export command
-- [ ] Add DTW/template recognizer for personalized dynamic gestures
+- [ ] Add rule/DTW fallback support for personalized dynamic gestures
 - [ ] Add gesture evaluation metrics for continuous sessions
 - [ ] Add `airdesk gesture evaluate`
-- [ ] Prototype LSTM/GRU baseline if labeled data volume is enough
-- [ ] Prototype causal TCN baseline if labeled data volume is enough
-- [ ] Compare rule, DTW, LSTM/GRU, and TCN on the same sessions
-- [ ] Document model-selection decision for Sprint 5
+- [ ] Train/prototype a small causal TCN over AirDesk features
+- [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
+- [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
+- [ ] Document Sprint 5 recognizer decision
 - [ ] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke
 
@@ -203,10 +203,10 @@ Current next sprint: see `sprint-3.md`.
 ## Phase 7: Learning System
 
 - [ ] Add gesture labeling workflow
-- [ ] Add template/DTW recognizer baseline for dynamic gestures
+- [ ] Add template/DTW fallback for dynamic gestures
 - [ ] Train simple static gesture classifier from recorded landmarks
-- [ ] Evaluate temporal classifier options: GRU, LSTM, TCN
-- [ ] Compare ML recognizers against rule/template baselines
+- [ ] Train and harden the causal TCN recognizer for temporal gestures
+- [ ] Evaluate alternate temporal classifiers only if the TCN path disappoints
 - [ ] Add per-user model/profile concept
 - [ ] Investigate public dataset usefulness, including HaGRID/HaGRIDv2
 

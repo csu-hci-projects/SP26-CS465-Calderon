@@ -19,7 +19,11 @@ Therefore the core problem is **gesture spotting plus intent detection**, not si
 
 ## Bottom Line
 
-Do not make Sprint 3's answer "train an LSTM."
+Do not make Sprint 3's answer "train an LSTM" or "compare every model family."
+
+If we have to bet, AirDesk should bet on:
+
+> **Intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous landmark features.**
 
 Recommended architecture:
 
@@ -44,13 +48,13 @@ The first serious AirDesk dynamic recognizer should be a **gesture phrase recogn
 - cooldown and cancellation,
 - replayable logs.
 
-Then compare recognizers behind that same phrase interface:
+The model plan is:
 
-1. **Rule + features baseline** for immediate inspectability.
-2. **Template / DTW baseline** for personalized wrist flicks and conductor-like motions.
-3. **Small causal TCN** as the first learned model if enough labeled continuous data exists.
-4. **LSTM/GRU baseline** for comparison because it is familiar and lightweight.
-5. **ST-GCN / graph transformer** only after AirDesk has a larger labeled dataset and a stable training workflow.
+1. Use **rule + feature gates** for immediate safety and debugging.
+2. Use **DTW/template matching** as a low-data fallback and calibration tool.
+3. Train one primary learned model: a **small causal TCN**.
+4. Defer **LSTM/GRU** unless the TCN path fails or a later comparison is explicitly worth the time.
+5. Defer **ST-GCN / graph transformer** until AirDesk has a larger labeled skeleton dataset.
 
 ## Why LSTM Alone Is Not Enough
 
@@ -177,8 +181,9 @@ Weaknesses:
 
 AirDesk role:
 
-- strong near-term fit for Caden's personal gesture vocabulary.
-- likely better than LSTM for early "record my flick once or a few times" workflows.
+- low-data fallback and calibration tool.
+- useful for validating feature design before training.
+- not the main long-term model bet unless it clearly outperforms the TCN in practice.
 
 ### LSTM / GRU
 
@@ -198,7 +203,8 @@ Weaknesses:
 
 AirDesk role:
 
-- baseline learned model, not the main architecture.
+- deferred learned baseline.
+- do not spend Sprint 4 time here unless the causal TCN path is blocked or performs poorly.
 
 ### TCN
 
@@ -218,7 +224,7 @@ Weaknesses:
 
 AirDesk role:
 
-- best first learned model candidate once logs exist.
+- primary learned model bet once logs exist.
 - train to output frame-level states:
   - background,
   - preparation,
@@ -411,7 +417,7 @@ Primary metrics:
 - user-rated control/confidence,
 - fatigue/discomfort.
 
-Model comparisons should run on the same continuous sessions:
+If a later comparison becomes necessary, run it on the same continuous sessions:
 
 - rule baseline,
 - DTW/template,
@@ -426,16 +432,16 @@ Model comparisons should run on the same continuous sessions:
 - Add runtime event logging.
 - Record deliberate and negative continuous sessions.
 - Add a phrase-recognizer abstraction.
-- Implement rule and DTW baselines for pinch/flick and palm impulse gestures.
+- Implement rule scaffolding and DTW fallback for pinch/flick and palm impulse gestures.
 - Keep execution dry-run while evaluating false activations.
 
 ### Sprint 4
 
 - Add labeling tooling.
 - Export training datasets from JSONL.
-- Train LSTM/GRU and TCN baselines.
-- Compare against rule/DTW on continuous sessions.
-- Pick one learned model only if it beats baselines on false activations and latency.
+- Train the first causal TCN recognizer.
+- Use rule/DTW as sanity checks and fallbacks, not as a large model bake-off.
+- Defer LSTM/GRU unless the TCN path fails.
 
 ### Later
 
@@ -451,9 +457,9 @@ Model comparisons should run on the same continuous sessions:
 
 For AirDesk's near-term goal, the best recognition architecture is:
 
-> **Intent-gated gesture phrases with rule/DTW baselines now, then a causal TCN trained on phase-labeled continuous data.**
+> **Intent-gated gesture phrases with rule/DTW scaffolding now, then a causal TCN trained on phase-labeled continuous data.**
 
-LSTM should be included as a baseline because it is easy to compare and Caden has prior experience with it, but it should not be the primary bet.
+LSTM/GRU should be deferred. They are available as later baselines if the TCN disappoints, but they are not the current bet.
 
 The likely strongest mature path is not a single classifier. It is a hybrid:
 
@@ -461,7 +467,8 @@ The likely strongest mature path is not a single classifier. It is a hybrid:
 state machine / clutch
   + quality gates
   + phrase segmentation
-  + DTW or TCN recognizer
+  + causal TCN recognizer
+  + rule/DTW fallback
   + background rejection
   + profile policy
 ```

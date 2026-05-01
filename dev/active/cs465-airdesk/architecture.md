@@ -228,7 +228,7 @@ Use normalized landmarks and temporal windows for:
 
 Rules should emit confidence, not just booleans.
 
-### Phase 2: Template Recognition
+### Phase 2: Template / Fallback Recognition
 
 Use template matching or dynamic time warping for custom motion gestures:
 
@@ -237,15 +237,15 @@ Use template matching or dynamic time warping for custom motion gestures:
 - repeated command gestures
 - personalized motion profiles
 
-This may need less data than neural models and gives better debuggability.
+This may need less data than neural models and gives better debuggability. For the current roadmap, DTW/template recognition is fallback and calibration support rather than the primary learned-recognition bet.
 
 ### Phase 3: Personal ML
 
 Once AirDesk can record and label real sessions:
 
 - train static gesture classifiers over normalized landmarks
-- train temporal classifiers over landmark sequences
-- compare GRU/LSTM/TCN approaches
+- train one primary temporal classifier first: a small causal TCN over normalized AirDesk features
+- defer GRU/LSTM comparisons unless the TCN path disappoints
 - support per-user calibration and models
 
 ### Phase 4: General ML
