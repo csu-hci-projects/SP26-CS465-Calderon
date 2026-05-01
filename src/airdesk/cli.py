@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import glob
 import platform
+import re
+from collections.abc import Callable
 from pathlib import Path
 from statistics import fmean
 from typing import Annotated
@@ -34,6 +36,15 @@ from airdesk.tracking.mediapipe import (
     MediaPipeHandTrackerBackend,
 )
 from airdesk.tracking.replay import ReplayHandTrackerBackend
+
+DEFAULT_COLLECTION_LABELS = (
+    "open-palm-hold",
+    "fist-hold",
+    "pinch-hold",
+    "swipe-left-positive",
+    "swipe-right-positive",
+    "normal-desk-motion-negative",
+)
 
 app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CLI.")
 camera_app = typer.Typer(help="Camera discovery and probing commands.")
@@ -418,6 +429,132 @@ def record(
 
 
 @app.command()
+def collect(
+    out_dir: Annotated[Path, typer.Option(help="Directory for collected JSONL takes.")] = Path(
+        "data/recordings/collection"
+    ),
+    label: Annotated[
+        list[str] | None,
+        typer.Option("--label", "-l", help="Gesture/session label to collect. Repeatable."),
+    ] = None,
+    reps: Annotated[int, typer.Option(help="Kept repetitions per label.")] = 3,
+    duration: Annotated[float, typer.Option(help="Recording duration per take in seconds.")] = 5.0,
+    countdown: Annotated[float, typer.Option(help="Countdown duration before recording.")] = 3.0,
+    backend: Annotated[str, typer.Option(help="Tracking backend to collect from.")] = "mediapipe",
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None,
+        typer.Option(help="Requested camera FOURCC, e.g. MJPG."),
+    ] = "MJPG",
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    show: Annotated[bool, typer.Option(help="Show webcam preview with collection status.")] = True,
+    auto_keep: Annotated[
+        bool,
+        typer.Option(help="Keep every take without prompting."),
+    ] = False,
+) -> None:
+    """Collect prompted gesture recordings with countdown and keep/redo flow."""
+    labels = tuple(label) if label else DEFAULT_COLLECTION_LABELS
+    if reps < 1:
+        typer.echo("--reps must be at least 1.", err=True)
+        raise typer.Exit(code=1)
+    if duration <= 0:
+        typer.echo("--duration must be positive.", err=True)
+        raise typer.Exit(code=1)
+    if countdown < 0:
+        typer.echo("--countdown cannot be negative.", err=True)
+        raise typer.Exit(code=1)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    kept_paths: list[Path] = []
+    for current_label in labels:
+        kept = 0
+        while kept < reps:
+            repetition = kept + 1
+            output = _next_collection_path(out_dir, current_label, repetition)
+            typer.echo(f"\n{current_label} rep {repetition}/{reps}")
+            if not auto_keep:
+                typer.echo("Press Enter to start, or type s to skip this rep, q to quit.")
+                response = input("> ").strip().lower()
+                if response == "q":
+                    raise typer.Exit()
+                if response == "s":
+                    kept += 1
+                    continue
+
+            frame_count = _record_collection_take(
+                output=output,
+                label=current_label,
+                repetition=repetition,
+                backend=backend,
+                device=device,
+                width=width,
+                height=height,
+                fps=fps,
+                fourcc=fourcc,
+                duration=duration,
+                countdown=countdown,
+                model_path=model_path,
+                auto_download_model=auto_download_model,
+                max_num_hands=max_num_hands,
+                min_detection_confidence=min_detection_confidence,
+                min_presence_confidence=min_presence_confidence,
+                min_tracking_confidence=min_tracking_confidence,
+                show=show,
+            )
+
+            if auto_keep:
+                keep = True
+            else:
+                typer.echo(f"Recorded frames={frame_count} out={output}")
+                response = input("Keep, redo, skip, or quit? [k/r/s/q] ").strip().lower() or "k"
+                if response == "q":
+                    raise typer.Exit()
+                keep = response == "k"
+                if response == "r":
+                    output.unlink(missing_ok=True)
+                    continue
+                if response == "s":
+                    output.unlink(missing_ok=True)
+                    kept += 1
+                    continue
+            if keep:
+                kept_paths.append(output)
+                kept += 1
+
+    typer.echo(f"collection complete kept={len(kept_paths)} out_dir={out_dir}")
+
+
+@app.command()
 def benchmark(
     backend: Annotated[str, typer.Option(help="Tracking backend to benchmark.")] = "mediapipe",
     device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
@@ -636,6 +773,162 @@ def _attach_runtime_preview_controls(
         return False
 
     tracker.preview_key_handler = handle_key
+
+
+def _record_collection_take(
+    *,
+    output: Path,
+    label: str,
+    repetition: int,
+    backend: str,
+    device: str,
+    width: int | None,
+    height: int | None,
+    fps: float | None,
+    fourcc: str | None,
+    duration: float,
+    countdown: float,
+    model_path: Path,
+    auto_download_model: bool,
+    max_num_hands: int,
+    min_detection_confidence: float,
+    min_presence_confidence: float,
+    min_tracking_confidence: float,
+    show: bool,
+) -> int:
+    status = {"text": f"ready: {label} rep {repetition}"}
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=None,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+    _attach_collection_preview_status(tracker, lambda: status["text"])
+    frame_count = 0
+    interrupted = False
+    first_frame_timestamp: float | None = None
+    recording_started_at: float | None = None
+
+    try:
+        tracker.start()
+        with JsonlRecordingWriter(output) as writer:
+            writer.write_event(
+                EventLogEntry(
+                    event_type="collection_take_started",
+                    timestamp=utc_timestamp(),
+                    payload={
+                        "backend": backend,
+                        "device": device,
+                        "duration": duration,
+                        "countdown": countdown,
+                        "label": label,
+                        "repetition": repetition,
+                        "model_path": str(model_path),
+                        "mediapipe": {
+                            "max_num_hands": max_num_hands,
+                            "min_detection_confidence": min_detection_confidence,
+                            "min_presence_confidence": min_presence_confidence,
+                            "min_tracking_confidence": min_tracking_confidence,
+                        },
+                        "camera_settings": CameraSettings(
+                            width=width,
+                            height=height,
+                            fps=fps,
+                            fourcc=fourcc,
+                        ).to_dict(),
+                    },
+                )
+            )
+            try:
+                for frame in tracker.frames():
+                    if first_frame_timestamp is None:
+                        first_frame_timestamp = frame.timestamp
+                    elapsed = frame.timestamp - first_frame_timestamp
+                    if elapsed < countdown:
+                        remaining = countdown - elapsed
+                        status["text"] = f"countdown {remaining:.1f}s | {label} rep {repetition}"
+                        continue
+                    if recording_started_at is None:
+                        recording_started_at = frame.timestamp
+                        writer.write_event(
+                            EventLogEntry(
+                                event_type="collection_recording_started",
+                                timestamp=utc_timestamp(),
+                                payload={"label": label, "repetition": repetition},
+                            )
+                        )
+                    recorded_elapsed = frame.timestamp - recording_started_at
+                    if recorded_elapsed >= duration:
+                        break
+                    status["text"] = (
+                        f"recording {recorded_elapsed:.1f}/{duration:.1f}s | "
+                        f"{label} rep {repetition}"
+                    )
+                    writer.write_tracking_frame(frame)
+                    frame_count += 1
+            except KeyboardInterrupt:
+                interrupted = True
+                writer.write_event(
+                    EventLogEntry(
+                        event_type="collection_take_interrupted",
+                        timestamp=utc_timestamp(),
+                        payload={"frames": frame_count, "label": label, "repetition": repetition},
+                    )
+                )
+            status["text"] = f"done: {label} rep {repetition} frames={frame_count}"
+            writer.write_event(
+                EventLogEntry(
+                    event_type="collection_take_finished",
+                    timestamp=utc_timestamp(),
+                    payload={
+                        "frames": frame_count,
+                        "interrupted": interrupted,
+                        "duration": duration,
+                        "countdown": countdown,
+                        "label": label,
+                        "repetition": repetition,
+                    },
+                )
+            )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
+    return frame_count
+
+
+def _attach_collection_preview_status(
+    tracker: HandTrackerBackend,
+    status_provider: Callable[[], str],
+) -> None:
+    if isinstance(tracker, MediaPipeHandTrackerBackend):
+        tracker.preview_status_provider = status_provider
+
+
+def _next_collection_path(out_dir: Path, label: str, repetition: int) -> Path:
+    slug = _slugify_label(label)
+    candidate = out_dir / f"{slug}-{repetition:03d}.jsonl"
+    if not candidate.exists():
+        return candidate
+    suffix = 2
+    while True:
+        candidate = out_dir / f"{slug}-{repetition:03d}-{suffix}.jsonl"
+        if not candidate.exists():
+            return candidate
+        suffix += 1
+
+
+def _slugify_label(label: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    return slug or "take"
 
 
 def _make_runtime_action_target(

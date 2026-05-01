@@ -76,6 +76,62 @@ def test_run_help_exposes_live_tuning_options() -> None:
     assert "--allow-profile-execute" in result.stdout
 
 
+def test_collect_help_describes_prompted_collection() -> None:
+    result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--label" in result.stdout
+    assert "--reps" in result.stdout
+    assert "--countdown" in result.stdout
+    assert "--auto-keep" in result.stdout
+
+
+def test_collect_replay_auto_keep_writes_prompted_takes(tmp_path: Path) -> None:
+    output_dir = tmp_path / "collection"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "collect",
+            "--backend",
+            "replay",
+            "--device",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out-dir",
+            str(output_dir),
+            "--label",
+            "swipe-left-positive",
+            "--reps",
+            "2",
+            "--duration",
+            "1",
+            "--countdown",
+            "0",
+            "--no-show",
+            "--auto-keep",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "collection complete kept=2" in result.stdout
+    first = output_dir / "swipe-left-positive-001.jsonl"
+    second = output_dir / "swipe-left-positive-002.jsonl"
+    assert first.exists()
+    assert second.exists()
+    first_records = iter_recording(first)
+    events = [record.payload for record in first_records if record.kind == "event"]
+    frames = [record.payload for record in first_records if record.kind == "tracking_frame"]
+    assert [event.event_type for event in events] == [
+        "collection_take_started",
+        "collection_recording_started",
+        "collection_take_finished",
+    ]
+    assert events[0].payload["label"] == "swipe-left-positive"
+    assert events[0].payload["repetition"] == 1
+    assert events[-1].payload["frames"] == 1
+    assert len(frames) == 1
+
+
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
     output = tmp_path / "runtime-events.jsonl"
 

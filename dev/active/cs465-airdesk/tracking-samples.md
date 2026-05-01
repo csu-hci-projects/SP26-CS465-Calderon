@@ -115,11 +115,21 @@ uv run airdesk replay data/recordings/open-palm-hold.jsonl
 Collect continuous positive and negative streams before training or trusting a learned recognizer:
 
 ```bash
+uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --show
+```
+
+The collect command shows the webcam preview, prints the next take, starts a countdown, displays a recording status while writing JSONL, and then prompts to keep, redo, skip, or quit. Use `--auto-keep` for scripted/replay checks.
+
+Lower-level one-off commands are still useful when you want explicit filenames:
+
+```bash
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 10 --label swipe-left-positive --out data/recordings/swipe-left-positive.jsonl
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 10 --label swipe-right-positive --out data/recordings/swipe-right-positive.jsonl
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 15 --label normal-desk-motion-negative --out data/recordings/normal-desk-motion-negative.jsonl
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 15 --label aborted-gestures-negative --out data/recordings/aborted-gestures-negative.jsonl
 ```
+
+These are continuous frame-over-frame landmark streams. Do not try to squeeze a gesture into exactly 30 frames. Sprint 4 feature extraction and causal TCN training can use sliding windows internally, but collection should include lead-in, arming, stroke, release, aborted motion, and background.
 
 Analyze both static and dynamic candidates:
 

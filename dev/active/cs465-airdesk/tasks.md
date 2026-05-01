@@ -57,6 +57,7 @@ Current next sprint: see `sprint-3.md`.
 - [x] Add intent-gated phrase recognizer foundation for temporal gestures
 - [x] Detect flick/swipe left/right from normalized landmark motion
 - [x] Add continuous positive and negative recording protocol for dynamic gestures
+- [x] Add prompted collection workflow with countdown and keep/redo/skip
 - [x] Decide whether point left/right is reliable enough for Sprint 3
 - [x] Show command-mode state in live `run --show` preview
 - [x] Add pause/kill-switch behavior before real execution
