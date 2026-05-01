@@ -66,10 +66,20 @@ def test_preview_coordinate_helpers_clamp_to_image_bounds() -> None:
     point = FakePoint(x=1.5, y=-0.2)
 
     assert pixel_point(point, width=640, height=480) == (639, 0)
+    assert pixel_point(FakePoint(x=0.25, y=0.5), width=640, height=480, mirror=True) == (
+        480,
+        240,
+    )
     assert bbox_pixels((-0.1, 0.2, 1.2, 0.8), width=640, height=480) == (
         0,
         96,
         639,
+        384,
+    )
+    assert bbox_pixels((0.2, 0.2, 0.6, 0.8), width=640, height=480, mirror=True) == (
+        256,
+        96,
+        512,
         384,
     )
 

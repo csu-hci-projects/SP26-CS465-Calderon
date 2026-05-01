@@ -9,7 +9,14 @@ from typing import Any
 from urllib.request import urlretrieve
 
 from airdesk.capture.opencv import CameraSettings, OpenCVCaptureBackend
-from airdesk.state.types import HandLandmarks, Landmark, NormalizedHand, TrackingFrame
+from airdesk.gestures.primitives import StaticHandPoseRecognizer
+from airdesk.state.types import (
+    FrameMetadata,
+    HandLandmarks,
+    Landmark,
+    NormalizedHand,
+    TrackingFrame,
+)
 
 HAND_LANDMARKER_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/"
@@ -57,6 +64,10 @@ class MediaPipeHandTrackerBackend:
     min_hand_presence_confidence: float = 0.5
     min_tracking_confidence: float = 0.5
     show: bool = False
+    preview_mirror: bool = True
+    preview_gestures: bool = True
+    preview_extended_threshold: float = 0.08
+    preview_pinch_threshold: float = 0.06
     name: str = "mediapipe"
 
     def __post_init__(self) -> None:
@@ -157,17 +168,36 @@ class MediaPipeHandTrackerBackend:
 
     def _draw_debug_image(self, image: Any, hands: tuple[NormalizedHand, ...]) -> bool:
         assert self._cv2 is not None
-        height, width = image.shape[:2]
-        self._draw_header(image, hands)
+        display_image = self._cv2.flip(image, 1) if self.preview_mirror else image
+        height, width = display_image.shape[:2]
+        candidates = self._preview_candidates(hands, width=width, height=height)
+        self._draw_header(display_image, hands, candidates)
         for hand in hands:
-            self._draw_hand_overlay(image, hand, width=width, height=height)
-        self._cv2.imshow(PREVIEW_WINDOW_NAME, image)
+            self._draw_hand_overlay(
+                display_image,
+                hand,
+                width=width,
+                height=height,
+                candidate_names=candidates.get(hand.hand_id, ()),
+            )
+        self._draw_gesture_strip(display_image, candidates)
+        self._cv2.imshow(PREVIEW_WINDOW_NAME, display_image)
         key = self._cv2.waitKey(1) & 0xFF
         return key not in (27, ord("q"))
 
-    def _draw_header(self, image: Any, hands: tuple[NormalizedHand, ...]) -> None:
+    def _draw_header(
+        self,
+        image: Any,
+        hands: tuple[NormalizedHand, ...],
+        candidates: dict[str, tuple[str, ...]],
+    ) -> None:
         assert self._cv2 is not None
-        text = f"AirDesk live view | hands={len(hands)} | q/esc quits"
+        gesture_count = sum(len(names) for names in candidates.values())
+        mirror = "mirror" if self.preview_mirror else "camera"
+        text = (
+            f"AirDesk live view | {mirror} | hands={len(hands)} | "
+            f"gestures={gesture_count} | q/esc quits"
+        )
         self._cv2.rectangle(image, (0, 0), (image.shape[1], 34), (20, 20, 20), -1)
         self._cv2.putText(
             image,
@@ -187,6 +217,7 @@ class MediaPipeHandTrackerBackend:
         *,
         width: int,
         height: int,
+        candidate_names: tuple[str, ...],
     ) -> None:
         assert self._cv2 is not None
         landmarks = hand.landmarks.landmarks
@@ -197,17 +228,45 @@ class MediaPipeHandTrackerBackend:
                 continue
             self._cv2.line(
                 image,
-                pixel_point(landmarks[start], width=width, height=height),
-                pixel_point(landmarks[end], width=width, height=height),
+                pixel_point(
+                    landmarks[start],
+                    width=width,
+                    height=height,
+                    mirror=self.preview_mirror,
+                ),
+                pixel_point(
+                    landmarks[end],
+                    width=width,
+                    height=height,
+                    mirror=self.preview_mirror,
+                ),
                 muted,
                 2,
             )
         for landmark in landmarks:
-            self._cv2.circle(image, pixel_point(landmark, width=width, height=height), 3, color, -1)
+            self._cv2.circle(
+                image,
+                pixel_point(
+                    landmark,
+                    width=width,
+                    height=height,
+                    mirror=self.preview_mirror,
+                ),
+                3,
+                color,
+                -1,
+            )
 
-        x_min, y_min, x_max, y_max = bbox_pixels(hand.bbox, width=width, height=height)
+        x_min, y_min, x_max, y_max = bbox_pixels(
+            hand.bbox,
+            width=width,
+            height=height,
+            mirror=self.preview_mirror,
+        )
         self._cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
         label = hand_label(hand)
+        if candidate_names:
+            label = f"{label} | {', '.join(candidate_names)}"
         self._cv2.putText(
             image,
             label,
@@ -218,6 +277,57 @@ class MediaPipeHandTrackerBackend:
             2,
             self._cv2.LINE_AA,
         )
+
+    def _draw_gesture_strip(self, image: Any, candidates: dict[str, tuple[str, ...]]) -> None:
+        assert self._cv2 is not None
+        names = sorted({name for hand_names in candidates.values() for name in hand_names})
+        text = "gestures: " + (", ".join(names) if names else "none")
+        y = image.shape[0] - 14
+        self._cv2.rectangle(
+            image, (0, image.shape[0] - 42), (image.shape[1], image.shape[0]), (20, 20, 20), -1
+        )
+        self._cv2.putText(
+            image,
+            text,
+            (10, y),
+            self._cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (0, 255, 255) if names else (190, 190, 190),
+            2,
+            self._cv2.LINE_AA,
+        )
+
+    def _preview_candidates(
+        self,
+        hands: tuple[NormalizedHand, ...],
+        *,
+        width: int,
+        height: int,
+    ) -> dict[str, tuple[str, ...]]:
+        if not self.preview_gestures or not hands:
+            return {}
+        recognizer = StaticHandPoseRecognizer(
+            extended_threshold=self.preview_extended_threshold,
+            pinch_threshold=self.preview_pinch_threshold,
+        )
+        frame = TrackingFrame(
+            timestamp=0,
+            source_id="preview",
+            frame=FrameMetadata(
+                timestamp=0,
+                source_id="preview",
+                width=width,
+                height=height,
+                sequence=0,
+            ),
+            hands=hands,
+        )
+        candidates: dict[str, list[str]] = {}
+        for candidate in recognizer.recognize(frame):
+            if candidate.hand_id is None:
+                continue
+            candidates.setdefault(candidate.hand_id, []).append(candidate.name)
+        return {hand_id: tuple(names) for hand_id, names in candidates.items()}
 
 
 def normalized_hands_from_mediapipe_results(results: Any) -> tuple[NormalizedHand, ...]:
@@ -283,9 +393,16 @@ def ensure_hand_landmarker_model(
     return path
 
 
-def pixel_point(landmark: Landmark, *, width: int, height: int) -> tuple[int, int]:
+def pixel_point(
+    landmark: Landmark,
+    *,
+    width: int,
+    height: int,
+    mirror: bool = False,
+) -> tuple[int, int]:
     """Convert a normalized landmark to image pixel coordinates."""
-    x = min(width - 1, max(0, round(landmark.x * width)))
+    x_value = 1.0 - landmark.x if mirror else landmark.x
+    x = min(width - 1, max(0, round(x_value * width)))
     y = min(height - 1, max(0, round(landmark.y * height)))
     return x, y
 
@@ -295,12 +412,16 @@ def bbox_pixels(
     *,
     width: int,
     height: int,
+    mirror: bool = False,
 ) -> tuple[int, int, int, int]:
     """Convert a normalized hand bounding box to pixel coordinates."""
-    x_min = min(width - 1, max(0, round(bbox[0] * width)))
+    x0, y0, x1, y1 = bbox
+    if mirror:
+        x0, x1 = 1.0 - x1, 1.0 - x0
+    x_min = min(width - 1, max(0, round(x0 * width)))
     y_min = min(height - 1, max(0, round(bbox[1] * height)))
-    x_max = min(width - 1, max(0, round(bbox[2] * width)))
-    y_max = min(height - 1, max(0, round(bbox[3] * height)))
+    x_max = min(width - 1, max(0, round(x1 * width)))
+    y_max = min(height - 1, max(0, round(y1 * height)))
     return x_min, y_min, x_max, y_max
 
 

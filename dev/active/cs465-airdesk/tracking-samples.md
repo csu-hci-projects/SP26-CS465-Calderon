@@ -36,6 +36,8 @@ uv run airdesk view --device /dev/video0
 
 The preview shows the camera frame, hand landmarks, hand skeleton, bounding box, handedness/confidence label, and hand count. Press `q` or `esc` in the preview window to quit.
 
+The preview is mirrored by default so setup feels like looking into a mirror. Use `--no-mirror` if you want the raw camera orientation.
+
 Then use numeric tuning while moving through open palm, fist, and pinch:
 
 ```bash

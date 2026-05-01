@@ -78,6 +78,7 @@ def track(
     ] = True,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
+    mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
 ) -> None:
     """Run live tracking and print compact frame summaries without recording or actions."""
     tracker = _make_tracker(
@@ -88,6 +89,7 @@ def track(
         camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
+        preview_mirror=mirror,
     )
     recognizer = StaticHandPoseRecognizer()
     try:
@@ -132,6 +134,7 @@ def tune(
     ] = True,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
+    mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
 ) -> None:
     """Run a live primitive-tuning session with per-frame landmark features."""
     tracker = _make_tracker(
@@ -142,6 +145,9 @@ def tune(
         camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
+        preview_mirror=mirror,
+        preview_extended_threshold=extended_threshold,
+        preview_pinch_threshold=pinch_threshold,
     )
     recognizer = StaticHandPoseRecognizer(
         extended_threshold=extended_threshold,
@@ -188,6 +194,7 @@ def view(
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
 ) -> None:
     """Open a live webcam preview with MediaPipe hand overlays."""
     tracker = _make_tracker(
@@ -198,6 +205,7 @@ def view(
         camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
         model_path=model_path,
         auto_download_model=auto_download_model,
+        preview_mirror=mirror,
     )
     typer.echo("Opening AirDesk live view. Press q or esc in the preview window to quit.")
     try:
@@ -432,6 +440,9 @@ def _make_tracker(
     camera_settings: CameraSettings | None = None,
     model_path: Path = DEFAULT_HAND_LANDMARKER_MODEL,
     auto_download_model: bool = True,
+    preview_mirror: bool = True,
+    preview_extended_threshold: float = 0.08,
+    preview_pinch_threshold: float = 0.06,
 ) -> HandTrackerBackend:
     if backend == "mediapipe":
         from airdesk.tracking.mediapipe import MediaPipeHandTrackerBackend
@@ -443,6 +454,9 @@ def _make_tracker(
             camera_settings=camera_settings or CameraSettings(),
             max_frames=max_frames,
             show=show,
+            preview_mirror=preview_mirror,
+            preview_extended_threshold=preview_extended_threshold,
+            preview_pinch_threshold=preview_pinch_threshold,
         )
     if backend == "replay":
         return ReplayHandTrackerBackend(Path(device))
