@@ -12,7 +12,11 @@ import typer
 
 from airdesk import __version__
 from airdesk.actions.dry_run import DryRunActionTarget
-from airdesk.actions.hyprland import HYPRLAND_DISPATCH
+from airdesk.actions.hyprland import (
+    HYPRLAND_DISPATCH,
+    SAFE_HYPRLAND_DISPATCHERS,
+    GuardedHyprlandActionTarget,
+)
 from airdesk.analysis.recording import analyze_recording, format_analysis
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.gestures.base import CompositeGestureRecognizer
@@ -503,6 +507,14 @@ def run(
         typer.Option(help="Profile TOML path."),
     ] = Path("configs/profiles/study-safe.toml"),
     dry_run: Annotated[bool, typer.Option(help="Route actions to the dry-run target.")] = True,
+    execute: Annotated[
+        bool,
+        typer.Option(help="Opt in to guarded real Hyprland execution."),
+    ] = False,
+    allow_profile_execute: Annotated[
+        bool,
+        typer.Option(help="Allow --execute even when the profile defaults to dry-run."),
+    ] = False,
     width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
     height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
     fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
@@ -543,9 +555,10 @@ def run(
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
 ) -> None:
     """Run the safe recognition/policy/action pipeline."""
-    if not dry_run:
-        typer.echo("Sprint 2 runtime only supports --dry-run.", err=True)
+    if not dry_run and not execute:
+        typer.echo("Real actions require explicit --execute.", err=True)
         raise typer.Exit(code=1)
+    effective_dry_run = not execute
     source = str(recording) if recording is not None else device
     tracker = _make_tracker(
         backend=backend,
@@ -561,19 +574,26 @@ def run(
         min_tracking_confidence=min_tracking_confidence,
     )
     loaded_profile = load_profile(profile)
+    action_target = _make_runtime_action_target(
+        profile=loaded_profile,
+        execute=execute,
+        allow_profile_execute=allow_profile_execute,
+    )
     event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
     try:
         runtime = AirdeskRuntime(
             tracker=tracker,
             profile=loaded_profile,
-            action_target=DryRunActionTarget(),
+            action_target=action_target,
             event_writer=event_writer,
             paused=pause_on_start,
             session_metadata={
                 "backend": backend,
                 "source": source,
                 "profile_path": str(profile),
-                "dry_run": dry_run,
+                "dry_run": effective_dry_run,
+                "execute": execute,
+                "allow_profile_execute": allow_profile_execute,
                 "paused_at_start": pause_on_start,
                 "show": show,
                 "max_frames": max_frames,
@@ -616,6 +636,37 @@ def _attach_runtime_preview_controls(
         return False
 
     tracker.preview_key_handler = handle_key
+
+
+def _make_runtime_action_target(
+    *,
+    profile: object,
+    execute: bool,
+    allow_profile_execute: bool,
+) -> DryRunActionTarget | GuardedHyprlandActionTarget:
+    if not execute:
+        return DryRunActionTarget()
+    if getattr(profile, "dry_run_default", True) and not allow_profile_execute:
+        typer.echo(
+            "Profile defaults to dry-run; use --allow-profile-execute to override for "
+            "guarded local pilot execution.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if getattr(profile, "destructive_actions", False):
+        typer.echo("Refusing --execute for a profile that permits destructive actions.", err=True)
+        raise typer.Exit(code=1)
+    unsafe_bindings = [
+        binding
+        for binding in getattr(profile, "bindings", ())
+        if binding.action_type == HYPRLAND_DISPATCH
+        and binding.command not in SAFE_HYPRLAND_DISPATCHERS
+    ]
+    if unsafe_bindings:
+        commands = ", ".join(sorted({binding.command for binding in unsafe_bindings}))
+        typer.echo(f"Refusing --execute for unsafe Hyprland dispatchers: {commands}", err=True)
+        raise typer.Exit(code=1)
+    return GuardedHyprlandActionTarget()
 
 
 def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:

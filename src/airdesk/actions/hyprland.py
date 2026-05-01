@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from airdesk.state.types import ActionRequest, ActionResult, utc_timestamp
 
 HYPRLAND_DISPATCH = "hyprland.dispatch"
+SAFE_HYPRLAND_DISPATCHERS = frozenset({"workspace", "movefocus"})
 
 
 class CommandRunner(Protocol):
@@ -62,3 +63,32 @@ class HyprlandActionTarget:
         if not isinstance(args, list):
             raise TypeError("Hyprland action parameters['args'] must be a list")
         return ["hyprctl", "dispatch", request.command, *[str(arg) for arg in args]]
+
+
+@dataclass
+class GuardedHyprlandActionTarget:
+    """Allowlisted Hyprland target for pilot-safe real execution."""
+
+    inner: HyprlandActionTarget = field(default_factory=HyprlandActionTarget)
+    allowed_dispatchers: frozenset[str] = SAFE_HYPRLAND_DISPATCHERS
+    name: str = "hyprland-guarded"
+
+    def execute(self, request: ActionRequest) -> ActionResult:
+        if request.action_type != HYPRLAND_DISPATCH:
+            return ActionResult(
+                request_id=request.request_id,
+                ok=False,
+                target=self.name,
+                executed_at=utc_timestamp(),
+                message=f"unsupported action type for guarded execution: {request.action_type}",
+            )
+        if request.command not in self.allowed_dispatchers:
+            return ActionResult(
+                request_id=request.request_id,
+                ok=False,
+                target=self.name,
+                executed_at=utc_timestamp(),
+                message=f"blocked unsafe Hyprland dispatcher: {request.command}",
+                command_preview=HyprlandActionTarget.build_command(request),
+            )
+        return self.inner.execute(request)

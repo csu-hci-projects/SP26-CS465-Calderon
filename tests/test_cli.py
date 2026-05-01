@@ -72,6 +72,8 @@ def test_run_help_exposes_live_tuning_options() -> None:
     assert "--min-tracking-confidence" in result.stdout
     assert "--events-out" in result.stdout
     assert "--pause-on-start" in result.stdout
+    assert "--execute" in result.stdout
+    assert "--allow-profile-execute" in result.stdout
 
 
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
@@ -105,6 +107,62 @@ def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
     assert events[1].payload["events"] == 2
     assert events[1].payload["actions"] == 0
     assert events[1].payload["interrupted"] is False
+
+
+def test_run_refuses_no_dry_run_without_execute() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--no-dry-run",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Real actions require explicit --execute" in result.stderr
+
+
+def test_run_execute_requires_profile_override_for_dry_run_profiles() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--profile",
+            "configs/profiles/window-manager.toml",
+            "--execute",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Profile defaults to dry-run" in result.stderr
+
+
+def test_run_execute_allows_replay_when_profile_override_is_explicit() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--profile",
+            "configs/profiles/window-manager.toml",
+            "--execute",
+            "--allow-profile-execute",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "frames=1" in result.stdout
 
 
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:
