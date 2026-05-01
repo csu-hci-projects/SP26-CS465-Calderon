@@ -149,6 +149,6 @@ Current third sprint direction:
 - add a safe `run` path over replay/live backends that routes gestures to `DryRunActionTarget`
 - do not execute real Hyprland commands from live gestures until reliability data supports it
 - current camera finding: `/dev/video0` needs OpenCV index normalization plus `--fourcc MJPG` to honor `640x480 @ 30 FPS`
-- next best task: record deliberate hand-in-frame samples and tune primitive thresholds against real landmark recordings
+- next best task: use `airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show` for live primitive tuning, then record deliberate hand-in-frame samples once the thresholds look plausible
 
 ---

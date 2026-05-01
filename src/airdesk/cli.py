@@ -105,6 +105,71 @@ def track(
 
 
 @app.command()
+def tune(
+    backend: Annotated[str, typer.Option(help="Tracking backend to tune.")] = "mediapipe",
+    device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")
+    ] = "MJPG",
+    extended_threshold: Annotated[
+        float,
+        typer.Option(help="Finger tip-vs-MCP y-distance threshold."),
+    ] = 0.08,
+    pinch_threshold: Annotated[
+        float,
+        typer.Option(help="Thumb/index distance threshold for pinch."),
+    ] = 0.06,
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
+) -> None:
+    """Run a live primitive-tuning session with per-frame landmark features."""
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+    )
+    recognizer = StaticHandPoseRecognizer(
+        extended_threshold=extended_threshold,
+        pinch_threshold=pinch_threshold,
+    )
+    previous_timestamp: float | None = None
+    typer.echo(
+        "target: open_palm extended=4 spread>=0.16 | fist folded=4 | "
+        f"pinch distance<={pinch_threshold:.3f}"
+    )
+    try:
+        tracker.start()
+        for frame in tracker.frames():
+            candidates = recognizer.recognize(frame)
+            features = recognizer.features_for_frame(frame)
+            frame_fps = _instant_fps(previous_timestamp, frame.timestamp)
+            previous_timestamp = frame.timestamp
+            typer.echo(_format_tune_summary(frame, candidates, features, frame_fps))
+    except KeyboardInterrupt:
+        typer.echo("interrupted")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
+
+
+@app.command()
 def record(
     out: Annotated[Path, typer.Option(help="Output JSONL recording path.")],
     backend: Annotated[str, typer.Option(help="Tracking backend to record.")] = "mediapipe",
@@ -276,6 +341,42 @@ def _format_frame_summary(frame: TrackingFrame, candidates: object) -> str:
         f"frame={frame.frame.sequence} hands={len(frame.hands)} "
         f"size={frame.frame.width}x{frame.frame.height} candidates={names}"
     )
+
+
+def _format_tune_summary(
+    frame: TrackingFrame,
+    candidates: object,
+    features: object,
+    frame_fps: float | None,
+) -> str:
+    names = ",".join(candidate.name for candidate in candidates) or "none"
+    fps = f"{frame_fps:.1f}" if frame_fps is not None else "unknown"
+    if not features:
+        return (
+            f"frame={frame.frame.sequence} fps={fps} hands=0 "
+            f"size={frame.frame.width}x{frame.frame.height} candidates={names}"
+        )
+    feature_parts = []
+    for feature in features:
+        values = feature.to_flat_dict()
+        feature_parts.append(
+            "hand={hand_id} side={handedness} conf={confidence} extended={extended} "
+            "folded={folded} spread={spread} pinch={pinch}".format(**values)
+        )
+    return (
+        f"frame={frame.frame.sequence} fps={fps} hands={len(feature_parts)} "
+        f"size={frame.frame.width}x{frame.frame.height} candidates={names} | "
+        + " | ".join(feature_parts)
+    )
+
+
+def _instant_fps(previous_timestamp: float | None, timestamp: float) -> float | None:
+    if previous_timestamp is None:
+        return None
+    elapsed = timestamp - previous_timestamp
+    if elapsed <= 0:
+        return None
+    return 1.0 / elapsed
 
 
 def _make_tracker(

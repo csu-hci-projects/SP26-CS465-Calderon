@@ -14,6 +14,32 @@ INDEX_TIP = 8
 
 
 @dataclass(frozen=True)
+class HandPoseFeatures:
+    """Primitive features used for static hand-pose tuning."""
+
+    hand_id: str
+    extended_fingers: int
+    folded_fingers: int
+    finger_spread: float
+    pinch_distance: float
+    hand_confidence: float | None
+    handedness: str | None
+
+    def to_flat_dict(self) -> dict[str, float | int | str]:
+        return {
+            "hand_id": self.hand_id,
+            "extended": self.extended_fingers,
+            "folded": self.folded_fingers,
+            "spread": round(self.finger_spread, 4),
+            "pinch": round(self.pinch_distance, 4),
+            "confidence": round(self.hand_confidence, 4)
+            if self.hand_confidence is not None
+            else "unknown",
+            "handedness": self.handedness or "unknown",
+        }
+
+
+@dataclass(frozen=True)
 class StaticHandPoseRecognizer:
     """Recognizes the first Sprint 0 synthetic hand-pose primitives."""
 
@@ -29,50 +55,73 @@ class StaticHandPoseRecognizer:
 
     def _recognize_hand(self, timestamp: float, hand: NormalizedHand) -> list[GestureCandidate]:
         results: list[GestureCandidate] = []
-        if len(hand.landmarks.landmarks) < 21:
+        features = self.features_for_hand(hand)
+        if features is None:
             return results
 
-        extended = self._extended_fingers(hand)
-        folded = 4 - extended
-        spread = self._finger_spread(hand)
-
-        if extended >= 4 and spread >= 0.16:
-            confidence = min(1.0, 0.75 + spread)
+        if features.extended_fingers >= 4 and features.finger_spread >= 0.16:
+            confidence = min(1.0, 0.75 + features.finger_spread)
             results.append(
                 GestureCandidate(
                     name="open_palm",
                     confidence=confidence,
                     timestamp=timestamp,
                     hand_id=hand.hand_id,
-                    metadata={"extended_fingers": extended, "spread": spread},
+                    metadata={
+                        "extended_fingers": features.extended_fingers,
+                        "spread": features.finger_spread,
+                    },
                 )
             )
 
-        if folded >= 4:
+        if features.folded_fingers >= 4:
             results.append(
                 GestureCandidate(
                     name="fist",
                     confidence=1.0,
                     timestamp=timestamp,
                     hand_id=hand.hand_id,
-                    metadata={"folded_fingers": folded},
+                    metadata={"folded_fingers": features.folded_fingers},
                 )
             )
 
-        pinch_distance = self._pinch_distance(hand)
-        if pinch_distance <= self.pinch_threshold:
-            confidence = max(0.0, 1.0 - (pinch_distance / self.pinch_threshold))
+        if features.pinch_distance <= self.pinch_threshold:
+            confidence = max(0.0, 1.0 - (features.pinch_distance / self.pinch_threshold))
             results.append(
                 GestureCandidate(
                     name="pinch",
                     confidence=confidence,
                     timestamp=timestamp,
                     hand_id=hand.hand_id,
-                    metadata={"pinch_distance": pinch_distance},
+                    metadata={"pinch_distance": features.pinch_distance},
                 )
             )
 
         return results
+
+    def features_for_frame(self, frame: TrackingFrame) -> list[HandPoseFeatures]:
+        """Return primitive tuning features for each hand in a frame."""
+        features: list[HandPoseFeatures] = []
+        for hand in frame.hands:
+            hand_features = self.features_for_hand(hand)
+            if hand_features is not None:
+                features.append(hand_features)
+        return features
+
+    def features_for_hand(self, hand: NormalizedHand) -> HandPoseFeatures | None:
+        """Return primitive tuning features for one hand."""
+        if len(hand.landmarks.landmarks) < 21:
+            return None
+        extended = self._extended_fingers(hand)
+        return HandPoseFeatures(
+            hand_id=hand.hand_id,
+            extended_fingers=extended,
+            folded_fingers=4 - extended,
+            finger_spread=self._finger_spread(hand),
+            pinch_distance=self._pinch_distance(hand),
+            hand_confidence=hand.confidence,
+            handedness=hand.handedness,
+        )
 
     def _extended_fingers(self, hand: NormalizedHand) -> int:
         landmarks = hand.landmarks.landmarks

@@ -314,6 +314,7 @@ Updated: 2026-04-30
 - OpenCV did not honor requested settings when passed the literal `/dev/video0` path, so AirDesk now normalizes `/dev/videoN` to numeric index `N`.
 - `airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG` now reports `640x480 @ 30 FPS`.
 - `airdesk analyze` reports frame counts, hand-present frames, average FPS, primitive candidate counts, longest candidate runs, and simple landmark jitter.
+- `airdesk tune` runs the live backend and prints per-frame primitive features for immediate threshold tuning.
 - `airdesk run --backend replay ... --dry-run` routes replayed frames through recognition, command-mode policy, profile binding resolution, and `DryRunActionTarget`.
 - Real Hyprland execution remains out of scope for Sprint 2.
 

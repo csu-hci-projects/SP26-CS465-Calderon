@@ -35,6 +35,7 @@ Live camera/tracking support is optional:
 ```bash
 uv sync --dev --extra live
 uv run airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG
+uv run airdesk tune --device /dev/video0 --max-frames 300 --show
 uv run airdesk track --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --no-show
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --out data/recordings/sample.jsonl
 uv run airdesk replay data/recordings/sample.jsonl

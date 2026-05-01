@@ -43,3 +43,17 @@ def test_pinch_primitive(
     candidates = StaticHandPoseRecognizer().recognize(frame)
 
     assert "pinch" in names(candidates)
+
+
+def test_primitive_features_expose_live_tuning_values(
+    make_hand: Callable[[str], NormalizedHand],
+) -> None:
+    recognizer = StaticHandPoseRecognizer()
+
+    features = recognizer.features_for_hand(make_hand("pinch"))
+
+    assert features is not None
+    assert features.extended_fingers == 4
+    assert features.folded_fingers == 0
+    assert features.pinch_distance == 0
+    assert features.finger_spread > 0

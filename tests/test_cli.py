@@ -15,6 +15,14 @@ def test_cli_help_works() -> None:
     assert "AirDesk spatial input prototype CLI" in result.stdout
 
 
+def test_tune_help_exposes_threshold_options() -> None:
+    result = CliRunner().invoke(app, ["tune", "--help"])
+
+    assert result.exit_code == 0
+    assert "--extended-threshold" in result.stdout
+    assert "--pinch-threshold" in result.stdout
+
+
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:
     result = CliRunner().invoke(app, ["replay", "tests/fixtures/replay-one-frame.jsonl"])
 

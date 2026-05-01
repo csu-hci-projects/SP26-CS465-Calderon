@@ -4,6 +4,8 @@
 
 These samples are short local recordings used to decide whether live tracking is good enough for command-mode work.
 
+Use live tuning first when you want immediate feedback. Record after the live numbers look plausible so threshold changes can be checked against the same landmark stream later.
+
 Record landmarks/events by default. Do not record raw video unless there is a deliberate reason and the file is kept out of Git.
 
 ## Setup
@@ -23,6 +25,30 @@ uv run airdesk camera modes --device /dev/video0
 ```
 
 Prefer the lowest resolution that keeps the hand landmarks stable.
+
+## Live Tuning
+
+Use this while moving through open palm, fist, and pinch:
+
+```bash
+uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
+```
+
+The live output prints:
+
+- frame FPS
+- hand count and confidence
+- extended/folded finger counts
+- finger spread
+- thumb/index pinch distance
+- recognized primitive candidates
+
+Useful threshold experiments:
+
+```bash
+uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --pinch-threshold 0.08
+uv run airdesk tune --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --extended-threshold 0.06
+```
 
 ## Recommended Samples
 
