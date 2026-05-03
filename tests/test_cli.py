@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from airdesk.cli import app
+from airdesk.cli import _handle_collection_preview_key, app
 from airdesk.recording.jsonl import iter_recording
 
 
@@ -130,6 +130,18 @@ def test_collect_replay_auto_keep_writes_prompted_takes(tmp_path: Path) -> None:
     assert events[0].payload["repetition"] == 1
     assert events[-1].payload["frames"] == 1
     assert len(frames) == 1
+
+
+def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
+    state: dict[str, str | None] = {"phase": "waiting", "decision": None}
+
+    assert _handle_collection_preview_key(ord(" "), state) is True
+    assert state == {"phase": "countdown", "decision": None}
+
+    state = {"phase": "review", "decision": None}
+
+    assert _handle_collection_preview_key(ord("r"), state) is True
+    assert state == {"phase": "done", "decision": "redo"}
 
 
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:

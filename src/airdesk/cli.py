@@ -6,6 +6,7 @@ import glob
 import platform
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 from typing import Annotated
@@ -45,6 +46,14 @@ DEFAULT_COLLECTION_LABELS = (
     "swipe-right-positive",
     "normal-desk-motion-negative",
 )
+
+
+@dataclass(frozen=True)
+class CollectionTakeResult:
+    """Result of one prompted collection take."""
+
+    frames: int
+    decision: str
 
 app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CLI.")
 camera_app = typer.Typer(help="Camera discovery and probing commands.")
@@ -502,7 +511,10 @@ def collect(
             repetition = kept + 1
             output = _next_collection_path(out_dir, current_label, repetition)
             typer.echo(f"\n{current_label} rep {repetition}/{reps}")
-            if not auto_keep:
+            preview_driven = show and not auto_keep and backend == "mediapipe"
+            if preview_driven:
+                typer.echo("Use the preview: space=start, k=keep, r=redo, s=skip, q=quit.")
+            elif not auto_keep:
                 typer.echo("Press Enter to start, or type s to skip this rep, q to quit.")
                 response = input("> ").strip().lower()
                 if response == "q":
@@ -511,7 +523,7 @@ def collect(
                     kept += 1
                     continue
 
-            frame_count = _record_collection_take(
+            take = _record_collection_take(
                 output=output,
                 label=current_label,
                 repetition=repetition,
@@ -530,23 +542,40 @@ def collect(
                 min_presence_confidence=min_presence_confidence,
                 min_tracking_confidence=min_tracking_confidence,
                 show=show,
+                preview_driven=preview_driven,
             )
 
             if auto_keep:
-                keep = True
+                keep = take.decision == "keep"
             else:
-                typer.echo(f"Recorded frames={frame_count} out={output}")
-                response = input("Keep, redo, skip, or quit? [k/r/s/q] ").strip().lower() or "k"
-                if response == "q":
-                    raise typer.Exit()
-                keep = response == "k"
-                if response == "r":
-                    output.unlink(missing_ok=True)
-                    continue
-                if response == "s":
-                    output.unlink(missing_ok=True)
-                    kept += 1
-                    continue
+                if preview_driven:
+                    if take.decision == "quit":
+                        raise typer.Exit()
+                    if take.decision == "redo":
+                        output.unlink(missing_ok=True)
+                        continue
+                    if take.decision == "skip":
+                        output.unlink(missing_ok=True)
+                        kept += 1
+                        continue
+                    keep = take.decision == "keep"
+                    if keep:
+                        typer.echo(f"Kept frames={take.frames} out={output}")
+                else:
+                    typer.echo(f"Recorded frames={take.frames} out={output}")
+                    response = (
+                        input("Keep, redo, skip, or quit? [k/r/s/q] ").strip().lower() or "k"
+                    )
+                    if response == "q":
+                        raise typer.Exit()
+                    keep = response == "k"
+                    if response == "r":
+                        output.unlink(missing_ok=True)
+                        continue
+                    if response == "s":
+                        output.unlink(missing_ok=True)
+                        kept += 1
+                        continue
             if keep:
                 kept_paths.append(output)
                 kept += 1
@@ -795,8 +824,13 @@ def _record_collection_take(
     min_presence_confidence: float,
     min_tracking_confidence: float,
     show: bool,
-) -> int:
+    preview_driven: bool,
+) -> CollectionTakeResult:
     status = {"text": f"ready: {label} rep {repetition}"}
+    state: dict[str, str | None] = {
+        "phase": "waiting" if preview_driven else "countdown",
+        "decision": None,
+    }
     tracker = _make_tracker(
         backend=backend,
         device=device,
@@ -810,7 +844,11 @@ def _record_collection_take(
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
     )
-    _attach_collection_preview_status(tracker, lambda: status["text"])
+    _attach_collection_preview_controls(
+        tracker,
+        status_provider=lambda: status["text"],
+        key_handler=lambda key: _handle_collection_preview_key(key, state),
+    )
     frame_count = 0
     interrupted = False
     first_frame_timestamp: float | None = None
@@ -848,13 +886,32 @@ def _record_collection_take(
             )
             try:
                 for frame in tracker.frames():
-                    if first_frame_timestamp is None:
-                        first_frame_timestamp = frame.timestamp
-                    elapsed = frame.timestamp - first_frame_timestamp
-                    if elapsed < countdown:
-                        remaining = countdown - elapsed
-                        status["text"] = f"countdown {remaining:.1f}s | {label} rep {repetition}"
+                    if state["phase"] == "done":
+                        break
+                    if state["phase"] == "waiting":
+                        status["text"] = (
+                            f"{label} rep {repetition} | position hand | "
+                            "space=start s=skip q=quit"
+                        )
                         continue
+                    if state["phase"] == "review":
+                        if state["decision"] is not None:
+                            break
+                        status["text"] = (
+                            f"done frames={frame_count} | k=keep r=redo s=skip q=quit"
+                        )
+                        continue
+                    if state["phase"] == "countdown":
+                        if first_frame_timestamp is None:
+                            first_frame_timestamp = frame.timestamp
+                        elapsed = frame.timestamp - first_frame_timestamp
+                        if elapsed < countdown:
+                            remaining = countdown - elapsed
+                            status["text"] = (
+                                f"countdown {remaining:.1f}s | {label} rep {repetition}"
+                            )
+                            continue
+                        state["phase"] = "recording"
                     if recording_started_at is None:
                         recording_started_at = frame.timestamp
                         writer.write_event(
@@ -866,7 +923,14 @@ def _record_collection_take(
                         )
                     recorded_elapsed = frame.timestamp - recording_started_at
                     if recorded_elapsed >= duration:
-                        break
+                        state["phase"] = "review"
+                        if not preview_driven:
+                            state["decision"] = "keep"
+                            break
+                        status["text"] = (
+                            f"done frames={frame_count} | k=keep r=redo s=skip q=quit"
+                        )
+                        continue
                     status["text"] = (
                         f"recording {recorded_elapsed:.1f}/{duration:.1f}s | "
                         f"{label} rep {repetition}"
@@ -902,15 +966,45 @@ def _record_collection_take(
         raise typer.Exit(code=1) from exc
     finally:
         tracker.stop()
-    return frame_count
+    return CollectionTakeResult(frames=frame_count, decision=state["decision"] or "keep")
 
 
-def _attach_collection_preview_status(
+def _attach_collection_preview_controls(
     tracker: HandTrackerBackend,
     status_provider: Callable[[], str],
+    key_handler: Callable[[int], bool] | None = None,
 ) -> None:
     if isinstance(tracker, MediaPipeHandTrackerBackend):
         tracker.preview_status_provider = status_provider
+        tracker.preview_key_handler = key_handler
+
+
+def _handle_collection_preview_key(key: int, state: dict[str, str | None]) -> bool:
+    phase = state["phase"]
+    if phase == "waiting":
+        if key == ord(" "):
+            state["phase"] = "countdown"
+            return True
+        if key == ord("s"):
+            state["decision"] = "skip"
+            state["phase"] = "done"
+            return True
+        if key == ord("q"):
+            state["decision"] = "quit"
+            state["phase"] = "done"
+            return True
+    if phase == "review":
+        decisions = {
+            ord("k"): "keep",
+            ord("r"): "redo",
+            ord("s"): "skip",
+            ord("q"): "quit",
+        }
+        if key in decisions:
+            state["decision"] = decisions[key]
+            state["phase"] = "done"
+            return True
+    return False
 
 
 def _next_collection_path(out_dir: Path, label: str, repetition: int) -> Path:

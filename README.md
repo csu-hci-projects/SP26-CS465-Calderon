@@ -67,6 +67,8 @@ uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-lef
 uv run airdesk hyprland dry-run workspace r+1
 ```
 
+In `airdesk collect --show`, use the webcam preview itself: `space` starts the countdown, then `k` keeps, `r` redoes, `s` skips, and `q` quits.
+
 Sprint 3 guarded real execution is opt-in and allowlisted:
 
 ```bash

@@ -118,7 +118,15 @@ Collect continuous positive and negative streams before training or trusting a l
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --show
 ```
 
-The collect command shows the webcam preview, prints the next take, starts a countdown, displays a recording status while writing JSONL, and then prompts to keep, redo, skip, or quit. Use `--auto-keep` for scripted/replay checks.
+The collect command shows the webcam preview before recording so you can position your hand in frame. In the preview window:
+
+- `space` starts the countdown.
+- `k` keeps a finished take.
+- `r` redoes a finished take.
+- `s` skips the current take.
+- `q` quits collection.
+
+The preview displays countdown and recording status while writing JSONL. Use `--auto-keep` for scripted/replay checks.
 
 Lower-level one-off commands are still useful when you want explicit filenames:
 
