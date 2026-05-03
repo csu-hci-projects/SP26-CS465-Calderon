@@ -66,6 +66,8 @@ uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --reps 5 --duration 6 --countdown 3 --show
 uv run airdesk collection-summary data/recordings/sprint4-smoke
 uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json
+uv run airdesk label add-phase data/labels/swipe-left-positive-001.labels.json --phase stroke_left --start 2.4 --end 3.1 --gesture swipe_left
+uv run airdesk label add-event data/labels/swipe-left-positive-001.labels.json --gesture swipe_left --start 2.4 --end 3.1
 uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
 uv run airdesk features export data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/features/swipe-left-positive-001.csv
 uv run airdesk hyprland dry-run workspace r+1

@@ -187,6 +187,56 @@ def test_label_init_and_validate_cli(tmp_path: Path) -> None:
     assert "valid labels=" in validate_result.stdout
 
 
+def test_label_add_phase_and_event_cli(tmp_path: Path) -> None:
+    output = tmp_path / "replay-one-frame.labels.json"
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "init",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out",
+            str(output),
+        ],
+    )
+
+    phase_result = CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-phase",
+            str(output),
+            "--phase",
+            "stroke_left",
+            "--start",
+            "0",
+            "--end",
+            "0",
+            "--gesture",
+            "swipe_left",
+        ],
+    )
+    event_result = CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-event",
+            str(output),
+            "--gesture",
+            "swipe_left",
+            "--start",
+            "0",
+            "--end",
+            "0",
+        ],
+    )
+
+    assert phase_result.exit_code == 0
+    assert event_result.exit_code == 0
+    assert "stroke_left" in output.read_text(encoding="utf-8")
+    assert "swipe_left" in output.read_text(encoding="utf-8")
+
+
 def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
     output = tmp_path / "features.csv"
 

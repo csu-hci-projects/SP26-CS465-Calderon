@@ -26,7 +26,14 @@ from airdesk.features import export_features_csv
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
-from airdesk.labels import init_label_file, load_label_file, save_label_file, validate_label_file
+from airdesk.labels import (
+    add_event_label,
+    add_phase_label,
+    init_label_file,
+    load_label_file,
+    save_label_file,
+    validate_label_file,
+)
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.runtime import AirdeskRuntime, format_runtime_summary
@@ -148,6 +155,65 @@ def label_validate(path: Annotated[Path, typer.Argument(exists=True, readable=Tr
             typer.echo(error, err=True)
         raise typer.Exit(code=1)
     typer.echo(f"valid labels={path}")
+
+
+@label_app.command("add-phase")
+def label_add_phase(
+    path: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    phase: Annotated[str, typer.Option(help="Phase label, e.g. stroke_left.")],
+    start: Annotated[float, typer.Option(help="Start seconds relative to recording start.")],
+    end: Annotated[float, typer.Option(help="End seconds relative to recording start.")],
+    gesture: Annotated[str | None, typer.Option(help="Optional gesture name.")] = None,
+    notes: Annotated[str, typer.Option(help="Optional notes.")] = "",
+) -> None:
+    """Append one phase label using relative seconds from the recording start."""
+    label_file = load_label_file(path)
+    updated = add_phase_label(
+        label_file,
+        phase=phase,
+        start_time=_relative_label_time(label_file.session.start_timestamp, start),
+        end_time=_relative_label_time(label_file.session.start_timestamp, end),
+        gesture=gesture,
+        notes=notes,
+    )
+    _save_valid_label_file(updated, path)
+    typer.echo(f"added phase={phase} labels={path}")
+
+
+@label_app.command("add-event")
+def label_add_event(
+    path: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    gesture: Annotated[str, typer.Option(help="Gesture name, e.g. swipe_left.")],
+    start: Annotated[float, typer.Option(help="Start seconds relative to recording start.")],
+    end: Annotated[float, typer.Option(help="End seconds relative to recording start.")],
+    label_type: Annotated[str, typer.Option(help="Event label type.")] = "gesture",
+    commit: Annotated[
+        float | None,
+        typer.Option(help="Optional commit seconds relative to recording start."),
+    ] = None,
+    intended_command: Annotated[str | None, typer.Option(help="Optional intended command.")] = None,
+    success: Annotated[bool | None, typer.Option(help="Optional success flag.")] = None,
+    notes: Annotated[str, typer.Option(help="Optional notes.")] = "",
+) -> None:
+    """Append one event label using relative seconds from the recording start."""
+    label_file = load_label_file(path)
+    updated = add_event_label(
+        label_file,
+        gesture=gesture,
+        start_time=_relative_label_time(label_file.session.start_timestamp, start),
+        end_time=_relative_label_time(label_file.session.start_timestamp, end),
+        label_type=label_type,
+        commit_time=(
+            _relative_label_time(label_file.session.start_timestamp, commit)
+            if commit is not None
+            else None
+        ),
+        intended_command=intended_command,
+        success=success,
+        notes=notes,
+    )
+    _save_valid_label_file(updated, path)
+    typer.echo(f"added event={gesture} labels={path}")
 
 
 @features_app.command("export")
@@ -1240,6 +1306,21 @@ def _format_collection_totals(rows: list[dict[str, str | int | float]]) -> str:
         values = " ".join(f"{key}={value}" for key, value in label_totals.items())
         parts.append(f"label={label} {values}")
     return "totals | " + " | ".join(parts)
+
+
+def _relative_label_time(start_timestamp: float | None, seconds: float) -> float:
+    if start_timestamp is None:
+        return seconds
+    return start_timestamp + seconds
+
+
+def _save_valid_label_file(label_file: object, path: Path) -> None:
+    result = validate_label_file(label_file)
+    if not result.ok:
+        for error in result.errors:
+            typer.echo(error, err=True)
+        raise typer.Exit(code=1)
+    save_label_file(label_file, path)
 
 
 def _format_frame_summary(frame: TrackingFrame, candidates: object) -> str:

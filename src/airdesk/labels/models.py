@@ -215,6 +215,66 @@ def validate_label_file(label_file: GestureLabelFile) -> LabelValidationResult:
     return LabelValidationResult(ok=not errors, errors=tuple(errors))
 
 
+def add_phase_label(
+    label_file: GestureLabelFile,
+    *,
+    phase: str,
+    start_time: float,
+    end_time: float,
+    gesture: str | None = None,
+    notes: str = "",
+) -> GestureLabelFile:
+    """Return a copy with one additional phase label."""
+    label = GesturePhaseLabel(
+        label_id=_next_label_id("phase", [item.label_id for item in label_file.phase_labels]),
+        phase=phase,
+        start_time=start_time,
+        end_time=end_time,
+        gesture=gesture,
+        notes=notes,
+    )
+    return GestureLabelFile(
+        schema_version=label_file.schema_version,
+        created_at=label_file.created_at,
+        session=label_file.session,
+        event_labels=label_file.event_labels,
+        phase_labels=(*label_file.phase_labels, label),
+    )
+
+
+def add_event_label(
+    label_file: GestureLabelFile,
+    *,
+    gesture: str,
+    start_time: float,
+    end_time: float,
+    label_type: str = "gesture",
+    commit_time: float | None = None,
+    intended_command: str | None = None,
+    success: bool | None = None,
+    notes: str = "",
+) -> GestureLabelFile:
+    """Return a copy with one additional event label."""
+    label = GestureEventLabel(
+        label_id=_next_label_id("event", [item.label_id for item in label_file.event_labels]),
+        label_type=label_type,
+        gesture=gesture,
+        start_time=start_time,
+        end_time=end_time,
+        commit_time=commit_time,
+        intended_command=intended_command,
+        success=success,
+        notes=notes,
+    )
+    return GestureLabelFile(
+        schema_version=label_file.schema_version,
+        created_at=label_file.created_at,
+        session=label_file.session,
+        event_labels=(*label_file.event_labels, label),
+        phase_labels=label_file.phase_labels,
+    )
+
+
 def _metadata_from_recording(
     recording_path: Path,
     *,
@@ -288,3 +348,15 @@ def _validate_interval(
         errors.append(f"{label_id}: start_time is before recording start")
     if session_end is not None and end_time > session_end:
         errors.append(f"{label_id}: end_time is after recording end")
+
+
+def _next_label_id(prefix: str, existing_ids: list[str]) -> str:
+    max_id = 0
+    for label_id in existing_ids:
+        if not label_id.startswith(f"{prefix}-"):
+            continue
+        try:
+            max_id = max(max_id, int(label_id.rsplit("-", maxsplit=1)[1]))
+        except ValueError:
+            continue
+    return f"{prefix}-{max_id + 1:03d}"

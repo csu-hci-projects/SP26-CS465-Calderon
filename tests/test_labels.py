@@ -5,6 +5,8 @@ from pathlib import Path
 from airdesk.labels import (
     GestureLabelFile,
     GesturePhaseLabel,
+    add_event_label,
+    add_phase_label,
     init_label_file,
     load_label_file,
     save_label_file,
@@ -56,3 +58,25 @@ def test_validate_label_file_rejects_unknown_phase() -> None:
 
     assert result.ok is False
     assert "unsupported phase=mystery" in result.errors[0]
+
+
+def test_add_phase_and_event_labels_generate_ids() -> None:
+    label_file = init_label_file(Path("tests/fixtures/replay-one-frame.jsonl"))
+
+    updated = add_phase_label(
+        label_file,
+        phase="stroke_left",
+        start_time=label_file.session.start_timestamp or 0.0,
+        end_time=label_file.session.end_timestamp or 0.0,
+        gesture="swipe_left",
+    )
+    updated = add_event_label(
+        updated,
+        gesture="swipe_left",
+        start_time=label_file.session.start_timestamp or 0.0,
+        end_time=label_file.session.end_timestamp or 0.0,
+    )
+
+    assert updated.phase_labels[-1].label_id == "phase-002"
+    assert updated.event_labels[-1].label_id == "event-001"
+    assert validate_label_file(updated).ok is True
