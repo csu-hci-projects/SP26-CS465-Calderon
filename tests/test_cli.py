@@ -187,6 +187,25 @@ def test_label_init_and_validate_cli(tmp_path: Path) -> None:
     assert "valid labels=" in validate_result.stdout
 
 
+def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
+    output = tmp_path / "features.csv"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "features",
+            "export",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "rows=1" in result.stdout
+    assert "tracking_present" in output.read_text(encoding="utf-8")
+
+
 def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
     state: dict[str, str | None] = {"phase": "waiting", "decision": None}
 

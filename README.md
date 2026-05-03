@@ -67,6 +67,7 @@ uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-lef
 uv run airdesk collection-summary data/recordings/sprint4-smoke
 uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json
 uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
+uv run airdesk features export data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/features/swipe-left-positive-001.csv
 uv run airdesk hyprland dry-run workspace r+1
 ```
 

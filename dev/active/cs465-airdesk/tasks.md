@@ -71,8 +71,8 @@ Current next sprint: see `sprint-3.md`.
 - [x] Define continuous gesture label schema
 - [x] Add `airdesk label init`
 - [x] Add `airdesk label validate`
-- [ ] Add deterministic feature extraction from tracking frames
-- [ ] Add feature export command
+- [x] Add deterministic feature extraction from tracking frames
+- [x] Add feature export command
 - [ ] Add rule/DTW fallback support for personalized dynamic gestures
 - [ ] Add gesture evaluation metrics for continuous sessions
 - [ ] Add `airdesk gesture evaluate`

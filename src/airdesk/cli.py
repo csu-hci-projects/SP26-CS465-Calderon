@@ -22,6 +22,7 @@ from airdesk.actions.hyprland import (
 )
 from airdesk.analysis.recording import analyze_recording, format_analysis
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
+from airdesk.features import export_features_csv
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
@@ -61,11 +62,13 @@ camera_app = typer.Typer(help="Camera discovery and probing commands.")
 hyprland_app = typer.Typer(help="Hyprland action helpers.")
 profile_app = typer.Typer(help="Profile loading and validation commands.")
 label_app = typer.Typer(help="Continuous gesture labeling commands.")
+features_app = typer.Typer(help="Feature extraction commands.")
 
 app.add_typer(camera_app, name="camera")
 app.add_typer(hyprland_app, name="hyprland")
 app.add_typer(profile_app, name="profile")
 app.add_typer(label_app, name="label")
+app.add_typer(features_app, name="features")
 
 
 @app.command()
@@ -145,6 +148,21 @@ def label_validate(path: Annotated[Path, typer.Argument(exists=True, readable=Tr
             typer.echo(error, err=True)
         raise typer.Exit(code=1)
     typer.echo(f"valid labels={path}")
+
+
+@features_app.command("export")
+def features_export(
+    recording: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    out: Annotated[Path, typer.Option(help="Output CSV feature path.")],
+    labels: Annotated[
+        Path | None,
+        typer.Option(help="Optional gesture labels JSON path."),
+    ] = None,
+) -> None:
+    """Export deterministic landmark-derived features as CSV."""
+    label_file = load_label_file(labels) if labels is not None else None
+    rows = export_features_csv(recording, out, labels=label_file)
+    typer.echo(f"exported features={out} rows={len(rows)}")
 
 
 @app.command()
