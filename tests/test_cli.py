@@ -132,6 +132,40 @@ def test_collect_replay_auto_keep_writes_prompted_takes(tmp_path: Path) -> None:
     assert len(frames) == 1
 
 
+def test_collection_summary_reports_directory_totals(tmp_path: Path) -> None:
+    output_dir = tmp_path / "collection"
+    collect_result = CliRunner().invoke(
+        app,
+        [
+            "collect",
+            "--backend",
+            "replay",
+            "--device",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out-dir",
+            str(output_dir),
+            "--label",
+            "normal-desk-motion-negative",
+            "--reps",
+            "1",
+            "--duration",
+            "1",
+            "--countdown",
+            "0",
+            "--no-show",
+            "--auto-keep",
+        ],
+    )
+
+    result = CliRunner().invoke(app, ["collection-summary", str(output_dir)])
+
+    assert collect_result.exit_code == 0
+    assert result.exit_code == 0
+    assert "file=normal-desk-motion-negative-001.jsonl" in result.stdout
+    assert "label=normal-desk-motion-negative" in result.stdout
+    assert "totals | label=normal-desk-motion-negative files=1" in result.stdout
+
+
 def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
     state: dict[str, str | None] = {"phase": "waiting", "decision": None}
 

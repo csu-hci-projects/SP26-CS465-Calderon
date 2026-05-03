@@ -92,6 +92,26 @@ def analyze(path: Annotated[Path, typer.Argument(exists=True, readable=True)]) -
     typer.echo(format_analysis(analyze_recording(path)))
 
 
+@app.command("collection-summary")
+def collection_summary(
+    path: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    pattern: Annotated[
+        str,
+        typer.Option(help="Recording filename pattern for directories."),
+    ] = "*.jsonl",
+) -> None:
+    """Summarize candidate counts across a collection directory or recording files."""
+    paths = _collection_paths(path, pattern=pattern)
+    if not paths:
+        typer.echo(f"No recordings matched {path}/{pattern}", err=True)
+        raise typer.Exit(code=1)
+
+    rows = [_collection_summary_row(recording_path) for recording_path in paths]
+    for row in rows:
+        typer.echo(_format_collection_row(row))
+    typer.echo(_format_collection_totals(rows))
+
+
 @app.command()
 def track(
     backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
@@ -1092,6 +1112,81 @@ def _summarize_records(path: Path, *, recognize: bool) -> dict[str, int]:
 
 def _format_summary(summary: dict[str, int]) -> str:
     return " ".join(f"{key}={value}" for key, value in summary.items())
+
+
+def _collection_paths(path: Path, *, pattern: str) -> list[Path]:
+    if path.is_dir():
+        return sorted(recording for recording in path.glob(pattern) if recording.is_file())
+    return [path]
+
+
+def _collection_summary_row(path: Path) -> dict[str, str | int | float]:
+    analysis = analyze_recording(path)
+    return {
+        "file": path.name,
+        "label": _recording_label(path),
+        **analysis.to_flat_dict(),
+    }
+
+
+def _recording_label(path: Path) -> str:
+    for record in iter_recording(path):
+        if record.kind != "event":
+            continue
+        assert isinstance(record.payload, EventLogEntry)
+        label = record.payload.payload.get("label")
+        if isinstance(label, str) and label:
+            return label
+    return re.sub(r"-\d{3}(?:-\d+)?$", "", path.stem)
+
+
+def _format_collection_row(row: dict[str, str | int | float]) -> str:
+    keys = (
+        "file",
+        "label",
+        "frames",
+        "hand_frames",
+        "average_fps",
+        "open_palm_count",
+        "swipe_left_count",
+        "swipe_right_count",
+        "point_left_count",
+        "point_right_count",
+        "pinch_count",
+        "fist_count",
+    )
+    return " ".join(f"{key}={row.get(key, 0)}" for key in keys)
+
+
+def _format_collection_totals(rows: list[dict[str, str | int | float]]) -> str:
+    totals: dict[str, dict[str, int]] = {}
+    for row in rows:
+        label = str(row["label"])
+        label_totals = totals.setdefault(
+            label,
+            {
+                "files": 0,
+                "frames": 0,
+                "hand_frames": 0,
+                "swipe_left_count": 0,
+                "swipe_right_count": 0,
+                "point_left_count": 0,
+                "point_right_count": 0,
+                "pinch_count": 0,
+                "fist_count": 0,
+            },
+        )
+        label_totals["files"] += 1
+        for key in tuple(label_totals):
+            if key == "files":
+                continue
+            label_totals[key] += int(row.get(key, 0))
+
+    parts = []
+    for label, label_totals in sorted(totals.items()):
+        values = " ".join(f"{key}={value}" for key, value in label_totals.items())
+        parts.append(f"label={label} {values}")
+    return "totals | " + " | ".join(parts)
 
 
 def _format_frame_summary(frame: TrackingFrame, candidates: object) -> str:

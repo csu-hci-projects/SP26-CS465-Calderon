@@ -179,4 +179,12 @@ Sprint 3 implementation notes:
 - `airdesk analyze` and `airdesk replay` now count `swipe_left`, `swipe_right`, `point_left`, and `point_right` candidates in addition to static primitives.
 - `point_left` and `point_right` are implemented as rule-based dry-run candidates and should remain lower priority than swipes until real sample logs show low false positives.
 - A bounded smoke on `/dev/video0` opened `640x480 @ 30 FPS MJPG` and ran one MediaPipe dry-run frame with `frames=1 events=2 actions=0`.
+- `/dev/video0` advertises MJPG modes up to 1920x1080 at 30 FPS. Requesting `640x480 @ 60 FPS MJPG` falls back to 30 FPS, so 60 FPS does not appear to be supported by this webcam.
 - Real local sample results are still pending in this environment. Do not mark live reliability proven until Caden records and analyzes the recommended samples above.
+
+Sprint 4 smoke collection notes:
+
+- Run `uv run airdesk collection-summary data/recordings/sprint4-smoke` to summarize the prompted collection batch.
+- Caden's first natural swipe/negative batch recorded 15 takes at about 29.6 FPS.
+- Current swipe phrase rules produced zero `swipe_left` / `swipe_right` candidates because they depend on a brittle static `open_palm` arm.
+- Natural negative motion produced substantial crude `pinch` / `fist` counts, which reinforces the need for phase labels, negative data, and a causal temporal recognizer rather than a static-pose-only command path.
