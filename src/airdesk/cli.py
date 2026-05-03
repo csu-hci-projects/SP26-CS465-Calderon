@@ -20,7 +20,13 @@ from airdesk.actions.hyprland import (
     SAFE_HYPRLAND_DISPATCHERS,
     GuardedHyprlandActionTarget,
 )
-from airdesk.analysis.recording import analyze_recording, format_analysis
+from airdesk.analysis import (
+    analyze_recording,
+    evaluate_rule_recognizer,
+    format_analysis,
+    format_evaluation,
+    save_evaluation_json,
+)
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.features import export_features_csv
 from airdesk.gestures.base import CompositeGestureRecognizer
@@ -70,12 +76,14 @@ hyprland_app = typer.Typer(help="Hyprland action helpers.")
 profile_app = typer.Typer(help="Profile loading and validation commands.")
 label_app = typer.Typer(help="Continuous gesture labeling commands.")
 features_app = typer.Typer(help="Feature extraction commands.")
+gesture_app = typer.Typer(help="Gesture recognizer evaluation commands.")
 
 app.add_typer(camera_app, name="camera")
 app.add_typer(hyprland_app, name="hyprland")
 app.add_typer(profile_app, name="profile")
 app.add_typer(label_app, name="label")
 app.add_typer(features_app, name="features")
+app.add_typer(gesture_app, name="gesture")
 
 
 @app.command()
@@ -229,6 +237,24 @@ def features_export(
     label_file = load_label_file(labels) if labels is not None else None
     rows = export_features_csv(recording, out, labels=label_file)
     typer.echo(f"exported features={out} rows={len(rows)}")
+
+
+@gesture_app.command("evaluate")
+def gesture_evaluate(
+    recording: Annotated[Path, typer.Option(help="Recording JSONL path.")],
+    labels: Annotated[Path, typer.Option(help="Gesture labels JSON path.")],
+    recognizer: Annotated[str, typer.Option(help="Recognizer to evaluate.")] = "rule",
+    out: Annotated[Path | None, typer.Option(help="Optional JSON output path.")] = None,
+) -> None:
+    """Evaluate a recognizer against event labels for one recording."""
+    if recognizer != "rule":
+        typer.echo("Only --recognizer rule is implemented in this Sprint 4 slice.", err=True)
+        raise typer.Exit(code=1)
+    label_file = load_label_file(labels)
+    evaluation = evaluate_rule_recognizer(recording, labels, label_file)
+    if out is not None:
+        save_evaluation_json(evaluation, out)
+    typer.echo(format_evaluation(evaluation))
 
 
 @app.command()

@@ -256,6 +256,40 @@ def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
     assert "tracking_present" in output.read_text(encoding="utf-8")
 
 
+def test_gesture_evaluate_cli_writes_json(tmp_path: Path) -> None:
+    labels = tmp_path / "labels.json"
+    output = tmp_path / "evaluation.json"
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "init",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out",
+            str(labels),
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "evaluate",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--labels",
+            str(labels),
+            "--out",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=rule" in result.stdout
+    assert "intended=0" in result.stdout
+    assert output.exists()
+
+
 def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
     state: dict[str, str | None] = {"phase": "waiting", "decision": None}
 

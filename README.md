@@ -70,6 +70,7 @@ uv run airdesk label add-phase data/labels/swipe-left-positive-001.labels.json -
 uv run airdesk label add-event data/labels/swipe-left-positive-001.labels.json --gesture swipe_left --start 2.4 --end 3.1
 uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
 uv run airdesk features export data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/features/swipe-left-positive-001.csv
+uv run airdesk gesture evaluate --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/evaluations/swipe-left-positive-001-rule.json
 uv run airdesk hyprland dry-run workspace r+1
 ```
 

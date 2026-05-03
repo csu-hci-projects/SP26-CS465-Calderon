@@ -74,8 +74,8 @@ Current next sprint: see `sprint-3.md`.
 - [x] Add deterministic feature extraction from tracking frames
 - [x] Add feature export command
 - [ ] Add rule/DTW fallback support for personalized dynamic gestures
-- [ ] Add gesture evaluation metrics for continuous sessions
-- [ ] Add `airdesk gesture evaluate`
+- [x] Add gesture evaluation metrics for continuous sessions
+- [x] Add `airdesk gesture evaluate`
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
