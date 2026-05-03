@@ -166,6 +166,27 @@ def test_collection_summary_reports_directory_totals(tmp_path: Path) -> None:
     assert "totals | label=normal-desk-motion-negative files=1" in result.stdout
 
 
+def test_label_init_and_validate_cli(tmp_path: Path) -> None:
+    output = tmp_path / "replay-one-frame.labels.json"
+
+    init_result = CliRunner().invoke(
+        app,
+        [
+            "label",
+            "init",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--out",
+            str(output),
+        ],
+    )
+    validate_result = CliRunner().invoke(app, ["label", "validate", str(output)])
+
+    assert init_result.exit_code == 0
+    assert "frames=1" in init_result.stdout
+    assert validate_result.exit_code == 0
+    assert "valid labels=" in validate_result.stdout
+
+
 def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
     state: dict[str, str | None] = {"phase": "waiting", "decision": None}
 

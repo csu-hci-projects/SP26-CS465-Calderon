@@ -25,6 +25,7 @@ from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_re
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
+from airdesk.labels import init_label_file, load_label_file, save_label_file, validate_label_file
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.runtime import AirdeskRuntime, format_runtime_summary
@@ -59,10 +60,12 @@ app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CL
 camera_app = typer.Typer(help="Camera discovery and probing commands.")
 hyprland_app = typer.Typer(help="Hyprland action helpers.")
 profile_app = typer.Typer(help="Profile loading and validation commands.")
+label_app = typer.Typer(help="Continuous gesture labeling commands.")
 
 app.add_typer(camera_app, name="camera")
 app.add_typer(hyprland_app, name="hyprland")
 app.add_typer(profile_app, name="profile")
+app.add_typer(label_app, name="label")
 
 
 @app.command()
@@ -110,6 +113,38 @@ def collection_summary(
     for row in rows:
         typer.echo(_format_collection_row(row))
     typer.echo(_format_collection_totals(rows))
+
+
+@label_app.command("init")
+def label_init(
+    recording: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    out: Annotated[Path | None, typer.Option(help="Output label JSON path.")] = None,
+    participant: Annotated[str, typer.Option(help="Participant/user identifier.")] = "caden",
+    notes: Annotated[str, typer.Option(help="Starter notes for this label file.")] = "",
+    overwrite: Annotated[bool, typer.Option(help="Overwrite an existing label file.")] = False,
+) -> None:
+    """Create a starter label file for a continuous recording."""
+    output = out or recording.with_suffix(".labels.json")
+    if output.exists() and not overwrite:
+        typer.echo(f"Label file already exists: {output}. Use --overwrite to replace it.", err=True)
+        raise typer.Exit(code=1)
+    label_file = init_label_file(recording, participant_id=participant, notes=notes)
+    save_label_file(label_file, output)
+    typer.echo(
+        f"wrote labels={output} frames={label_file.session.frame_count} "
+        f"hand_frames={label_file.session.hand_frame_count}"
+    )
+
+
+@label_app.command("validate")
+def label_validate(path: Annotated[Path, typer.Argument(exists=True, readable=True)]) -> None:
+    """Validate a gesture label file."""
+    result = validate_label_file(load_label_file(path))
+    if not result.ok:
+        for error in result.errors:
+            typer.echo(error, err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"valid labels={path}")
 
 
 @app.command()

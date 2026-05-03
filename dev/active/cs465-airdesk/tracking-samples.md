@@ -185,6 +185,8 @@ Sprint 3 implementation notes:
 Sprint 4 smoke collection notes:
 
 - Run `uv run airdesk collection-summary data/recordings/sprint4-smoke` to summarize the prompted collection batch.
+- Run `uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json` to create a starter label file.
+- Edit `event_labels` and `phase_labels` manually for now, then run `uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json`.
 - Caden's first natural swipe/negative batch recorded 15 takes at about 29.6 FPS.
 - Current swipe phrase rules produced zero `swipe_left` / `swipe_right` candidates because they depend on a brittle static `open_palm` arm.
 - Natural negative motion produced substantial crude `pinch` / `fist` counts, which reinforces the need for phase labels, negative data, and a causal temporal recognizer rather than a static-pose-only command path.

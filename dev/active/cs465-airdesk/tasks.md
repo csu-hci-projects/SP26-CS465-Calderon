@@ -68,9 +68,9 @@ Current next sprint: see `sprint-3.md`.
 
 ## Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
 
-- [ ] Define continuous gesture label schema
-- [ ] Add `airdesk label init`
-- [ ] Add `airdesk label validate`
+- [x] Define continuous gesture label schema
+- [x] Add `airdesk label init`
+- [x] Add `airdesk label validate`
 - [ ] Add deterministic feature extraction from tracking frames
 - [ ] Add feature export command
 - [ ] Add rule/DTW fallback support for personalized dynamic gestures
