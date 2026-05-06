@@ -24,6 +24,7 @@ from airdesk.actions.hyprland import (
 )
 from airdesk.analysis import (
     analyze_recording,
+    evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
     format_analysis,
     format_evaluation,
@@ -32,6 +33,7 @@ from airdesk.analysis import (
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.features import export_features_csv
 from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.dtw import DtwCalibrationInput, DtwGestureModel, calibrate_dtw_model
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import (
@@ -334,17 +336,101 @@ def gesture_evaluate(
     recording: Annotated[Path, typer.Option(help="Recording JSONL path.")],
     labels: Annotated[Path, typer.Option(help="Gesture labels JSON path.")],
     recognizer: Annotated[str, typer.Option(help="Recognizer to evaluate.")] = "rule",
+    model: Annotated[
+        Path | None,
+        typer.Option(help="Recognizer model path, required for --recognizer dtw."),
+    ] = None,
     out: Annotated[Path | None, typer.Option(help="Optional JSON output path.")] = None,
 ) -> None:
     """Evaluate a recognizer against event labels for one recording."""
-    if recognizer != "rule":
-        typer.echo("Only --recognizer rule is implemented in this Sprint 4 slice.", err=True)
-        raise typer.Exit(code=1)
     label_file = load_label_file(labels)
-    evaluation = evaluate_rule_recognizer(recording, labels, label_file)
+    if recognizer == "rule":
+        evaluation = evaluate_rule_recognizer(recording, labels, label_file)
+    elif recognizer == "dtw":
+        if model is None:
+            typer.echo("--model is required when --recognizer dtw.", err=True)
+            raise typer.Exit(code=1)
+        evaluation = evaluate_dtw_recognizer(
+            recording,
+            labels,
+            label_file,
+            DtwGestureModel.load(model),
+        )
+    else:
+        typer.echo(f"Unsupported recognizer={recognizer}. Use rule or dtw.", err=True)
+        raise typer.Exit(code=1)
     if out is not None:
         save_evaluation_json(evaluation, out)
     typer.echo(format_evaluation(evaluation))
+
+
+@gesture_app.command("calibrate")
+def gesture_calibrate(
+    kind: Annotated[str, typer.Option(help="Calibration kind. Only dtw is implemented.")],
+    recording: Annotated[
+        list[Path] | None,
+        typer.Option(help="Recording JSONL path. Repeat for multiple recordings."),
+    ] = None,
+    labels: Annotated[
+        list[Path] | None,
+        typer.Option(help="Gesture label JSON path. Repeat in recording order."),
+    ] = None,
+    out: Annotated[Path, typer.Option(help="Output model JSON path.")] = Path(
+        "data/models/gestures/caden-dtw.json"
+    ),
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Candidate suppression cooldown in seconds."),
+    ] = 0.5,
+    min_window_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum DTW candidate window duration."),
+    ] = 0.25,
+    max_window_seconds: Annotated[
+        float,
+        typer.Option(help="Maximum DTW candidate window duration."),
+    ] = 1.25,
+    window_step_seconds: Annotated[
+        float,
+        typer.Option(help="DTW candidate window duration step."),
+    ] = 0.1,
+) -> None:
+    """Calibrate a personalized gesture recognizer from labeled recordings."""
+    if kind != "dtw":
+        typer.echo("Only --kind dtw is implemented.", err=True)
+        raise typer.Exit(code=1)
+    recording_paths = recording or []
+    label_paths = labels or []
+    if not recording_paths:
+        typer.echo("At least one --recording is required.", err=True)
+        raise typer.Exit(code=1)
+    if len(recording_paths) != len(label_paths):
+        typer.echo("--recording and --labels counts must match.", err=True)
+        raise typer.Exit(code=1)
+    inputs = [
+        DtwCalibrationInput(
+            recording=recording_path,
+            labels=load_label_file(label_path),
+            label_path=label_path,
+        )
+        for recording_path, label_path in zip(recording_paths, label_paths, strict=True)
+    ]
+    try:
+        model = calibrate_dtw_model(
+            inputs,
+            cooldown_seconds=cooldown_seconds,
+            min_window_seconds=min_window_seconds,
+            max_window_seconds=max_window_seconds,
+            window_step_seconds=window_step_seconds,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    model.save(out)
+    gestures = ", ".join(sorted(model.thresholds))
+    typer.echo(
+        f"wrote dtw_model={out} templates={len(model.templates)} gestures={gestures}"
+    )
 
 
 @app.command()

@@ -280,6 +280,80 @@ def test_label_suggest_cli_applies_motion_label(tmp_path: Path) -> None:
     assert "swipe_right" in text
 
 
+def test_gesture_calibrate_dtw_and_evaluate_cli(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-left.jsonl"
+    labels = tmp_path / "swipe-left.labels.json"
+    model = tmp_path / "dtw.json"
+    evaluation = tmp_path / "evaluation.json"
+    _write_cli_motion_recording(recording)
+    init_result = CliRunner().invoke(
+        app,
+        ["label", "init", str(recording), "--out", str(labels)],
+    )
+    event_result = CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-event",
+            str(labels),
+            "--gesture",
+            "swipe_left",
+            "--start",
+            "0",
+            "--end",
+            "1",
+        ],
+    )
+
+    calibrate_result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "calibrate",
+            "--kind",
+            "dtw",
+            "--recording",
+            str(recording),
+            "--labels",
+            str(labels),
+            "--out",
+            str(model),
+            "--min-window-seconds",
+            "0.2",
+            "--max-window-seconds",
+            "0.5",
+            "--window-step-seconds",
+            "0.1",
+        ],
+    )
+    evaluate_result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "evaluate",
+            "--recognizer",
+            "dtw",
+            "--model",
+            str(model),
+            "--recording",
+            str(recording),
+            "--labels",
+            str(labels),
+            "--out",
+            str(evaluation),
+        ],
+    )
+
+    assert init_result.exit_code == 0
+    assert event_result.exit_code == 0
+    assert calibrate_result.exit_code == 0
+    assert "dtw_model=" in calibrate_result.stdout
+    assert evaluate_result.exit_code == 0
+    assert "recognizer=dtw" in evaluate_result.stdout
+    assert model.exists()
+    assert evaluation.exists()
+
+
 def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
     output = tmp_path / "features.csv"
 

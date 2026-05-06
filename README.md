@@ -72,6 +72,8 @@ uv run airdesk label add-event data/labels/swipe-left-positive-001.labels.json -
 uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
 uv run airdesk features export data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/features/swipe-left-positive-001.csv
 uv run airdesk gesture evaluate --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/evaluations/swipe-left-positive-001-rule.json
+uv run airdesk gesture calibrate --kind dtw --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/models/gestures/caden-dtw.json
+uv run airdesk gesture evaluate --recognizer dtw --model data/models/gestures/caden-dtw.json --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/evaluations/swipe-left-positive-001-dtw.json
 uv run airdesk hyprland dry-run workspace r+1
 uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --events-out data/logs/cursor-dry-run.jsonl
 ```
@@ -95,5 +97,6 @@ uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 -
 In cursor mode, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Mouse click/drag injection is intentionally not enabled yet because this machine does not currently have a pointer-button injector installed.
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
+`airdesk gesture calibrate --kind dtw` builds a dependency-free personalized template model for replay evaluation; keep it in dry-run/evaluation workflows until false activations are low on negative recordings.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.

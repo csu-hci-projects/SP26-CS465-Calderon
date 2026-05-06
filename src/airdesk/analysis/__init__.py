@@ -2,6 +2,7 @@
 
 from airdesk.analysis.evaluation import (
     GestureEvaluation,
+    evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
     format_evaluation,
     save_evaluation_json,
@@ -12,6 +13,7 @@ __all__ = [
     "GestureEvaluation",
     "RecordingAnalysis",
     "analyze_recording",
+    "evaluate_dtw_recognizer",
     "evaluate_rule_recognizer",
     "format_analysis",
     "format_evaluation",

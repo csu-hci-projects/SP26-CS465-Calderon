@@ -207,3 +207,7 @@ Sprint 4 swipe batch `data/recordings/sprint4-swipes-001`:
 - Current rule recognizer result on 8 negative takes: 1221 candidates, all counted as false activations, mainly `fist` and `pinch`.
 - The `label suggest` observed direction is opposite the intended left/right labels in this batch, likely because user-facing mirrored motion and raw camera coordinates differ. Do not hard-code camera-left/camera-right as the final semantic direction without calibration.
 - This batch is enough to start a DTW/template baseline or first causal TCN prototype; it is not evidence that the current rule recognizer is acceptable for live swipe control.
+- DTW baseline model `data/models/gestures/caden-dtw-sprint4-swipes-001.json` was calibrated from the 16 positive swipe labels plus 8 negative/background labels.
+- DTW evaluation over all 24 takes: 16 intended, 16 matched, 0 missed, 18 candidates, 2 false activations, 0 repeated fires, about 0.44 s mean latency.
+- Per gesture DTW result: `swipe_left` 8/8 matched with 0 false activations; `swipe_right` 8/8 matched with 2 extra candidates on positive takes; negative recordings produced 0 candidates.
+- DTW is now useful as a personalized replay baseline and calibration tool. It is still not ready for live desktop actions until latency, runtime cost, and chained/background recordings are tested.

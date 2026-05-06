@@ -6,7 +6,9 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from airdesk.features import extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.dtw import DtwGestureModel, DtwTemplateRecognizer
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import GestureEventLabel, GestureLabelFile
@@ -50,6 +52,50 @@ def evaluate_rule_recognizer(
     for frame in frames:
         candidates.extend(recognizer.recognize(frame))
 
+    return evaluate_candidates(
+        recording_path=recording_path,
+        label_path=label_path,
+        labels=labels,
+        recognizer="rule",
+        candidates=candidates,
+        match_tolerance_seconds=0.0,
+    )
+
+
+def evaluate_dtw_recognizer(
+    recording_path: Path,
+    label_path: Path,
+    labels: GestureLabelFile,
+    model: DtwGestureModel,
+) -> GestureEvaluation:
+    """Evaluate a calibrated DTW recognizer against event labels."""
+    frames = [
+        record.payload
+        for record in iter_recording(recording_path)
+        if record.kind == "tracking_frame" and isinstance(record.payload, TrackingFrame)
+    ]
+    rows = extract_feature_rows(frames, labels=labels)
+    candidates = DtwTemplateRecognizer(model).recognize_rows(rows)
+    return evaluate_candidates(
+        recording_path=recording_path,
+        label_path=label_path,
+        labels=labels,
+        recognizer="dtw",
+        candidates=candidates,
+        match_tolerance_seconds=0.5,
+    )
+
+
+def evaluate_candidates(
+    *,
+    recording_path: Path,
+    label_path: Path,
+    labels: GestureLabelFile,
+    recognizer: str,
+    candidates: list[GestureCandidate],
+    match_tolerance_seconds: float = 0.0,
+) -> GestureEvaluation:
+    """Evaluate a candidate stream against gesture event labels."""
     intended = [event for event in labels.event_labels if event.label_type == "gesture"]
     matched_events = 0
     repeated_fires = 0
@@ -67,7 +113,7 @@ def evaluate_rule_recognizer(
             (index, candidate)
             for index, candidate in enumerate(candidates)
             if candidate.name == event.gesture
-            and event.start_time <= candidate.timestamp <= event.end_time
+            and event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
         ]
         if not event_candidates:
             bucket["missed"] += 1
@@ -85,7 +131,7 @@ def evaluate_rule_recognizer(
     for index, candidate in enumerate(candidates):
         if index in matched_candidate_ids:
             continue
-        if _inside_any_event(candidate, intended):
+        if _inside_any_event(candidate, intended, match_tolerance_seconds=match_tolerance_seconds):
             continue
         false_activations += 1
         bucket = per_gesture.setdefault(
@@ -98,7 +144,7 @@ def evaluate_rule_recognizer(
     return GestureEvaluation(
         recording=str(recording_path),
         labels=str(label_path),
-        recognizer="rule",
+        recognizer=recognizer,
         intended_events=len(intended),
         matched_events=matched_events,
         missed_events=missed_events,
@@ -132,9 +178,14 @@ def format_evaluation(evaluation: GestureEvaluation) -> str:
     )
 
 
-def _inside_any_event(candidate: GestureCandidate, events: list[GestureEventLabel]) -> bool:
+def _inside_any_event(
+    candidate: GestureCandidate,
+    events: list[GestureEventLabel],
+    *,
+    match_tolerance_seconds: float,
+) -> bool:
     return any(
-        event.start_time <= candidate.timestamp <= event.end_time
+        event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
         for event in events
     )
 

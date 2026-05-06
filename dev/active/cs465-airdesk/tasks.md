@@ -74,7 +74,7 @@ Current next sprint: see `sprint-3.md`.
 - [x] Add `airdesk label suggest` to bootstrap stroke timestamps from motion
 - [x] Add deterministic feature extraction from tracking frames
 - [x] Add feature export command
-- [ ] Add rule/DTW fallback support for personalized dynamic gestures
+- [x] Add rule/DTW fallback support for personalized dynamic gestures
 - [x] Add gesture evaluation metrics for continuous sessions
 - [x] Add `airdesk gesture evaluate`
 - [ ] Train/prototype a small causal TCN over AirDesk features
@@ -208,7 +208,7 @@ Current next sprint: see `sprint-3.md`.
 ## Phase 7: Learning System
 
 - [ ] Add gesture labeling workflow
-- [ ] Add template/DTW fallback for dynamic gestures
+- [x] Add template/DTW fallback for dynamic gestures
 - [ ] Train simple static gesture classifier from recorded landmarks
 - [ ] Train and harden the causal TCN recognizer for temporal gestures
 - [ ] Evaluate alternate temporal classifiers only if the TCN path disappoints
