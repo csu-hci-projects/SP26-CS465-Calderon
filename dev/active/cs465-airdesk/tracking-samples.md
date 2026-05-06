@@ -240,3 +240,18 @@ uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swip
 - This variant loosens the negative-distance margin but adds a calibrated horizontal-displacement gate. The gate requires an accepted swipe window to move in the same horizontal direction as its calibrated templates and by at least a fraction of the smallest calibrated swipe displacement.
 - Result on the same held-out split: 4 intended swipes, 4 matched, 0 missed, 4 candidates, 0 false activations, 0 repeated fires, and about 0.36 s mean latency.
 - Interpretation: this is a promising fix candidate because it addresses the observed false-activation tradeoff directly, but it was tuned after looking at the holdout. Treat it as a hypothesis to validate on a fresh chained continuous recording, not as proof of reliability.
+
+Sprint 4 chained session `data/recordings/sprint4-chained-001`:
+
+- Caden recorded one continuous take, `chained-left-right-swipes-001.jsonl`, with roughly 15 swipes plus natural movement and some back-to-back swipes.
+- Recording health: 2669 frames, 1384 hand-present frames, about 29.66 FPS, and about 90 seconds of data.
+- Rule recognizer again found 0 swipe candidates, so dynamic swipe evaluation should use DTW/TCN paths rather than static pose rules.
+- Gated DTW spotting command:
+
+```bash
+uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --out data/evaluations/sprint4-chained-001/gated-dtw-candidates.json
+```
+
+- Gated DTW produced 16 candidates: 10 `swipe_right` and 6 `swipe_left`.
+- Candidate timestamps in seconds from recording start: right at 2.36, 24.58, 27.75, 50.24, 52.67, 59.89, 75.20, 77.29, 86.43, 87.94; left at 5.80, 8.76, 58.10, 60.29, 81.74, 83.76.
+- This aligns with Caden's rough "15-ish" swipe count and includes back-to-back clusters. It still needs human timestamp review or event labels before reporting matched/missed/false-activation metrics.

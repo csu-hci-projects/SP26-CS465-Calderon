@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: validate gated DTW on a fresh chained continuous recording.
+Current next sprint: review/label the fresh chained continuous recording and compute event-level DTW metrics.
 
 ## Phase 0: Project Setup
 
@@ -83,7 +83,10 @@ Current next sprint: validate gated DTW on a fresh chained continuous recording.
 - [x] Diagnose left-swipe holdout misses as a feature/separation issue rather than a simple threshold issue
 - [x] Add optional calibrated palm-displacement gate for DTW swipe separation
 - [x] Evaluate gated DTW variant on `sprint4-swipes-001` holdout
-- [ ] Validate gated DTW on a fresh 60-90 second chained continuous recording
+- [x] Record and spot-check a fresh 60-90 second chained continuous recording
+- [x] Add `airdesk gesture spot-dtw` for unlabeled continuous DTW candidate review
+- [ ] Review/label chained-session candidate timestamps
+- [ ] Compute matched/missed/false-activation metrics on the chained session
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails

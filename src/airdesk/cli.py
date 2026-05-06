@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import json
 import platform
 import re
 from collections.abc import Callable
@@ -34,9 +35,14 @@ from airdesk.analysis import (
     save_holdout_json,
 )
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
-from airdesk.features import export_features_csv
+from airdesk.features import export_features_csv, extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
-from airdesk.gestures.dtw import DtwCalibrationInput, DtwGestureModel, calibrate_dtw_model
+from airdesk.gestures.dtw import (
+    DtwCalibrationInput,
+    DtwGestureModel,
+    DtwTemplateRecognizer,
+    calibrate_dtw_model,
+)
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import (
@@ -525,6 +531,57 @@ def gesture_holdout_dtw(
     save_holdout_json(evaluation, out)
     typer.echo(format_holdout_evaluation(evaluation))
     typer.echo(f"wrote holdout={out}")
+
+
+@gesture_app.command("spot-dtw")
+def gesture_spot_dtw(
+    recording: Annotated[Path, typer.Option(exists=True, readable=True, help="Recording JSONL.")],
+    model: Annotated[Path, typer.Option(exists=True, readable=True, help="DTW model JSON.")],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON candidate output path.")] = None,
+) -> None:
+    """Spot DTW gesture candidates in an unlabeled continuous recording."""
+    frames = [
+        record.payload
+        for record in iter_recording(recording)
+        if record.kind == "tracking_frame" and isinstance(record.payload, TrackingFrame)
+    ]
+    rows = extract_feature_rows(frames)
+    recognizer = DtwTemplateRecognizer(DtwGestureModel.load(model))
+    candidates = recognizer.recognize_rows(rows)
+    first_timestamp = frames[0].timestamp if frames else None
+    payload = {
+        "recording": str(recording),
+        "model": str(model),
+        "candidate_count": len(candidates),
+        "candidates": [
+            {
+                "index": index,
+                "gesture": candidate.name,
+                "timestamp": candidate.timestamp,
+                "timestamp_relative": (
+                    candidate.timestamp - first_timestamp
+                    if first_timestamp is not None
+                    else None
+                ),
+                "confidence": candidate.confidence,
+                "metadata": candidate.metadata,
+            }
+            for index, candidate in enumerate(candidates, start=1)
+        ],
+    }
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    typer.echo(f"recording={Path(recording).name} recognizer=dtw candidates={len(candidates)}")
+    for item in payload["candidates"]:
+        typer.echo(
+            f"{item['index']:02d} gesture={item['gesture']} "
+            f"t={item['timestamp_relative']:.3f} confidence={item['confidence']:.3f}"
+        )
+    if out is not None:
+        typer.echo(f"wrote candidates={out}")
 
 
 @app.command()

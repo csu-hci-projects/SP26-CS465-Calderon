@@ -181,7 +181,8 @@ Current Sprint 4 dataset/evidence:
 - `airdesk gesture holdout-dtw` now runs deterministic DTW train/test evaluation. On `sprint4-swipes-001`, training on takes 001-006 and testing on takes 007-008 matched 2/4 held-out swipes, missed both held-out left swipes, produced 0 false activations on held-out negatives, and had about 0.40 s mean latency on matched events.
 - Holdout diagnostics now record the closest rejected DTW windows. The left-swipe misses are not safely fixed by loosening thresholds because the margin that recovers both left swipes introduces false activations. Treat this as a left-swipe/negative feature-separation issue.
 - An optional calibrated horizontal-displacement gate is implemented for DTW. With `--negative-distance-margin 1.3 --min-palm-dx-fraction 0.65`, the same holdout matched 4/4 held-out swipes, missed 0, produced 4 candidates, 0 false activations, and about 0.36 s mean latency.
-- Next best task: ask Caden for a 60-90 second chained continuous gesture session, then evaluate the gated DTW variant on that fresh recording. Do not treat the gated holdout as proof because its parameters were chosen after inspecting this batch.
+- Caden recorded `data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl`, a roughly 90-second continuous take with about 15 swipes, natural motion, and some back-to-back swipes. `airdesk gesture spot-dtw` with the gated holdout model found 16 candidates: 10 `swipe_right` and 6 `swipe_left`.
+- Next best task: review/label the chained-session candidate timestamps, then compute matched/missed/false-activation metrics. Do not treat candidate count as accuracy until labels exist.
 
 Current Sprint 5 direction:
 

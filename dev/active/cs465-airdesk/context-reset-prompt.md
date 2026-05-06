@@ -231,9 +231,18 @@ DTW holdout evidence:
 - Gated interpretation: promising, but tuned after seeing this holdout. It needs validation on a fresh chained continuous recording before live-control use.
 - Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
 
+Fresh chained-session evidence:
+
+- Recording: `data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl`
+- Health: 2669 frames, 1384 hand-present frames, about 29.66 FPS, roughly 90 seconds.
+- Caden reports roughly 15 swipes with some natural movement and back-to-back swipes.
+- Command: `uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --out data/evaluations/sprint4-chained-001/gated-dtw-candidates.json`
+- Result: 16 DTW candidates, 10 `swipe_right` and 6 `swipe_left`, with timestamps recorded in `tracking-samples.md`.
+- Caveat: this is candidate spotting, not event-level accuracy yet. Human timestamp review or labels are needed before reporting matched/missed/false-activation metrics.
+
 ## Current Next Task
 
-Ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate the gated DTW variant on that conductor-style recording before starting the causal TCN.
+Review/label the chained-session candidate timestamps, then compute matched/missed/false-activation metrics before starting the causal TCN.
 
 ## Useful Commands
 

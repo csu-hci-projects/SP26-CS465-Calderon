@@ -359,6 +359,71 @@ def test_gesture_calibrate_dtw_and_evaluate_cli(tmp_path: Path) -> None:
     assert evaluation.exists()
 
 
+def test_gesture_spot_dtw_cli_writes_unlabeled_candidates(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-left.jsonl"
+    labels = tmp_path / "swipe-left.labels.json"
+    model = tmp_path / "dtw.json"
+    output = tmp_path / "candidates.json"
+    _write_cli_motion_recording(recording)
+    CliRunner().invoke(app, ["label", "init", str(recording), "--out", str(labels)])
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-event",
+            str(labels),
+            "--gesture",
+            "swipe_left",
+            "--start",
+            "0",
+            "--end",
+            "1",
+        ],
+    )
+    CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "calibrate",
+            "--kind",
+            "dtw",
+            "--recording",
+            str(recording),
+            "--labels",
+            str(labels),
+            "--out",
+            str(model),
+            "--min-window-seconds",
+            "0.2",
+            "--max-window-seconds",
+            "0.8",
+            "--window-step-seconds",
+            "0.1",
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "spot-dtw",
+            "--recording",
+            str(recording),
+            "--model",
+            str(model),
+            "--out",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=dtw" in result.stdout
+    assert "wrote candidates=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["candidate_count"] >= 1
+    assert payload["candidates"][0]["gesture"] == "swipe_left"
+
+
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:
     recordings_dir = tmp_path / "recordings"
     labels_dir = tmp_path / "labels"

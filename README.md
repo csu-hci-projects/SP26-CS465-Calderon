@@ -76,6 +76,7 @@ uv run airdesk gesture calibrate --kind dtw --recording data/recordings/sprint4-
 uv run airdesk gesture evaluate --recognizer dtw --model data/models/gestures/caden-dtw.json --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/evaluations/swipe-left-positive-001-dtw.json
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout.json
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary-gated.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --negative-distance-margin 1.3 --min-palm-dx-fraction 0.65
+uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --out data/evaluations/sprint4-chained-001/gated-dtw-candidates.json
 uv run airdesk hyprland dry-run workspace r+1
 uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --events-out data/logs/cursor-dry-run.jsonl
 ```
@@ -101,5 +102,6 @@ In cursor mode, pinch-hold activates relative cursor movement, releasing the pin
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture calibrate --kind dtw` builds a dependency-free personalized template model for replay evaluation; keep it in dry-run/evaluation workflows until false activations are low on negative recordings.
 `airdesk gesture holdout-dtw` runs a deterministic train/test replay evaluation for a collection batch and writes closest-window diagnostics for rejected DTW matches. The first `sprint4-swipes-001` holdout matched 2/4 held-out swipes, missed both held-out left swipes, and produced 0 false activations on two held-out negative recordings, so the same-batch DTW result should still be treated as optimistic. An optional calibrated horizontal-displacement gate is available through `--min-palm-dx-fraction`; the first gated variant matched 4/4 held-out swipes with 0 held-out false activations, but it still needs a fresh chained recording before live-control use.
+`airdesk gesture spot-dtw` runs a DTW model over an unlabeled continuous recording and exports candidate timestamps for review.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.
