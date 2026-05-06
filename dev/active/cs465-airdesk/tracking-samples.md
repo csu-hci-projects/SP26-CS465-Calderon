@@ -285,6 +285,13 @@ uv run airdesk gesture holdout-tcn --features-dir data/features/sprint4-swipes-0
 - The manifest is dependency-free JSON. It points to exported feature CSV files and records deterministic sliding-window row ranges, target labels, target indexes, feature columns, and per-target counts.
 - TCN training is optional and requires `uv sync --dev --extra ml`. It saves a Torch checkpoint with model weights, target mapping, feature columns, normalization stats, window settings, and training metrics.
 - This remains an offline training/evaluation path. It must not be wired into live desktop actions until a later evaluation beats the current DTW baseline on held-out continuous sessions.
+- Live/replay TCN classifier preview is available for observation only:
+
+```bash
+uv run airdesk gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
+```
+
+- The preview overlay shows the latest target and probabilities. The terminal prints non-background predictions by default; add `--include-background` if you want every background window printed too.
 - First same-batch TCN run on `sprint4-swipes-001`: `samples=821`, `train_accuracy=0.989`, `validation_accuracy=0.957`; replay evaluation over the same manifest reported 16 intended, 16 matched, 0 missed, 17 candidates, 1 false activation, and about 0.407 s mean latency.
 - Interpretation: useful smoke evidence that the model path is functioning, but optimistic because windows come from the same labeled batch. Next required evidence is a deterministic TCN holdout split comparable to `gesture holdout-dtw`.
 - TCN holdout using the same 6 train / 2 test per gesture and negative split shape: 4 intended, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.502 s mean latency. Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.

@@ -16,6 +16,7 @@ from airdesk.labels import (
     save_label_file,
 )
 from airdesk.ml import (
+    CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
     build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
@@ -290,6 +291,43 @@ def test_train_causal_tcn_smoke_when_torch_is_installed(tmp_path: Path) -> None:
     assert model_path.exists()
     assert result.samples == len(manifest.windows)
     assert result.validation_accuracy is None
+
+
+def test_live_tcn_predictor_classifies_in_memory_rows_when_torch_is_installed(
+    tmp_path: Path,
+) -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("optional PyTorch dependency is not installed")
+    features = tmp_path / "features.csv"
+    rows = [
+        _row(timestamp=1.0, frame_index=0, event=""),
+        _row(timestamp=1.1, frame_index=1, event="swipe_left"),
+        _row(timestamp=1.2, frame_index=2, event="swipe_left"),
+        _row(timestamp=1.3, frame_index=3, event=""),
+    ]
+    _write_features(features, rows)
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.3,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    model_path = tmp_path / "model.pt"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+    train_causal_tcn(
+        manifest_path=manifest_path,
+        out_path=model_path,
+        config=CausalTcnTrainingConfig(epochs=1, batch_size=1, validation_fraction=0.0, seed=1),
+    )
+
+    predictor = CausalTcnLivePredictor.load(model_path)
+    prediction = predictor.predict_rows(rows)
+
+    assert predictor.window_seconds == manifest.window_seconds
+    assert set(prediction.probabilities) == set(manifest.targets)
+    assert 0.0 <= prediction.confidence <= 1.0
 
 
 def test_tcn_prediction_and_evaluation_smoke_when_torch_is_installed(tmp_path: Path) -> None:

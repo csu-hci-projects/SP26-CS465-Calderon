@@ -21,6 +21,8 @@ from airdesk.ml.diagnostics import (
     split_feature_holdout,
 )
 from airdesk.ml.train import (
+    CausalTcnLivePrediction,
+    CausalTcnLivePredictor,
     CausalTcnPrediction,
     CausalTcnTrainingConfig,
     CausalTcnTrainingResult,
@@ -46,6 +48,8 @@ __all__ = [
     "load_tcn_dataset_manifest",
     "build_feature_diagnostics_report",
     "CausalTcnPrediction",
+    "CausalTcnLivePrediction",
+    "CausalTcnLivePredictor",
     "CausalTcnTrainingConfig",
     "CausalTcnTrainingResult",
     "MissingMlDependencyError",

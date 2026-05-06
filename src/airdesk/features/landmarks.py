@@ -62,27 +62,40 @@ class _HandHistory:
     tracked_rows: list[tuple[float, float, float, float]] | None = None
 
 
+@dataclass
+class FeatureRowStream:
+    """Stateful frame-to-feature converter for live/replay rolling windows."""
+
+    labels: GestureLabelFile | None = None
+
+    def __post_init__(self) -> None:
+        self._history = _HandHistory()
+        self._pose_recognizer = StaticHandPoseRecognizer()
+        self._frame_index = 0
+
+    def append(self, frame: TrackingFrame) -> FrameFeatureRow:
+        """Convert one tracking frame into a feature row while preserving history."""
+        hand = frame.hands[0] if frame.hands else None
+        row = _row_for_frame(
+            frame_index=self._frame_index,
+            frame=frame,
+            hand=hand,
+            history=self._history,
+            pose_recognizer=self._pose_recognizer,
+            labels=self.labels,
+        )
+        self._frame_index += 1
+        return row
+
+
 def extract_feature_rows(
     frames: list[TrackingFrame],
     *,
     labels: GestureLabelFile | None = None,
 ) -> list[FrameFeatureRow]:
     """Extract deterministic per-frame features from tracking frames."""
-    history = _HandHistory()
-    pose_recognizer = StaticHandPoseRecognizer()
-    rows: list[FrameFeatureRow] = []
-    for index, frame in enumerate(frames):
-        hand = frame.hands[0] if frame.hands else None
-        row = _row_for_frame(
-            frame_index=index,
-            frame=frame,
-            hand=hand,
-            history=history,
-            pose_recognizer=pose_recognizer,
-            labels=labels,
-        )
-        rows.append(row)
-    return rows
+    stream = FeatureRowStream(labels=labels)
+    return [stream.append(frame) for frame in frames]
 
 
 def _row_for_frame(

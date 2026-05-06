@@ -85,6 +85,100 @@ class CausalTcnPrediction:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class CausalTcnLivePrediction:
+    """One live/replay TCN prediction over an in-memory feature window."""
+
+    start_time: float
+    end_time: float
+    target: str
+    target_index: int
+    confidence: float
+    probabilities: dict[str, float]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CausalTcnLivePredictor:
+    """Loaded TCN checkpoint for rolling live/replay classification."""
+
+    model: Any
+    torch: Any
+    targets: tuple[str, ...]
+    feature_columns: tuple[str, ...]
+    feature_mean: tuple[float, ...]
+    feature_std: tuple[float, ...]
+    window_seconds: float
+    stride_seconds: float
+
+    @classmethod
+    def load(cls, model_path: Path) -> CausalTcnLivePredictor:
+        """Load a TCN checkpoint for in-memory rolling-window predictions."""
+        torch, nn, functional = _require_torch()
+        checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+        metadata = checkpoint["metadata"]
+        model_config = checkpoint["model_config"]
+        model = _make_causal_tcn_model(
+            torch=torch,
+            nn=nn,
+            functional=functional,
+            input_features=int(model_config["input_features"]),
+            targets=int(model_config["targets"]),
+            hidden_channels=int(model_config["hidden_channels"]),
+            levels=int(model_config["levels"]),
+            kernel_size=int(model_config["kernel_size"]),
+            dropout=float(model_config["dropout"]),
+        )
+        model.load_state_dict(checkpoint["model_state"])
+        model.eval()
+        return cls(
+            model=model,
+            torch=torch,
+            targets=tuple(str(target) for target in metadata["targets"]),
+            feature_columns=tuple(str(column) for column in metadata["feature_columns"]),
+            feature_mean=tuple(float(value) for value in metadata["feature_mean"]),
+            feature_std=tuple(float(value) for value in metadata["feature_std"]),
+            window_seconds=float(metadata["window_seconds"]),
+            stride_seconds=float(metadata["stride_seconds"]),
+        )
+
+    def predict_rows(self, rows: list[Any]) -> CausalTcnLivePrediction:
+        """Classify one in-memory feature window."""
+        if not rows:
+            raise ValueError("TCN live prediction requires at least one feature row")
+        matrix = [
+            [_numeric_row_value(row, column) for column in self.feature_columns]
+            for row in rows
+        ]
+        normalized = [
+            [
+                (value - self.feature_mean[index]) / self.feature_std[index]
+                for index, value in enumerate(row)
+            ]
+            for row in matrix
+        ]
+        with self.torch.no_grad():
+            sample = self.torch.tensor([normalized], dtype=self.torch.float32)
+            lengths = self.torch.tensor([len(rows)], dtype=self.torch.long)
+            logits = self.model(sample, lengths)
+            probabilities_tensor = self.torch.softmax(logits, dim=1)[0]
+            target_index = int(probabilities_tensor.argmax().item())
+            confidence = float(probabilities_tensor[target_index].item())
+        return CausalTcnLivePrediction(
+            start_time=float(rows[0].timestamp),
+            end_time=float(rows[-1].timestamp),
+            target=self.targets[target_index],
+            target_index=target_index,
+            confidence=confidence,
+            probabilities={
+                self.targets[index]: float(value.item())
+                for index, value in enumerate(probabilities_tensor)
+            },
+        )
+
+
 def prepare_tcn_training_arrays(manifest: TcnDatasetManifest) -> TcnTrainingArrays:
     """Load, normalize, and pad-free window arrays from a manifest."""
     if not manifest.windows:
@@ -327,6 +421,13 @@ def _normalization_stats(
         variance = sum((value - means[index]) ** 2 for value in values) / len(values)
         stds.append(variance**0.5 if variance > 1e-8 else 1.0)
     return means, tuple(stds)
+
+
+def _numeric_row_value(row: Any, column: str) -> float:
+    value = getattr(row, column)
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"TCN feature column must be numeric: {column}")
 
 
 def _require_torch() -> tuple[Any, Any, Any]:

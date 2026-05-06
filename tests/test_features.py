@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from airdesk.features import export_features_csv, extract_feature_rows
+from airdesk.features import FeatureRowStream, export_features_csv, extract_feature_rows
 from airdesk.labels import GesturePhaseLabel, init_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter
 from airdesk.state.types import (
@@ -76,6 +76,21 @@ def test_extract_feature_rows_attach_phase_labels(
     rows = extract_feature_rows([frame], labels=label_file)
 
     assert rows[0].phase == "stroke_left"
+
+
+def test_feature_row_stream_matches_batch_extraction(
+    make_hand: Callable[[str], NormalizedHand],
+) -> None:
+    frames = [
+        frame_at(1.0, 1, _move_hand(make_hand("open_palm"), x=0.4)),
+        frame_at(1.1, 2, _move_hand(make_hand("open_palm"), x=0.5)),
+        frame_at(1.2, 3, _move_hand(make_hand("open_palm"), x=0.6)),
+    ]
+    stream = FeatureRowStream()
+
+    streamed = [stream.append(frame) for frame in frames]
+
+    assert streamed == extract_feature_rows(frames)
 
 
 def test_export_features_csv_writes_rows(

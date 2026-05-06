@@ -37,7 +37,7 @@ from airdesk.analysis import (
     save_holdout_json,
 )
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
-from airdesk.features import export_features_csv, extract_feature_rows
+from airdesk.features import FeatureRowStream, export_features_csv, extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.dtw import (
     DtwCalibrationInput,
@@ -57,6 +57,8 @@ from airdesk.labels import (
     validate_label_file,
 )
 from airdesk.ml import (
+    CausalTcnLivePrediction,
+    CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
     FeatureDiagnosticsReport,
     MissingMlDependencyError,
@@ -810,6 +812,132 @@ def gesture_evaluate_tcn(
     )
     if out is not None:
         typer.echo(f"wrote evaluation={out}")
+
+
+@gesture_app.command("watch-tcn")
+def gesture_watch_tcn(
+    tcn_model: Annotated[
+        Path,
+        typer.Option("--model", exists=True, readable=True, help="TCN checkpoint path."),
+    ],
+    backend: Annotated[str, typer.Option(help="Tracking backend to watch.")] = "mediapipe",
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None,
+        typer.Option(help="Requested camera FOURCC, e.g. MJPG."),
+    ] = "MJPG",
+    hand_model_path: Annotated[
+        Path,
+        typer.Option("--hand-model-path", help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --hand-model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV live preview.")] = True,
+    mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(help="Minimum confidence before printing a prediction line."),
+    ] = 0.0,
+    min_rows: Annotated[
+        int,
+        typer.Option(help="Minimum feature rows before the first TCN prediction."),
+    ] = 4,
+    include_background: Annotated[
+        bool,
+        typer.Option(help="Print background predictions as well as gestures."),
+    ] = False,
+) -> None:
+    """Watch live/replay TCN classification without triggering desktop actions."""
+    if not 0 <= confidence_threshold <= 1:
+        typer.echo("confidence-threshold must be in [0, 1]", err=True)
+        raise typer.Exit(code=1)
+    try:
+        predictor = CausalTcnLivePredictor.load(tcn_model)
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=hand_model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+        preview_mirror=mirror,
+    )
+    stream = FeatureRowStream()
+    rows = []
+    state = {"status": "warming up"}
+    first_timestamp: float | None = None
+    next_prediction_time: float | None = None
+
+    if hasattr(tracker, "preview_status_provider"):
+        tracker.preview_status_provider = lambda: state["status"]  # type: ignore[attr-defined]
+
+    typer.echo(
+        "watching tcn "
+        f"model={tcn_model} backend={backend} window={predictor.window_seconds:.2f}s "
+        f"stride={predictor.stride_seconds:.2f}s targets={','.join(predictor.targets)}"
+    )
+    try:
+        tracker.start()
+        for frame in tracker.frames():
+            first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
+            row = stream.append(frame)
+            rows.append(row)
+            cutoff = row.timestamp - predictor.window_seconds
+            rows = [item for item in rows if item.timestamp >= cutoff]
+            if len(rows) < min_rows:
+                state["status"] = f"warming rows={len(rows)}/{min_rows}"
+                continue
+            if next_prediction_time is not None and row.timestamp < next_prediction_time:
+                continue
+            prediction = predictor.predict_rows(rows)
+            state["status"] = _format_live_tcn_status(prediction)
+            next_prediction_time = row.timestamp + predictor.stride_seconds
+            if prediction.confidence < confidence_threshold:
+                continue
+            if prediction.target == "background" and not include_background:
+                continue
+            typer.echo(_format_live_tcn_prediction(prediction, first_timestamp=first_timestamp))
+    except KeyboardInterrupt:
+        typer.echo("interrupted")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
 
 
 @gesture_app.command("holdout-tcn")
@@ -2432,6 +2560,32 @@ def _format_feature_diagnostics_summary(report: FeatureDiagnosticsReport) -> str
             f"mean_direction_consistency={consistency_text}"
         )
     return "\n".join(lines)
+
+
+def _format_live_tcn_status(prediction: CausalTcnLivePrediction) -> str:
+    probabilities = _compact_probabilities(prediction.probabilities)
+    return f"tcn={prediction.target} {prediction.confidence:.2f} | {probabilities}"
+
+
+def _format_live_tcn_prediction(
+    prediction: CausalTcnLivePrediction,
+    *,
+    first_timestamp: float | None,
+) -> str:
+    relative = prediction.end_time
+    if first_timestamp is not None:
+        relative = prediction.end_time - first_timestamp
+    probabilities = _compact_probabilities(prediction.probabilities)
+    return (
+        f"t={relative:7.3f}s target={prediction.target} "
+        f"confidence={prediction.confidence:.3f} {probabilities}"
+    )
+
+
+def _compact_probabilities(probabilities: dict[str, float]) -> str:
+    return " ".join(
+        f"{target}={probability:.2f}" for target, probability in sorted(probabilities.items())
+    )
 
 
 def _make_tracker(

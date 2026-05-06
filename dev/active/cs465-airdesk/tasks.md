@@ -95,6 +95,7 @@ Current next sprint: make the Sprint 5 recognizer decision and scope the pilot a
 - [x] Add optional PyTorch extra for offline ML training without changing base runtime
 - [x] Add optional `airdesk gesture train-tcn` training scaffold and checkpoint metadata
 - [x] Add `airdesk gesture evaluate-tcn` for TCN metrics comparable with rule/DTW
+- [x] Add live/replay `airdesk gesture watch-tcn` classifier preview without desktop actions
 - [x] Run first same-batch TCN training/evaluation pass over the local Sprint 4 manifest
 - [x] Add deterministic `airdesk gesture holdout-tcn` evaluation split matching the DTW holdout split
 - [x] Evaluate causal TCN against rule/DTW fallback on the same `sprint4-swipes-001` split
