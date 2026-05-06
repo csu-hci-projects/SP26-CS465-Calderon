@@ -114,6 +114,15 @@ def test_evaluate_tcn_help_exposes_optional_evaluation_controls() -> None:
     assert "--cooldown-seconds" in result.stdout
 
 
+def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "holdout-tcn", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--features-dir" in result.stdout
+    assert "--train-per-gesture" in result.stdout
+    assert "--model-out" in result.stdout
+
+
 def test_collect_help_describes_prompted_collection() -> None:
     result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
 

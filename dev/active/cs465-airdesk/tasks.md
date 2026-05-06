@@ -96,8 +96,9 @@ Current next sprint: start the causal TCN dataset/training scaffold, using gated
 - [x] Add optional `airdesk gesture train-tcn` training scaffold and checkpoint metadata
 - [x] Add `airdesk gesture evaluate-tcn` for TCN metrics comparable with rule/DTW
 - [x] Run first same-batch TCN training/evaluation pass over the local Sprint 4 manifest
-- [ ] Add deterministic TCN holdout evaluation split matching the DTW holdout split
-- [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
+- [x] Add deterministic `airdesk gesture holdout-tcn` evaluation split matching the DTW holdout split
+- [x] Evaluate causal TCN against rule/DTW fallback on the same `sprint4-swipes-001` split
+- [ ] Diagnose TCN/DTW left-swipe holdout misses before changing live behavior
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
 - [ ] Document Sprint 5 recognizer decision
 - [ ] Update dynamic gesture protocol and research notes

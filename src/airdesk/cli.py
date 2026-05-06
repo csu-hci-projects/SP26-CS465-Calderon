@@ -809,6 +809,149 @@ def gesture_evaluate_tcn(
         typer.echo(f"wrote evaluation={out}")
 
 
+@gesture_app.command("holdout-tcn")
+def gesture_holdout_tcn(
+    features_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Feature CSV directory."),
+    ],
+    labels_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Label directory."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output JSON summary path.")],
+    model_out: Annotated[Path, typer.Option(help="Output TCN checkpoint path.")],
+    train_manifest_out: Annotated[
+        Path | None,
+        typer.Option(help="Optional output path for the train manifest."),
+    ] = None,
+    test_manifest_out: Annotated[
+        Path | None,
+        typer.Option(help="Optional output path for the test manifest."),
+    ] = None,
+    train_per_gesture: Annotated[int, typer.Option(help="Training files per gesture.")] = 6,
+    test_per_gesture: Annotated[int, typer.Option(help="Held-out test files per gesture.")] = 2,
+    train_negatives: Annotated[int, typer.Option(help="Training negative/background files.")] = 6,
+    test_negatives: Annotated[int, typer.Option(help="Held-out negative/background files.")] = 2,
+    window_seconds: Annotated[float, typer.Option(help="Sliding window duration.")] = 0.8,
+    stride_seconds: Annotated[float, typer.Option(help="Sliding window stride.")] = 0.2,
+    min_rows: Annotated[int, typer.Option(help="Minimum rows per window.")] = 4,
+    min_gesture_fraction: Annotated[
+        float,
+        typer.Option(help="Minimum in-window gesture-frame fraction for a swipe target."),
+    ] = 0.35,
+    epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
+    learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
+    batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
+    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 24,
+    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 2,
+    kernel_size: Annotated[int, typer.Option(help="Causal convolution kernel size.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.0,
+    validation_fraction: Annotated[
+        float,
+        typer.Option(help="Deterministic validation split fraction within train windows."),
+    ] = 0.2,
+    seed: Annotated[int, typer.Option(help="Deterministic training seed.")] = 7,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(help="Minimum softmax confidence for a non-background candidate."),
+    ] = 0.5,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Suppress repeated same-gesture windows within this many seconds."),
+    ] = 0.5,
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for window-end matching."),
+    ] = 0.5,
+) -> None:
+    """Train/evaluate TCN on a deterministic filename-ordered holdout split."""
+    train_features, test_features = _split_tcn_feature_holdout(
+        features_dir=features_dir,
+        labels_dir=labels_dir,
+        train_per_gesture=train_per_gesture,
+        test_per_gesture=test_per_gesture,
+        train_negatives=train_negatives,
+        test_negatives=test_negatives,
+    )
+    train_manifest_path = train_manifest_out or out.with_name(f"{out.stem}-train-manifest.json")
+    test_manifest_path = test_manifest_out or out.with_name(f"{out.stem}-test-manifest.json")
+    train_manifest = build_tcn_dataset_manifest(
+        train_features,
+        labels_dir=labels_dir,
+        window_seconds=window_seconds,
+        stride_seconds=stride_seconds,
+        min_rows=min_rows,
+        min_gesture_fraction=min_gesture_fraction,
+    )
+    test_manifest = build_tcn_dataset_manifest(
+        test_features,
+        labels_dir=labels_dir,
+        window_seconds=window_seconds,
+        stride_seconds=stride_seconds,
+        min_rows=min_rows,
+        min_gesture_fraction=min_gesture_fraction,
+    )
+    save_tcn_dataset_manifest(train_manifest, train_manifest_path)
+    save_tcn_dataset_manifest(test_manifest, test_manifest_path)
+    config = CausalTcnTrainingConfig(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        hidden_channels=hidden_channels,
+        levels=levels,
+        kernel_size=kernel_size,
+        dropout=dropout,
+        validation_fraction=validation_fraction,
+        seed=seed,
+    )
+    try:
+        train_result = train_causal_tcn(
+            manifest_path=train_manifest_path,
+            out_path=model_out,
+            config=config,
+        )
+        evaluations = evaluate_tcn_manifest(
+            manifest_path=test_manifest_path,
+            model_path=model_out,
+            confidence_threshold=confidence_threshold,
+            cooldown_seconds=cooldown_seconds,
+            match_tolerance_seconds=match_tolerance_seconds,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    summary = holdout_totals(evaluations)
+    payload = {
+        "recognizer": "tcn",
+        "model_path": str(model_out),
+        "split": {
+            "train_manifest": str(train_manifest_path),
+            "test_manifest": str(test_manifest_path),
+            "train_features": [str(path) for path in train_features],
+            "test_features": [str(path) for path in test_features],
+        },
+        "training": train_result.to_dict(),
+        "summary": summary,
+        "evaluations": [evaluation.to_dict() for evaluation in evaluations],
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    latency = summary["mean_latency_seconds"]
+    formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
+    typer.echo(
+        f"recognizer=tcn train={len(train_features)} test={len(test_features)} "
+        f"intended={summary['intended_events']} matched={summary['matched_events']} "
+        f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']} mean_latency={formatted_latency}"
+    )
+    typer.echo(f"wrote holdout={out}")
+
+
 @app.command()
 def track(
     backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
@@ -2175,6 +2318,58 @@ def _lcs_length(left: list[str], right: list[str]) -> int:
                 current[index] = max(previous[index], current[index - 1])
         previous = current
     return previous[-1]
+
+
+def _split_tcn_feature_holdout(
+    *,
+    features_dir: Path,
+    labels_dir: Path,
+    train_per_gesture: int,
+    test_per_gesture: int,
+    train_negatives: int,
+    test_negatives: int,
+) -> tuple[list[Path], list[Path]]:
+    positives: dict[str, list[Path]] = {}
+    negatives: list[Path] = []
+    for feature_path in sorted(features_dir.glob("*.csv")):
+        label_path = labels_dir / f"{feature_path.stem}.labels.json"
+        if not label_path.exists():
+            raise typer.BadParameter(
+                f"missing label file for features={feature_path}: {label_path}"
+            )
+        labels = load_label_file(label_path)
+        events = [event for event in labels.event_labels if event.label_type == "gesture"]
+        if not events:
+            negatives.append(feature_path)
+            continue
+        positives.setdefault(events[0].gesture, []).append(feature_path)
+
+    train: list[Path] = []
+    test: list[Path] = []
+    for gesture in sorted(positives):
+        items = positives[gesture]
+        if len(items) < train_per_gesture + test_per_gesture:
+            raise typer.BadParameter(
+                f"not enough features for gesture={gesture}: "
+                f"need {train_per_gesture + test_per_gesture}, found {len(items)}"
+            )
+        train.extend(items[:train_per_gesture])
+        test.extend(items[train_per_gesture : train_per_gesture + test_per_gesture])
+
+    if train_negatives + test_negatives > 0:
+        if len(negatives) < train_negatives + test_negatives:
+            raise typer.BadParameter(
+                "not enough negative features: "
+                f"need {train_negatives + test_negatives}, found {len(negatives)}"
+            )
+        train.extend(negatives[:train_negatives])
+        test.extend(negatives[train_negatives : train_negatives + test_negatives])
+
+    if not train:
+        raise typer.BadParameter("TCN holdout requires at least one training feature file")
+    if not test:
+        raise typer.BadParameter("TCN holdout requires at least one test feature file")
+    return train, test
 
 
 def _make_tracker(

@@ -278,6 +278,7 @@ TCN dataset scaffold:
 uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/models/gestures/tcn-sprint4-swipes-001-manifest.json
 uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-swipes-001-manifest.json --out data/models/gestures/tcn-sprint4-swipes-001.pt --epochs 25
 uv run airdesk gesture evaluate-tcn --manifest data/models/gestures/tcn-sprint4-swipes-001-manifest.json --model data/models/gestures/tcn-sprint4-swipes-001.pt --out data/evaluations/sprint4-swipes-001-tcn/summary.json
+uv run airdesk gesture holdout-tcn --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-tcn-holdout/summary.json --model-out data/models/gestures/tcn-sprint4-swipes-001-holdout.pt
 ```
 
 - The first TCN target is narrow by design: `background`, `swipe_left`, and `swipe_right`.
@@ -286,3 +287,5 @@ uv run airdesk gesture evaluate-tcn --manifest data/models/gestures/tcn-sprint4-
 - This remains an offline training/evaluation path. It must not be wired into live desktop actions until a later evaluation beats the current DTW baseline on held-out continuous sessions.
 - First same-batch TCN run on `sprint4-swipes-001`: `samples=821`, `train_accuracy=0.989`, `validation_accuracy=0.957`; replay evaluation over the same manifest reported 16 intended, 16 matched, 0 missed, 17 candidates, 1 false activation, and about 0.407 s mean latency.
 - Interpretation: useful smoke evidence that the model path is functioning, but optimistic because windows come from the same labeled batch. Next required evidence is a deterministic TCN holdout split comparable to `gesture holdout-dtw`.
+- TCN holdout using the same 6 train / 2 test per gesture and negative split shape: 4 intended, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.502 s mean latency. Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.
+- Interpretation: the first causal TCN scaffold works but does not yet beat gated DTW. It reproduces the same left-swipe generalization weakness as plain DTW, so the next useful work is feature/label diagnosis rather than live action wiring.
