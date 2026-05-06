@@ -40,6 +40,7 @@ from airdesk.labels import (
     init_label_file,
     load_label_file,
     save_label_file,
+    suggest_stroke_label,
     validate_label_file,
 )
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
@@ -227,6 +228,90 @@ def label_add_event(
     )
     _save_valid_label_file(updated, path)
     typer.echo(f"added event={gesture} labels={path}")
+
+
+@label_app.command("suggest")
+def label_suggest(
+    recording: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    gesture: Annotated[
+        str | None,
+        typer.Option(help="Gesture name to label, e.g. swipe_left. Inferred when possible."),
+    ] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Label JSON path to create or update when --apply is used."),
+    ] = None,
+    apply: Annotated[
+        bool,
+        typer.Option(help="Apply the suggested phase and event labels to --out."),
+    ] = False,
+    participant: Annotated[str, typer.Option(help="Participant/user identifier.")] = "caden",
+    min_duration: Annotated[
+        float,
+        typer.Option(help="Minimum stroke-window duration in seconds."),
+    ] = 0.25,
+    max_duration: Annotated[
+        float,
+        typer.Option(help="Maximum stroke-window duration in seconds."),
+    ] = 1.25,
+    pad_seconds: Annotated[
+        float,
+        typer.Option(help="Context padding added before/after the detected stroke."),
+    ] = 0.08,
+) -> None:
+    """Suggest a stroke label from the strongest palm-motion window."""
+    suggestion = suggest_stroke_label(
+        recording,
+        gesture=gesture,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        pad_seconds=pad_seconds,
+    )
+    typer.echo(
+        "suggestion "
+        f"gesture={suggestion.gesture} phase={suggestion.phase} "
+        f"start={suggestion.start_seconds:.3f} end={suggestion.end_seconds:.3f} "
+        f"direction={suggestion.direction} confidence={suggestion.confidence:.2f}"
+    )
+
+    output = out or recording.with_suffix(".labels.json")
+    if not apply:
+        typer.echo(
+            "apply with: "
+            f"uv run airdesk label suggest {recording} --gesture {suggestion.gesture} "
+            f"--out {output} --apply"
+        )
+        return
+
+    label_file = load_label_file(output) if output.exists() else init_label_file(
+        recording,
+        participant_id=participant,
+        notes="Initialized from label suggest.",
+    )
+    label_file = add_phase_label(
+        label_file,
+        phase=suggestion.phase,
+        start_time=suggestion.start_time,
+        end_time=suggestion.end_time,
+        gesture=suggestion.gesture,
+        notes=(
+            "Auto-suggested from strongest palm-motion window; "
+            "review before training/evaluation."
+        ),
+    )
+    label_file = add_event_label(
+        label_file,
+        gesture=suggestion.gesture,
+        start_time=suggestion.start_time,
+        end_time=suggestion.end_time,
+        label_type="gesture",
+        notes=(
+            "Auto-suggested from strongest palm-motion window; "
+            "review before training/evaluation."
+        ),
+    )
+    _save_valid_label_file(label_file, output)
+    typer.echo(f"applied suggestion labels={output}")
 
 
 @features_app.command("export")

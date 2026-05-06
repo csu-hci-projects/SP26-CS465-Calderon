@@ -192,6 +192,7 @@ Sprint 2 established a working live and replay foundation:
 - JSONL recording/replay and replay analysis are available.
 - Command-mode policy, profile binding resolution, and dry-run runtime routing are implemented.
 - Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Click/drag injection is still pending because no pointer-button injector is installed locally.
+- `airdesk label suggest` can bootstrap swipe labels by finding the strongest palm-motion window and applying phase/event labels for review. This is a labeling accelerator, not a final recognizer.
 
 Current next step:
 

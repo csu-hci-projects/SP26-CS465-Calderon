@@ -5,7 +5,14 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from airdesk.cli import _handle_collection_preview_key, app
-from airdesk.recording.jsonl import iter_recording
+from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
+from airdesk.state.types import (
+    FrameMetadata,
+    HandLandmarks,
+    Landmark,
+    NormalizedHand,
+    TrackingFrame,
+)
 
 
 def test_cli_help_works() -> None:
@@ -247,6 +254,32 @@ def test_label_add_phase_and_event_cli(tmp_path: Path) -> None:
     assert "swipe_left" in output.read_text(encoding="utf-8")
 
 
+def test_label_suggest_cli_applies_motion_label(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-right-positive-001.jsonl"
+    output = tmp_path / "swipe-right-positive-001.labels.json"
+    _write_cli_motion_recording(recording)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "label",
+            "suggest",
+            str(recording),
+            "--gesture",
+            "swipe_right",
+            "--out",
+            str(output),
+            "--apply",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "applied suggestion labels=" in result.stdout
+    text = output.read_text(encoding="utf-8")
+    assert "stroke_right" in text
+    assert "swipe_right" in text
+
+
 def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
     output = tmp_path / "features.csv"
 
@@ -434,3 +467,37 @@ def test_record_command_writes_metadata_events_with_label(tmp_path: Path) -> Non
     assert events[0].payload["label"] == "cli-test"
     assert events[0].payload["mediapipe"]["max_num_hands"] == 1
     assert events[-1].payload["frames"] == 1
+
+
+def _write_cli_motion_recording(path: Path) -> None:
+    with JsonlRecordingWriter(path) as writer:
+        timestamp = 100.0
+        for sequence, x in enumerate((0.30, 0.30, 0.34, 0.48, 0.60, 0.62)):
+            frame = FrameMetadata(
+                timestamp=timestamp,
+                source_id="test",
+                width=640,
+                height=480,
+                sequence=sequence,
+            )
+            writer.write_tracking_frame(
+                TrackingFrame(
+                    timestamp=timestamp,
+                    source_id="test",
+                    frame=frame,
+                    hands=(_cli_hand_at(x),),
+                )
+            )
+            timestamp += 0.2
+
+
+def _cli_hand_at(palm_x: float) -> NormalizedHand:
+    landmarks = [Landmark(palm_x, 0.5, 0.0) for _ in range(21)]
+    return NormalizedHand(
+        hand_id="hand-0",
+        landmarks=HandLandmarks(tuple(landmarks), handedness="right", confidence=1.0),
+        palm_center=(palm_x, 0.5, 0.0),
+        bbox=(palm_x - 0.1, 0.4, palm_x + 0.1, 0.6),
+        handedness="right",
+        confidence=1.0,
+    )

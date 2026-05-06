@@ -66,6 +66,7 @@ uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --reps 5 --duration 6 --countdown 3 --show
 uv run airdesk collection-summary data/recordings/sprint4-smoke
 uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json
+uv run airdesk label suggest data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --gesture swipe_left --out data/labels/swipe-left-positive-001.labels.json --apply
 uv run airdesk label add-phase data/labels/swipe-left-positive-001.labels.json --phase stroke_left --start 2.4 --end 3.1 --gesture swipe_left
 uv run airdesk label add-event data/labels/swipe-left-positive-001.labels.json --gesture swipe_left --start 2.4 --end 3.1
 uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
@@ -92,5 +93,7 @@ uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 -
 ```
 
 In cursor mode, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Mouse click/drag injection is intentionally not enabled yet because this machine does not currently have a pointer-button injector installed.
+
+`airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.

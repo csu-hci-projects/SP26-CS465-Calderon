@@ -71,6 +71,7 @@ Current next sprint: see `sprint-3.md`.
 - [x] Define continuous gesture label schema
 - [x] Add `airdesk label init`
 - [x] Add `airdesk label validate`
+- [x] Add `airdesk label suggest` to bootstrap stroke timestamps from motion
 - [x] Add deterministic feature extraction from tracking frames
 - [x] Add feature export command
 - [ ] Add rule/DTW fallback support for personalized dynamic gestures
@@ -217,6 +218,7 @@ Current next sprint: see `sprint-3.md`.
 ## Nice-to-Haves
 
 - [ ] Small desktop overlay showing current gesture
+- [ ] Hyprland/overlay frame-boundary feedback when the hand is near leaving the camera region
 - [ ] Audio feedback for recognized command
 - [ ] Waybar module integration
 - [ ] Configurable YAML gesture mappings
