@@ -256,6 +256,8 @@ def evaluate_dtw_holdout(
     min_window_seconds: float = 0.25,
     max_window_seconds: float = 1.25,
     window_step_seconds: float = 0.1,
+    negative_distance_margin: float = 0.85,
+    min_palm_dx_fraction: float = 0.0,
 ) -> DtwHoldoutEvaluation:
     """Calibrate DTW on a deterministic train split and evaluate a held-out test split."""
     labeled = load_labeled_recordings(recordings_dir, labels_dir)
@@ -285,6 +287,8 @@ def evaluate_dtw_holdout(
         min_window_seconds=min_window_seconds,
         max_window_seconds=max_window_seconds,
         window_step_seconds=window_step_seconds,
+        negative_distance_margin=negative_distance_margin,
+        min_palm_dx_fraction=min_palm_dx_fraction,
     )
     if model_path is not None:
         model.save(model_path)

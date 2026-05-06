@@ -230,3 +230,13 @@ DTW left-miss diagnostic notes:
 - The train-only model threshold for `swipe_left` is `0.417` because negative calibration clamps it from a raw template threshold of about `2.78`; the closest held-out left distances were about `0.618` and `0.485`.
 - Raising the negative margin enough to match both held-out left swipes also introduced false activations on held-out positive/negative streams, so this should not be solved by simply loosening thresholds.
 - The likely issue is weak separation between current left-swipe features/templates and natural desk-motion negatives. Next, inspect label quality and feature separation for left swipes before collecting a longer chained continuous session.
+
+Optional gated DTW variant:
+
+```bash
+uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary-gated.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --train-per-gesture 6 --test-per-gesture 2 --train-negatives 6 --test-negatives 2 --negative-distance-margin 1.3 --min-palm-dx-fraction 0.65
+```
+
+- This variant loosens the negative-distance margin but adds a calibrated horizontal-displacement gate. The gate requires an accepted swipe window to move in the same horizontal direction as its calibrated templates and by at least a fraction of the smallest calibrated swipe displacement.
+- Result on the same held-out split: 4 intended swipes, 4 matched, 0 missed, 4 candidates, 0 false activations, 0 repeated fires, and about 0.36 s mean latency.
+- Interpretation: this is a promising fix candidate because it addresses the observed false-activation tradeoff directly, but it was tuned after looking at the holdout. Treat it as a hypothesis to validate on a fresh chained continuous recording, not as proof of reliability.

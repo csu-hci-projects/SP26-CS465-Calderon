@@ -226,11 +226,14 @@ DTW holdout evidence:
 - Result: 4 intended held-out swipes, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.40 s mean latency on matched events.
 - Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.
 - Diagnostic update: the holdout JSON includes closest rejected DTW windows. The left threshold is clamped by similar negative motion, and loosening it enough to recover both held-out left swipes introduces false activations. Treat this as a feature-separation problem, not a simple threshold issue.
+- Gated variant: `uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary-gated.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --train-per-gesture 6 --test-per-gesture 2 --train-negatives 6 --test-negatives 2 --negative-distance-margin 1.3 --min-palm-dx-fraction 0.65`
+- Gated result: 4 intended held-out swipes, 4 matched, 0 missed, 4 candidates, 0 false activations, 0 repeated fires, about 0.36 s mean latency.
+- Gated interpretation: promising, but tuned after seeing this holdout. It needs validation on a fresh chained continuous recording before live-control use.
 - Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
 
 ## Current Next Task
 
-Improve or explain the held-out left-swipe/negative separation before trusting DTW for live command swipes. If DTW can be made stable without overfitting, ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate DTW on that conductor-style recording before starting the causal TCN.
+Ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate the gated DTW variant on that conductor-style recording before starting the causal TCN.
 
 ## Useful Commands
 

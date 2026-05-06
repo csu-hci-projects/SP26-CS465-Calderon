@@ -325,6 +325,10 @@ def test_gesture_calibrate_dtw_and_evaluate_cli(tmp_path: Path) -> None:
             "0.8",
             "--window-step-seconds",
             "0.1",
+            "--negative-distance-margin",
+            "0.9",
+            "--min-palm-dx-fraction",
+            "0.5",
         ],
     )
     evaluate_result = CliRunner().invoke(
@@ -422,6 +426,10 @@ def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> Non
             "0.8",
             "--window-step-seconds",
             "0.1",
+            "--negative-distance-margin",
+            "0.9",
+            "--min-palm-dx-fraction",
+            "0.5",
         ],
     )
 

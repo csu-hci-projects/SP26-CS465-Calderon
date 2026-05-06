@@ -397,6 +397,14 @@ def gesture_calibrate(
         float,
         typer.Option(help="DTW candidate window duration step."),
     ] = 0.1,
+    negative_distance_margin: Annotated[
+        float,
+        typer.Option(help="Multiplier applied to closest negative DTW distance."),
+    ] = 0.85,
+    min_palm_dx_fraction: Annotated[
+        float,
+        typer.Option(help="Optional fraction of calibrated horizontal palm motion to require."),
+    ] = 0.0,
 ) -> None:
     """Calibrate a personalized gesture recognizer from labeled recordings."""
     if kind != "dtw":
@@ -425,6 +433,8 @@ def gesture_calibrate(
             min_window_seconds=min_window_seconds,
             max_window_seconds=max_window_seconds,
             window_step_seconds=window_step_seconds,
+            negative_distance_margin=negative_distance_margin,
+            min_palm_dx_fraction=min_palm_dx_fraction,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -483,6 +493,14 @@ def gesture_holdout_dtw(
         float,
         typer.Option(help="DTW candidate window duration step."),
     ] = 0.1,
+    negative_distance_margin: Annotated[
+        float,
+        typer.Option(help="Multiplier applied to closest negative DTW distance."),
+    ] = 0.85,
+    min_palm_dx_fraction: Annotated[
+        float,
+        typer.Option(help="Optional fraction of calibrated horizontal palm motion to require."),
+    ] = 0.0,
 ) -> None:
     """Run deterministic train/test DTW holdout evaluation for a collection batch."""
     try:
@@ -498,6 +516,8 @@ def gesture_holdout_dtw(
             min_window_seconds=min_window_seconds,
             max_window_seconds=max_window_seconds,
             window_step_seconds=window_step_seconds,
+            negative_distance_margin=negative_distance_margin,
+            min_palm_dx_fraction=min_palm_dx_fraction,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)

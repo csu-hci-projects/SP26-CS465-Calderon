@@ -78,6 +78,7 @@ def test_dtw_recognizer_matches_synthetic_swipe_and_rejects_stationary_negative(
         min_window_seconds=0.2,
         max_window_seconds=0.5,
         window_step_seconds=0.1,
+        min_palm_dx_fraction=0.5,
     )
     recognizer = DtwTemplateRecognizer(model)
 
@@ -86,6 +87,8 @@ def test_dtw_recognizer_matches_synthetic_swipe_and_rejects_stationary_negative(
 
     assert any(candidate.name == "swipe_left" for candidate in recognizer.recognize_rows(left_rows))
     assert recognizer.recognize_rows(negative_rows) == []
+    assert model.palm_dx_signs["swipe_left"] < 0
+    assert model.min_palm_dx["swipe_left"] > 0
 
 
 def test_evaluate_dtw_recognizer_matches_labeled_event(tmp_path: Path) -> None:
@@ -174,6 +177,7 @@ def test_dtw_holdout_trains_only_on_split_and_exports_summary(tmp_path: Path) ->
         min_window_seconds=0.2,
         max_window_seconds=0.5,
         window_step_seconds=0.1,
+        min_palm_dx_fraction=0.5,
     )
     save_holdout_json(holdout, summary_path)
 
@@ -190,6 +194,9 @@ def test_dtw_holdout_trains_only_on_split_and_exports_summary(tmp_path: Path) ->
     assert "intended=2" in format_holdout_evaluation(holdout)
     assert holdout.to_dict()["summary"]["intended_events"] == 2
     assert "swipe_left" in holdout.to_dict()["diagnostics"][0]["best_by_gesture"]
+    assert holdout.to_dict()["diagnostics"][0]["best_by_gesture"]["swipe_left"][
+        "min_palm_dx"
+    ] > 0
 
 
 def _feature_rows(recording: Path, labels: object) -> object:

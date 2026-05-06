@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from math import dist
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,8 @@ class DtwTemplate:
     start_time: float
     end_time: float
     vectors: tuple[tuple[float, ...], ...]
+    palm_dx: float = 0.0
+    palm_dy: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +57,8 @@ class DtwTemplate:
             start_time=float(data["start_time"]),
             end_time=float(data["end_time"]),
             vectors=tuple(tuple(float(value) for value in vector) for vector in data["vectors"]),
+            palm_dx=float(data.get("palm_dx", 0.0)),
+            palm_dy=float(data.get("palm_dy", 0.0)),
         )
 
 
@@ -69,6 +73,8 @@ class DtwGestureModel:
     templates: tuple[DtwTemplate, ...]
     thresholds: dict[str, float]
     negative_distances: dict[str, float]
+    palm_dx_signs: dict[str, int] = field(default_factory=dict)
+    min_palm_dx: dict[str, float] = field(default_factory=dict)
     cooldown_seconds: float = 0.5
     min_window_seconds: float = 0.25
     max_window_seconds: float = 1.25
@@ -84,6 +90,8 @@ class DtwGestureModel:
             "templates": [template.to_dict() for template in self.templates],
             "thresholds": self.thresholds,
             "negative_distances": self.negative_distances,
+            "palm_dx_signs": self.palm_dx_signs,
+            "min_palm_dx": self.min_palm_dx,
             "cooldown_seconds": self.cooldown_seconds,
             "min_window_seconds": self.min_window_seconds,
             "max_window_seconds": self.max_window_seconds,
@@ -102,6 +110,12 @@ class DtwGestureModel:
             thresholds={str(key): float(value) for key, value in data["thresholds"].items()},
             negative_distances={
                 str(key): float(value) for key, value in data.get("negative_distances", {}).items()
+            },
+            palm_dx_signs={
+                str(key): int(value) for key, value in data.get("palm_dx_signs", {}).items()
+            },
+            min_palm_dx={
+                str(key): float(value) for key, value in data.get("min_palm_dx", {}).items()
             },
             cooldown_seconds=float(data.get("cooldown_seconds", 0.5)),
             min_window_seconds=float(data.get("min_window_seconds", 0.25)),
@@ -140,6 +154,8 @@ class DtwMatch:
     distance: float
     threshold: float
     confidence: float
+    palm_dx: float = 0.0
+    palm_dy: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -153,6 +169,10 @@ class DtwBestWindow:
     window_start: float
     window_end: float
     window_points: int
+    palm_dx: float = 0.0
+    palm_dy: float = 0.0
+    min_palm_dx: float = 0.0
+    expected_palm_dx_sign: int = 0
 
     @property
     def distance_ratio(self) -> float:
@@ -161,8 +181,20 @@ class DtwBestWindow:
         return self.distance / self.threshold
 
     @property
-    def accepted(self) -> bool:
+    def distance_accepted(self) -> bool:
         return self.distance <= self.threshold
+
+    @property
+    def displacement_accepted(self) -> bool:
+        if self.min_palm_dx <= 0 or self.expected_palm_dx_sign == 0:
+            return True
+        return (
+            self.palm_dx * self.expected_palm_dx_sign >= self.min_palm_dx
+        )
+
+    @property
+    def accepted(self) -> bool:
+        return self.distance_accepted and self.displacement_accepted
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,10 +203,16 @@ class DtwBestWindow:
             "distance": self.distance,
             "threshold": self.threshold,
             "distance_ratio": self.distance_ratio,
+            "distance_accepted": self.distance_accepted,
+            "displacement_accepted": self.displacement_accepted,
             "accepted": self.accepted,
             "window_start": self.window_start,
             "window_end": self.window_end,
             "window_points": self.window_points,
+            "palm_dx": self.palm_dx,
+            "palm_dy": self.palm_dy,
+            "min_palm_dx": self.min_palm_dx,
+            "expected_palm_dx_sign": self.expected_palm_dx_sign,
         }
 
 
@@ -205,6 +243,8 @@ class DtwTemplateRecognizer:
                             "distance": match.distance,
                             "threshold": match.threshold,
                             "template_id": match.template_id,
+                            "palm_dx": match.palm_dx,
+                            "palm_dy": match.palm_dy,
                             "window_start": window_rows[0].timestamp,
                             "window_end": window_rows[-1].timestamp,
                             "window_points": len(window_rows),
@@ -229,6 +269,9 @@ class DtwTemplateRecognizer:
         threshold = self.model.thresholds.get(template.gesture)
         if threshold is None or distance_value > threshold:
             return None
+        palm_dx, palm_dy = _window_palm_delta(rows)
+        if not _passes_palm_dx_gate(template.gesture, palm_dx, self.model):
+            return None
         confidence = max(0.0, min(1.0, 1.0 - (distance_value / threshold)))
         return DtwMatch(
             gesture=template.gesture,
@@ -236,6 +279,8 @@ class DtwTemplateRecognizer:
             distance=distance_value,
             threshold=threshold,
             confidence=confidence,
+            palm_dx=palm_dx,
+            palm_dy=palm_dy,
         )
 
     def best_windows_by_gesture(
@@ -263,6 +308,7 @@ class DtwTemplateRecognizer:
                     current = best.get(template.gesture)
                     if current is not None and current.distance <= distance_value:
                         continue
+                    palm_dx, palm_dy = _window_palm_delta(window_rows)
                     best[template.gesture] = DtwBestWindow(
                         gesture=template.gesture,
                         template_id=template.template_id,
@@ -271,6 +317,13 @@ class DtwTemplateRecognizer:
                         window_start=window_rows[0].timestamp,
                         window_end=window_rows[-1].timestamp,
                         window_points=len(window_rows),
+                        palm_dx=palm_dx,
+                        palm_dy=palm_dy,
+                        min_palm_dx=self.model.min_palm_dx.get(template.gesture, 0.0),
+                        expected_palm_dx_sign=self.model.palm_dx_signs.get(
+                            template.gesture,
+                            0,
+                        ),
                     )
         return best
 
@@ -283,6 +336,8 @@ def calibrate_dtw_model(
     max_window_seconds: float = 1.25,
     window_step_seconds: float = 0.1,
     min_points: int = 4,
+    negative_distance_margin: float = 0.85,
+    min_palm_dx_fraction: float = 0.0,
 ) -> DtwGestureModel:
     """Build a DTW model from labeled gesture recordings."""
     raw_templates: list[tuple[DtwTemplate, tuple[tuple[float, ...], ...]]] = []
@@ -318,6 +373,8 @@ def calibrate_dtw_model(
                         start_time=event.start_time,
                         end_time=event.end_time,
                         vectors=(),
+                        palm_dx=event_rows[-1].palm_x - event_rows[0].palm_x,
+                        palm_dy=event_rows[-1].palm_y - event_rows[0].palm_y,
                     ),
                     raw_vectors,
                 )
@@ -336,6 +393,8 @@ def calibrate_dtw_model(
             start_time=template.start_time,
             end_time=template.end_time,
             vectors=_normalize_sequence(raw_vectors, mean, std),
+            palm_dx=template.palm_dx,
+            palm_dy=template.palm_dy,
         )
         for template, raw_vectors in raw_templates
     )
@@ -351,7 +410,11 @@ def calibrate_dtw_model(
         window_step_seconds=window_step_seconds,
     )
     for gesture, negative_distance in negative_distances.items():
-        thresholds[gesture] = min(thresholds[gesture], negative_distance * 0.85)
+        thresholds[gesture] = min(thresholds[gesture], negative_distance * negative_distance_margin)
+    palm_dx_signs, min_palm_dx = _palm_dx_gates(
+        templates,
+        min_palm_dx_fraction=min_palm_dx_fraction,
+    )
 
     return DtwGestureModel(
         schema_version=DTW_MODEL_VERSION,
@@ -361,6 +424,8 @@ def calibrate_dtw_model(
         templates=templates,
         thresholds=thresholds,
         negative_distances=negative_distances,
+        palm_dx_signs=palm_dx_signs,
+        min_palm_dx=min_palm_dx,
         cooldown_seconds=cooldown_seconds,
         min_window_seconds=min_window_seconds,
         max_window_seconds=max_window_seconds,
@@ -518,6 +583,46 @@ def _candidate_windows(
             windows.append(window_rows)
         next_duration += model.window_step_seconds
     return windows
+
+
+def _palm_dx_gates(
+    templates: tuple[DtwTemplate, ...],
+    *,
+    min_palm_dx_fraction: float,
+) -> tuple[dict[str, int], dict[str, float]]:
+    if min_palm_dx_fraction <= 0:
+        return {}, {}
+    signs: dict[str, int] = {}
+    minimums: dict[str, float] = {}
+    for gesture in sorted({template.gesture for template in templates}):
+        deltas = [template.palm_dx for template in templates if template.gesture == gesture]
+        if not deltas:
+            continue
+        mean_delta = sum(deltas) / len(deltas)
+        if abs(mean_delta) < 1e-6:
+            continue
+        signs[gesture] = 1 if mean_delta > 0 else -1
+        minimums[gesture] = min(abs(delta) for delta in deltas) * min_palm_dx_fraction
+    return signs, minimums
+
+
+def _passes_palm_dx_gate(
+    gesture: str,
+    palm_dx: float,
+    model: DtwGestureModel,
+) -> bool:
+    min_palm_dx = model.min_palm_dx.get(gesture, 0.0)
+    sign = model.palm_dx_signs.get(gesture, 0)
+    if min_palm_dx <= 0 or sign == 0:
+        return True
+    return palm_dx * sign >= min_palm_dx
+
+
+def _window_palm_delta(rows: list[FrameFeatureRow]) -> tuple[float, float]:
+    usable = [row for row in rows if _usable_row(row)]
+    if not usable:
+        return 0.0, 0.0
+    return usable[-1].palm_x - usable[0].palm_x, usable[-1].palm_y - usable[0].palm_y
 
 
 def _suppress_candidates(
