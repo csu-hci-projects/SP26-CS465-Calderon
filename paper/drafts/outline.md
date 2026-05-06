@@ -17,21 +17,41 @@ The paper should read as:
 1. Abstract
 2. Introduction
 3. Related Work
-4. System Overview
-5. Interaction Design and Gesture Vocabulary
-6. Implementation
-7. Pilot Method
-8. Prototype Evidence and Findings
-9. Discussion
-10. Limitations
-11. Future Work
-12. Conclusion
+4. Design Goals and Research Questions
+5. System Overview
+6. Interaction Design
+7. Implementation and Reproducibility
+8. Pilot Method
+9. Prototype Evidence and Findings
+10. Discussion
+11. Limitations
+12. Future Work
+13. Conclusion
+
+## Why This Order
+
+This order fits a system paper with pilot evidence.
+
+The early sections explain why the problem matters and what prior work says. The
+middle sections describe the design choices and prototype before asking the
+reader to interpret results. The later sections report evidence, then honestly
+separate what the current prototype supports from what still needs future work.
+
+The ACM template does not require this specific section order. It mainly defines
+the formatting shell: document class, title, abstract, CCS concepts, keywords,
+body sections, and bibliography. The course rubric is the real content guide, so
+the paper needs strong state-of-the-art, methods/evaluation, prototype
+description, reproducibility, limitations, future work, and conclusion sections.
 
 ## Core Argument
 
 AirDesk should not argue that mid-air gestures are faster than keyboard shortcuts in normal desktop use.
 
 AirDesk should argue that gestures may be valuable as a secondary command layer for moments when traditional input is inconvenient, unavailable, dirty, painful, or physically costly.
+
+The tone should stay clear and human. The paper can be formal, but it should not
+read like inflated system-paper boilerplate. Prefer direct sentences, concrete
+examples, and evidence-bounded claims.
 
 ## Claims We Can Probably Support
 
@@ -48,4 +68,3 @@ AirDesk should argue that gestures may be valuable as a secondary command layer 
 - The current recognizer is live-control reliable.
 - The pilot generalizes to a broad population.
 - MediaPipe is the contribution.
-
