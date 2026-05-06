@@ -137,13 +137,16 @@ Current next sprint: see `sprint-3.md`.
 ## Phase 3.5: Cursor Mode
 
 - [ ] Prototype fake cursor overlay controlled by hand position
-- [ ] Add pinch-to-enter cursor mode
-- [ ] Add release-to-exit cursor mode
-- [ ] Add smoothing / gain / dead-zone settings
-- [ ] Add visible cursor-mode indicator
-- [ ] Investigate safe real-cursor control on Wayland/Hyprland
+- [x] Add pinch-to-enter cursor mode
+- [x] Add release-to-exit cursor mode
+- [x] Add smoothing / gain / dead-zone settings
+- [x] Add visible cursor-mode indicator
+- [x] Investigate safe real-cursor control on Wayland/Hyprland
+- [x] Add guarded real cursor movement through Hyprland `movecursor`
+- [x] Add dry-run cursor movement and JSONL cursor session logging
 - [ ] Add controlled test surface for click/drag before global cursor control
-- [ ] Evaluate Hyprland cursor dispatchers
+- [x] Evaluate Hyprland cursor dispatchers
+- [ ] Add pointer-button injection for click and drag
 - [ ] Evaluate Wayland virtual pointer or `uinput`/`ydotool` path
 
 ## Phase 3.6: Text Mode / Virtual Keyboard

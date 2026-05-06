@@ -10,10 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 from typing import Annotated
+from uuid import uuid4
 
 import typer
 
 from airdesk import __version__
+from airdesk.actions.cursor import CursorTarget, DryRunCursorTarget, HyprlandCursorTarget
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import (
     HYPRLAND_DISPATCH,
@@ -40,6 +42,7 @@ from airdesk.labels import (
     save_label_file,
     validate_label_file,
 )
+from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.runtime import AirdeskRuntime, format_runtime_summary
@@ -77,6 +80,7 @@ profile_app = typer.Typer(help="Profile loading and validation commands.")
 label_app = typer.Typer(help="Continuous gesture labeling commands.")
 features_app = typer.Typer(help="Feature extraction commands.")
 gesture_app = typer.Typer(help="Gesture recognizer evaluation commands.")
+cursor_app = typer.Typer(help="Modeful cursor control commands.")
 
 app.add_typer(camera_app, name="camera")
 app.add_typer(hyprland_app, name="hyprland")
@@ -84,6 +88,7 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(label_app, name="label")
 app.add_typer(features_app, name="features")
 app.add_typer(gesture_app, name="gesture")
+app.add_typer(cursor_app, name="cursor")
 
 
 @app.command()
@@ -950,6 +955,203 @@ def run(
     finally:
         if event_writer is not None:
             event_writer.close()
+
+
+@cursor_app.command("run")
+def cursor_run(
+    backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
+    recording: Annotated[Path | None, typer.Option(help="Replay JSONL recording path.")] = None,
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    execute: Annotated[
+        bool,
+        typer.Option(help="Move the real Hyprland cursor. Dry-run is the default."),
+    ] = False,
+    monitor: Annotated[
+        str | None,
+        typer.Option(help="Hyprland monitor name to constrain movement."),
+    ] = None,
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    pinch_threshold: Annotated[
+        float,
+        typer.Option(help="Thumb/index distance that enters cursor mode."),
+    ] = 0.06,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Thumb/index distance that exits cursor mode."),
+    ] = 0.08,
+    gain: Annotated[float, typer.Option(help="Relative hand-to-cursor movement gain.")] = 1.8,
+    smoothing_alpha: Annotated[
+        float,
+        typer.Option(help="Cursor smoothing alpha from 0 to 1."),
+    ] = 0.35,
+    dead_zone_px: Annotated[int, typer.Option(help="Ignore movements below this pixel size.")] = 3,
+    max_step_px: Annotated[int, typer.Option(help="Maximum cursor step per tracking frame.")] = 140,
+    mirror_x: Annotated[
+        bool,
+        typer.Option(help="Mirror hand X movement for webcam control."),
+    ] = True,
+    events_out: Annotated[
+        Path | None,
+        typer.Option(help="Write cursor runtime events as JSONL."),
+    ] = None,
+    pause_on_start: Annotated[
+        bool,
+        typer.Option(help="Start paused; press p in preview to resume."),
+    ] = False,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = True,
+) -> None:
+    """Run pinch-held cursor control.
+
+    Dry-run is default. Real cursor movement requires `--execute`.
+    """
+    source = str(recording) if recording is not None else device
+    tracker = _make_tracker(
+        backend=backend,
+        device=source,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+    target: CursorTarget = HyprlandCursorTarget() if execute else DryRunCursorTarget()
+    controller = PinchCursorController(
+        CursorControlConfig(
+            pinch_threshold=pinch_threshold,
+            release_threshold=release_threshold,
+            gain=gain,
+            smoothing_alpha=smoothing_alpha,
+            dead_zone_px=dead_zone_px,
+            max_step_px=max_step_px,
+            mirror_x=mirror_x,
+        )
+    )
+    event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
+    session_id = str(uuid4())
+    state: dict[str, bool] = {"paused": pause_on_start}
+    frame_count = 0
+    move_count = 0
+
+    def emit(event_type: str, payload: dict[str, object] | None = None) -> None:
+        if event_writer is None:
+            return
+        event_writer.write_event(
+            EventLogEntry(
+                event_type=event_type,
+                timestamp=utc_timestamp(),
+                payload=payload or {},
+                session_id=session_id,
+            )
+        )
+
+    if isinstance(tracker, MediaPipeHandTrackerBackend):
+        tracker.preview_status_provider = lambda: (
+            ("paused | " if state["paused"] else "") + controller.status_text()
+        )
+
+        def handle_key(key: int) -> bool:
+            if key == ord("p"):
+                state["paused"] = not state["paused"]
+                emit(
+                    "cursor_runtime_paused" if state["paused"] else "cursor_runtime_resumed",
+                    {"paused": state["paused"]},
+                )
+                return True
+            return False
+
+        tracker.preview_key_handler = handle_key
+
+    try:
+        bounds = target.bounds(monitor=monitor)
+        current_cursor = target.current_position()
+        emit(
+            "cursor_session_start",
+            {
+                "backend": backend,
+                "source": source,
+                "execute": execute,
+                "target": target.name,
+                "monitor": bounds.name,
+                "bounds": {
+                    "x": bounds.x,
+                    "y": bounds.y,
+                    "width": bounds.width,
+                    "height": bounds.height,
+                },
+                "paused_at_start": pause_on_start,
+                "click_available": False,
+            },
+        )
+        tracker.start()
+        for frame in tracker.frames():
+            frame_count += 1
+            update = controller.update(
+                frame,
+                current_cursor=current_cursor,
+                bounds=bounds,
+                paused=state["paused"],
+            )
+            if update.event is not None:
+                emit(update.event, {"detail": update.detail, "active": update.active})
+            if update.moved and update.position is not None:
+                result = target.move_to(update.position)
+                if result.ok:
+                    current_cursor = update.position
+                    move_count += 1
+                emit(
+                    "cursor_moved" if result.ok else "cursor_move_failed",
+                    {
+                        "x": update.position.x,
+                        "y": update.position.y,
+                        "result": result.to_dict(),
+                    },
+                )
+    finally:
+        tracker.stop()
+        emit(
+            "cursor_session_finish",
+            {"frames": frame_count, "moves": move_count, "paused": state["paused"]},
+        )
+        if event_writer is not None:
+            event_writer.close()
+
+    mode = "execute" if execute else "dry-run"
+    typer.echo(f"cursor {mode} complete frames={frame_count} moves={move_count}")
 
 
 def _attach_runtime_preview_controls(

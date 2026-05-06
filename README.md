@@ -72,6 +72,7 @@ uv run airdesk label validate data/labels/swipe-left-positive-001.labels.json
 uv run airdesk features export data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/features/swipe-left-positive-001.csv
 uv run airdesk gesture evaluate --recording data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --labels data/labels/swipe-left-positive-001.labels.json --out data/evaluations/swipe-left-positive-001-rule.json
 uv run airdesk hyprland dry-run workspace r+1
+uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --events-out data/logs/cursor-dry-run.jsonl
 ```
 
 In `airdesk collect --show`, use the webcam preview itself: `space` starts the countdown, then `k` keeps, `r` redoes, `s` skips, and `q` quits.
@@ -83,5 +84,13 @@ uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height
 ```
 
 Dry-run remains the default. Use `--pause-on-start` or press `p` in the live preview to suppress actions while tracking continues.
+
+Cursor control is also dry-run by default. Real cursor movement is opt-in and uses Hyprland's `movecursor` dispatcher:
+
+```bash
+uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --execute --events-out data/logs/cursor-execute.jsonl
+```
+
+In cursor mode, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Mouse click/drag injection is intentionally not enabled yet because this machine does not currently have a pointer-button injector installed.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.

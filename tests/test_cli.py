@@ -76,6 +76,16 @@ def test_run_help_exposes_live_tuning_options() -> None:
     assert "--allow-profile-execute" in result.stdout
 
 
+def test_cursor_run_help_exposes_cursor_controls() -> None:
+    result = CliRunner().invoke(app, ["cursor", "run", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--execute" in result.stdout
+    assert "--pinch-threshold" in result.stdout
+    assert "--release-threshold" in result.stdout
+    assert "--events-out" in result.stdout
+
+
 def test_collect_help_describes_prompted_collection() -> None:
     result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
 
