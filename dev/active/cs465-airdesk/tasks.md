@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: see `sprint-3.md`.
+Current next sprint: continue Sprint 4 holdout evaluation and chained-session recognition.
 
 ## Phase 0: Project Setup
 

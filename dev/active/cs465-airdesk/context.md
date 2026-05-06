@@ -2,7 +2,7 @@
 
 ## Date
 
-2026-05-01
+2026-05-06
 
 ## Project Summary
 
@@ -193,10 +193,14 @@ Sprint 2 established a working live and replay foundation:
 - Command-mode policy, profile binding resolution, and dry-run runtime routing are implemented.
 - Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Click/drag injection is still pending because no pointer-button injector is installed locally.
 - `airdesk label suggest` can bootstrap swipe labels by finding the strongest palm-motion window and applying phase/event labels for review. This is a labeling accelerator, not a final recognizer.
+- `airdesk gesture calibrate --kind dtw` and `airdesk gesture evaluate --recognizer dtw --model ...` now provide a dependency-free personalized DTW/template baseline for replay evaluation.
+- Sprint 4 batch `data/recordings/sprint4-swipes-001` has 24 local takes: 8 left swipes, 8 right swipes, and 8 normal desk-motion negatives. Generated labels/features/evaluations live under ignored `data/labels`, `data/features`, and `data/evaluations`.
+- Rule recognizer result on that batch was poor: 0/16 positive swipe matches and high static-pose false activations.
+- DTW calibrated on the same batch matched all 16 intended swipes, missed 0, produced 18 candidates total, 2 false activations, 0 repeated fires, and about 0.44 s mean latency. Negative recordings produced 0 DTW candidates.
 
 Current next step:
 
-> Sprint 3 should make live command mode observable, logged, and pilot-safe before real desktop actions are used beyond explicit local testing.
+> Start Sprint 4 holdout evaluation for DTW, then collect/evaluate a longer chained continuous gesture session before wiring dynamic swipes into live control.
 
 ## Current Roadmap
 
@@ -218,6 +222,7 @@ Turn recordings into evidence:
 
 - label schema and CLI,
 - feature extraction,
+- DTW/template baseline and holdout evaluation,
 - train and evaluate one small causal TCN over AirDesk features,
 - rule/DTW fallback for safety, calibration, and debugging,
 - LSTM/GRU deferred unless the TCN path fails,

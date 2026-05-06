@@ -122,42 +122,31 @@ Current architecture direction:
 - start with recording/replay, normalized hand state, rule-based gestures, Hyprland dry-run/dispatch, overlay feedback, and study logging
 - design for future control center, Kinect/depth input, cursor control, virtual keyboard, hybrid keyboard+hand workflows, and personal ML training
 
-Current first sprint direction:
+Current implementation state:
 
-- implement project skeleton and tooling
-- define core typed data structures and event schema
-- define profile/config schema
-- add dry-run action target and Hyprland action wrapper
-- add capture/tracking interfaces
-- add JSONL recording/replay format
-- add mock/replay backend
-- add first synthetic gesture primitive tests
-- avoid polished UI, cursor takeover, Kinect, and ML training until the foundation is stable
+- uv Python project with ruff/pytest
+- typed frame, landmark, gesture, profile, action, and event data structures
+- OpenCV camera backend and MediaPipe Tasks backend
+- camera probing/mode reporting and benchmark/tuning commands
+- JSONL recording/replay/analyze
+- static open-palm/fist/pinch/point recognizers
+- intent-gated swipe phrase recognizer foundation
+- command-mode policy, profile binding resolver, dry-run runtime path
+- runtime `--events-out` logging with session start/finish events
+- preview-driven collection with countdown, keep, redo, skip, and quit
+- guarded opt-in Hyprland execution for allowlisted commands
+- modeful cursor command where pinch-hold moves the Hyprland cursor through `movecursor`
+- continuous label schema and label CLI, including `label suggest`
+- deterministic feature export
+- rule and DTW evaluation paths
+- dependency-free personalized DTW/template calibration baseline
 
-Current second sprint direction:
+Current hardware/evidence findings:
 
-- test Python/OpenCV/MediaPipe dependency viability
-- constrain Python to 3.12 if live tracking packages do not support 3.14
-- add OpenCV camera capture/probe backend
-- implement MediaPipe as backend zero if packaging and runtime behavior are viable
-- add bounded `track` and `record` CLI commands
-- record normalized landmark/event JSONL by default, not raw video
-- replay recorded tracking streams through static recognizers
-- document real-camera tracking quality before deciding whether Sprint 2 should build command-mode policy or tracking robustness
-
-Sprint 2 outcome and carryover:
-
-- improve camera probing/control with requested width, height, FPS, and FOURCC
-- carry over deliberate hand-in-frame samples for open palm, fist, pinch, no-hand, and normal desk motion
-- analyze replayed recordings for FPS, hand presence, primitive counts, candidate runs, and simple landmark jitter
-- implement command-mode state policy in dry-run only
-- resolve profile bindings with confidence thresholds and cooldowns
-- add a safe `run` path over replay/live backends that routes gestures to `DryRunActionTarget`
-- do not execute real Hyprland commands from live gestures until reliability data supports it
-- current camera finding: `/dev/video0` needs OpenCV index normalization plus `--fourcc MJPG` to honor `640x480 @ 30 FPS`
-- MediaPipe Tasks tuning is now exposed through `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`; use `airdesk benchmark` to compare configurations instead of guessing
-- current CLI default is one tracked hand for latency; test `--max-num-hands 2` only when the interaction needs two hands
-- next best task: benchmark/tune the mirrored live view with deliberate hand motion, then record the recommended open palm, fist, pinch, no-hand, and normal desk motion samples
+- `/dev/video0` works reliably at `640x480 @ 30 FPS MJPG`; requesting 60 FPS falls back to 30 FPS.
+- Hyprland supports `hyprctl dispatch movecursor x y`.
+- `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection is still pending.
+- Raw data and generated labels/features/evaluations live under ignored `data/` and should not be committed unless Caden explicitly asks.
 
 Current Sprint 3 direction:
 
@@ -177,10 +166,19 @@ Current Sprint 4 direction:
 - build the dataset, labeling, feature pipeline, and first causal TCN recognizer
 - define labels for continuous sessions, including event labels and phase labels
 - export deterministic landmark-derived features from replayable JSONL recordings
-- implement rule/DTW fallback for personalized conductor-like gestures where useful
+- use rule recognizer only as diagnostic scaffolding
+- use DTW/template matching as a personalized fallback/calibration baseline
 - train/evaluate a small causal TCN on continuous sessions
 - do not spend Sprint 4 comparing many model families
 - select whether TCN or the rule/DTW fallback is safe enough for Sprint 5
+
+Current Sprint 4 dataset/evidence:
+
+- Caden recorded `data/recordings/sprint4-swipes-001`: 8 left swipes, 8 right swipes, 8 normal desk-motion negatives.
+- Rule recognizer failed this batch: 0/16 positive swipe matches and high static-pose false activations.
+- DTW model `data/models/gestures/caden-dtw-sprint4-swipes-001.json` matched 16/16 on the same batch, missed 0, produced 18 candidates, 2 false activations, 0 repeated fires, about 0.44 s mean latency, and 0 candidates on negative recordings.
+- This is promising but optimistic because calibration and evaluation used the same batch.
+- Next best task: implement DTW train/test holdout evaluation, run it on `sprint4-swipes-001`, document results, then decide whether to ask Caden for a 60-90 second chained continuous gesture session.
 
 Current Sprint 5 direction:
 
