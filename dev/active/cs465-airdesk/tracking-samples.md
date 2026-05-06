@@ -271,3 +271,13 @@ uv run airdesk gesture score-sequence --candidates data/evaluations/sprint4-chai
 - Result: 8/10 matched in order, 2 missed-or-wrong-order gestures, 0 extra-or-wrong-order detections.
 - Interpretation: gated DTW is now finding plausible continuous-session swipes without extra order-level detections, but still misses some gestures in a structured stream. That is good enough evidence to continue model work, not enough evidence for live desktop actions.
 - Next model step: use these recordings as evidence for a causal TCN scaffold, starting with deterministic dataset/window construction over exported feature rows. Keep gated DTW as the baseline and keep live desktop actions disabled.
+
+TCN dataset scaffold:
+
+```bash
+uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/models/gestures/tcn-sprint4-swipes-001-manifest.json
+```
+
+- The first TCN target is narrow by design: `background`, `swipe_left`, and `swipe_right`.
+- The manifest is dependency-free JSON. It points to exported feature CSV files and records deterministic sliding-window row ranges, target labels, target indexes, feature columns, and per-target counts.
+- This is a training-data scaffold only. It does not train a TCN, does not require PyTorch, and must not be wired into live desktop actions until a later evaluation beats the current DTW baseline on held-out continuous sessions.

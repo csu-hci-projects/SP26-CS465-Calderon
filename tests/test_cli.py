@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from airdesk.cli import _handle_collection_preview_key, app
+from airdesk.features import FrameFeatureRow
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -462,6 +464,41 @@ def test_gesture_score_sequence_cli_scores_ordered_candidates(tmp_path: Path) ->
     assert payload["missed_or_wrong_order"] == 1
 
 
+def test_gesture_build_tcn_dataset_cli_writes_manifest(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    features_dir.mkdir()
+    _write_feature_csv(
+        features_dir / "swipe-left-positive-001.csv",
+        events=("", "swipe_left", "swipe_left", ""),
+    )
+    output = tmp_path / "manifest.json"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "build-tcn-dataset",
+            "--features-dir",
+            str(features_dir),
+            "--out",
+            str(output),
+            "--window-seconds",
+            "0.2",
+            "--stride-seconds",
+            "0.2",
+            "--min-rows",
+            "2",
+            "--min-gesture-fraction",
+            "0.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "wrote tcn_manifest=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["summary"]["window_counts"]["swipe_left"] == 1
+
+
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:
     recordings_dir = tmp_path / "recordings"
     labels_dir = tmp_path / "labels"
@@ -760,6 +797,45 @@ def _write_cli_motion_recording(
                 )
             )
             timestamp += 0.2
+
+
+def _write_feature_csv(path: Path, *, events: tuple[str, ...]) -> None:
+    rows = [
+        FrameFeatureRow(
+            frame_index=index,
+            timestamp=1.0 + index * 0.1,
+            dt=0.1 if index else 0.0,
+            tracking_present=1,
+            hand_count=1,
+            hand_id="hand-0",
+            confidence=1.0,
+            palm_x=0.5,
+            palm_y=0.5,
+            palm_z=0.0,
+            palm_vx=0.0,
+            palm_vy=0.0,
+            palm_speed=0.0,
+            palm_ax=0.0,
+            palm_ay=0.0,
+            index_rel_x=0.0,
+            index_rel_y=0.0,
+            index_rel_vx=0.0,
+            index_rel_vy=0.0,
+            pinch_distance=0.1,
+            pinch_velocity=0.0,
+            hand_scale=0.2,
+            extended_fingers=4,
+            folded_fingers=0,
+            phase="",
+            event=event,
+        )
+        for index, event in enumerate(events)
+    ]
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].to_dict()))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.to_dict())
 
 
 def _cli_hand_at(palm_x: float) -> NormalizedHand:

@@ -88,8 +88,10 @@ Current next sprint: start the causal TCN dataset/training scaffold, using gated
 - [x] Add `airdesk gesture score-sequence` for remembered R/L order checks
 - [x] Score structured chained-session DTW order against `R L R R L L R R L L`
 - [x] Decide whether to collect one more timestamp-aware stream or start causal TCN prototype
-- [ ] Define the first causal TCN training target and dataset manifest format
-- [ ] Add deterministic dataset/window builder over exported AirDesk features
+- [x] Define the first causal TCN training target and dataset manifest format
+- [x] Add deterministic dataset/window builder over exported AirDesk features
+- [x] Add dependency-free `airdesk gesture build-tcn-dataset` manifest command
+- [x] Add tests for TCN manifest/window construction and label assignment
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails

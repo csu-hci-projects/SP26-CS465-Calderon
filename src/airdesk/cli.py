@@ -54,6 +54,7 @@ from airdesk.labels import (
     suggest_stroke_label,
     validate_label_file,
 )
+from airdesk.ml import build_tcn_dataset_manifest, save_tcn_dataset_manifest
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
@@ -627,6 +628,63 @@ def gesture_score_sequence(
     )
     if out is not None:
         typer.echo(f"wrote score={out}")
+
+
+@gesture_app.command("build-tcn-dataset")
+def gesture_build_tcn_dataset(
+    features_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Feature CSV directory."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output dataset manifest JSON path.")],
+    labels_dir: Annotated[
+        Path | None,
+        typer.Option(file_okay=False, readable=True, help="Optional matching label directory."),
+    ] = None,
+    pattern: Annotated[str, typer.Option(help="Feature filename glob pattern.")] = "*.csv",
+    window_seconds: Annotated[
+        float,
+        typer.Option(help="Sliding window duration in seconds."),
+    ] = 0.8,
+    stride_seconds: Annotated[
+        float,
+        typer.Option(help="Sliding window stride in seconds."),
+    ] = 0.2,
+    min_rows: Annotated[
+        int,
+        typer.Option(help="Minimum feature rows required per window."),
+    ] = 4,
+    min_gesture_fraction: Annotated[
+        float,
+        typer.Option(help="Minimum in-window gesture-frame fraction for a swipe target."),
+    ] = 0.35,
+) -> None:
+    """Build a dependency-free manifest for background/left/right TCN windows."""
+    feature_paths = sorted(features_dir.glob(pattern))
+    if not feature_paths:
+        typer.echo(f"No feature CSV files matched {features_dir}/{pattern}", err=True)
+        raise typer.Exit(code=1)
+    try:
+        manifest = build_tcn_dataset_manifest(
+            feature_paths,
+            labels_dir=labels_dir,
+            window_seconds=window_seconds,
+            stride_seconds=stride_seconds,
+            min_rows=min_rows,
+            min_gesture_fraction=min_gesture_fraction,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    save_tcn_dataset_manifest(manifest, out)
+    summary = manifest.to_dict()["summary"]
+    window_counts = " ".join(
+        f"{target}={count}" for target, count in summary["window_counts"].items()
+    )
+    typer.echo(
+        f"wrote tcn_manifest={out} sources={summary['source_count']} "
+        f"windows={summary['window_count']} {window_counts}"
+    )
 
 
 @app.command()
