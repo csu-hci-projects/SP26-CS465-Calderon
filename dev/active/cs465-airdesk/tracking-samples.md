@@ -270,3 +270,4 @@ uv run airdesk gesture score-sequence --candidates data/evaluations/sprint4-chai
 
 - Result: 8/10 matched in order, 2 missed-or-wrong-order gestures, 0 extra-or-wrong-order detections.
 - Interpretation: gated DTW is now finding plausible continuous-session swipes without extra order-level detections, but still misses some gestures in a structured stream. That is good enough evidence to continue model work, not enough evidence for live desktop actions.
+- Next model step: use these recordings as evidence for a causal TCN scaffold, starting with deterministic dataset/window construction over exported feature rows. Keep gated DTW as the baseline and keep live desktop actions disabled.

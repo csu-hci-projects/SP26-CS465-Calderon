@@ -205,7 +205,7 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Decide whether to collect one more timestamp-aware continuous stream or start the causal TCN prototype. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
+> Start the causal TCN dataset/training scaffold. Keep the first chunk focused on deterministic dataset manifests and window building over exported AirDesk features; compare later against gated DTW. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
 
 ## Current Roadmap
 

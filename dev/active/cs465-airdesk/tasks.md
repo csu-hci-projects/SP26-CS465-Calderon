@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: use chained-session evidence to decide whether to start the causal TCN or collect one more labeled stream.
+Current next sprint: start the causal TCN dataset/training scaffold, using gated DTW as the baseline.
 
 ## Phase 0: Project Setup
 
@@ -87,7 +87,9 @@ Current next sprint: use chained-session evidence to decide whether to start the
 - [x] Add `airdesk gesture spot-dtw` for unlabeled continuous DTW candidate review
 - [x] Add `airdesk gesture score-sequence` for remembered R/L order checks
 - [x] Score structured chained-session DTW order against `R L R R L L R R L L`
-- [ ] Decide whether to collect one more timestamp-aware stream or start causal TCN prototype
+- [x] Decide whether to collect one more timestamp-aware stream or start causal TCN prototype
+- [ ] Define the first causal TCN training target and dataset manifest format
+- [ ] Add deterministic dataset/window builder over exported AirDesk features
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails

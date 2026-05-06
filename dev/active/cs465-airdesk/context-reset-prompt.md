@@ -252,7 +252,18 @@ Structured chained-session evidence:
 
 ## Current Next Task
 
-Decide whether to collect one more timestamp-aware continuous stream or start the causal TCN prototype. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
+Start the causal TCN dataset/training scaffold. Keep the first chunk focused on deterministic dataset manifests and window building over exported AirDesk features; compare later against gated DTW. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
+
+Recommended next chunk:
+
+1. Read the existing feature, label, DTW, and evaluation modules before editing.
+2. Define the first TCN training target narrowly: background vs `swipe_left` vs `swipe_right` over feature windows.
+3. Add a deterministic dataset manifest/window builder using existing recordings, labels, and feature rows.
+4. Keep ML dependencies optional; do not make base runtime require PyTorch.
+5. Add tests for manifest/window construction and label assignment.
+6. Document commands and limitations in README/tasks/tracking-samples.
+7. Run `uv run ruff check .` and `uv run pytest`.
+8. Commit and push.
 
 ## Useful Commands
 
