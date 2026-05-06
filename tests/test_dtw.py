@@ -13,6 +13,7 @@ from airdesk.analysis import (
 from airdesk.gestures.dtw import (
     DtwCalibrationInput,
     DtwGestureModel,
+    DtwTemplate,
     DtwTemplateRecognizer,
     calibrate_dtw_model,
     dtw_distance,
@@ -89,6 +90,53 @@ def test_dtw_recognizer_matches_synthetic_swipe_and_rejects_stationary_negative(
     assert recognizer.recognize_rows(negative_rows) == []
     assert model.palm_dx_signs["swipe_left"] < 0
     assert model.min_palm_dx["swipe_left"] > 0
+
+
+def test_dtw_recognizer_supports_older_saved_feature_sets(tmp_path: Path) -> None:
+    recording = _write_motion_recording(tmp_path / "left.jsonl", (0.7, 0.6, 0.45, 0.3))
+    labels = _label_recording(recording, "swipe_left")
+    old_feature_names = (
+        "palm_rel_x",
+        "palm_rel_y",
+        "palm_vx",
+        "palm_vy",
+        "index_rel_x",
+        "index_rel_y",
+        "pinch_distance",
+        "hand_scale",
+        "confidence",
+    )
+    model = DtwGestureModel(
+        schema_version=1,
+        feature_names=old_feature_names,
+        mean=(0.0,) * len(old_feature_names),
+        std=(1.0,) * len(old_feature_names),
+        templates=(
+            DtwTemplate(
+                template_id="template-old",
+                gesture="swipe_left",
+                recording=str(recording),
+                label_id="event-old",
+                start_time=1.0,
+                end_time=1.3,
+                vectors=(
+                    (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.14, 0.2, 1.0),
+                    (-0.1, 0.0, -1.0, 0.0, 0.0, 0.0, 0.14, 0.2, 1.0),
+                    (-0.25, 0.0, -1.5, 0.0, 0.0, 0.0, 0.14, 0.2, 1.0),
+                    (-0.4, 0.0, -1.5, 0.0, 0.0, 0.0, 0.14, 0.2, 1.0),
+                ),
+            ),
+        ),
+        thresholds={"swipe_left": 10.0},
+        negative_distances={},
+        min_window_seconds=0.2,
+        max_window_seconds=0.5,
+        window_step_seconds=0.1,
+    )
+
+    candidates = DtwTemplateRecognizer(model).recognize_rows(_feature_rows(recording, labels))
+
+    assert any(candidate.name == "swipe_left" for candidate in candidates)
 
 
 def test_evaluate_dtw_recognizer_matches_labeled_event(tmp_path: Path) -> None:

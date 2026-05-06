@@ -45,6 +45,10 @@ def test_extract_feature_rows_include_motion_and_pose_features(
     assert rows[0].tracking_present == 1
     assert rows[1].dt == pytest.approx(0.1)
     assert rows[1].palm_vx > 0
+    assert rows[1].palm_window_dx == pytest.approx(0.1)
+    assert rows[1].palm_window_dx_per_hand_scale == pytest.approx(0.2)
+    assert rows[1].palm_window_peak_abs_vx == pytest.approx(1.0)
+    assert rows[1].palm_window_direction_consistency == pytest.approx(1.0)
     assert rows[1].extended_fingers == 4
     assert rows[1].phase == ""
 

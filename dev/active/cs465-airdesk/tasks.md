@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: start the causal TCN dataset/training scaffold, using gated DTW as the baseline.
+Current next sprint: validate the best DTW window-feature variant on continuous streams and make the Sprint 5 recognizer decision.
 
 ## Phase 0: Project Setup
 
@@ -100,7 +100,9 @@ Current next sprint: start the causal TCN dataset/training scaffold, using gated
 - [x] Evaluate causal TCN against rule/DTW fallback on the same `sprint4-swipes-001` split
 - [x] Add feature-diagnostics report for TCN/DTW left-swipe holdout misses
 - [x] Run feature diagnostics on `sprint4-swipes-001` and document the evidence
-- [ ] Decide whether feature export should add explicit displacement/velocity summary features
+- [x] Add causal trailing-window displacement/velocity/direction features to feature export
+- [x] Rerun DTW/TCN holdouts with the new feature representation
+- [ ] Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
 - [ ] Document Sprint 5 recognizer decision
 - [ ] Update dynamic gesture protocol and research notes

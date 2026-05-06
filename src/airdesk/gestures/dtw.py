@@ -19,6 +19,10 @@ DTW_FEATURE_NAMES = (
     "palm_rel_y",
     "palm_vx",
     "palm_vy",
+    "palm_window_dx",
+    "palm_window_dx_per_hand_scale",
+    "palm_window_peak_abs_vx",
+    "palm_window_direction_consistency",
     "index_rel_x",
     "index_rel_y",
     "pinch_distance",
@@ -254,7 +258,11 @@ class DtwTemplateRecognizer:
         return _suppress_candidates(raw_candidates, cooldown_seconds=self.model.cooldown_seconds)
 
     def best_match(self, rows: list[FrameFeatureRow]) -> DtwMatch | None:
-        sequence = _normalize_sequence(_raw_sequence(rows), self.model.mean, self.model.std)
+        sequence = _normalize_sequence(
+            _raw_sequence(rows, self.model.feature_names),
+            self.model.mean,
+            self.model.std,
+        )
         if len(sequence) < self.model.min_points:
             return None
         best: tuple[DtwTemplate, float] | None = None
@@ -294,7 +302,7 @@ class DtwTemplateRecognizer:
                 continue
             for window_rows in _candidate_windows(rows, start_index, self.model):
                 sequence = _normalize_sequence(
-                    _raw_sequence(window_rows),
+                    _raw_sequence(window_rows, self.model.feature_names),
                     self.model.mean,
                     self.model.std,
                 )
@@ -361,7 +369,7 @@ def calibrate_dtw_model(
             ]
             if len(event_rows) < min_points:
                 continue
-            raw_vectors = _raw_sequence(event_rows)
+            raw_vectors = _raw_sequence(event_rows, DTW_FEATURE_NAMES)
             normalization_vectors.extend(raw_vectors)
             raw_templates.append(
                 (
@@ -460,30 +468,31 @@ def _frames_from_recording(recording: Path) -> list[TrackingFrame]:
     ]
 
 
-def _raw_sequence(rows: list[FrameFeatureRow]) -> tuple[tuple[float, ...], ...]:
+def _raw_sequence(
+    rows: list[FrameFeatureRow],
+    feature_names: tuple[str, ...],
+) -> tuple[tuple[float, ...], ...]:
     usable = [row for row in rows if _usable_row(row)]
     if not usable:
         return ()
     origin_x = usable[0].palm_x
     origin_y = usable[0].palm_y
     return tuple(
-        (
-            row.palm_x - origin_x,
-            row.palm_y - origin_y,
-            row.palm_vx,
-            row.palm_vy,
-            row.index_rel_x,
-            row.index_rel_y,
-            row.pinch_distance,
-            row.hand_scale,
-            row.confidence,
+        tuple(
+            _dtw_feature_value(
+                row,
+                feature_name,
+                origin_x=origin_x,
+                origin_y=origin_y,
+            )
+            for feature_name in feature_names
         )
         for row in usable
     )
 
 
 def _normalizer(vectors: list[tuple[float, ...]]) -> tuple[tuple[float, ...], tuple[float, ...]]:
-    dimensions = len(DTW_FEATURE_NAMES)
+    dimensions = len(vectors[0]) if vectors else len(DTW_FEATURE_NAMES)
     mean = tuple(
         sum(vector[index] for vector in vectors) / len(vectors) for index in range(dimensions)
     )
@@ -493,6 +502,23 @@ def _normalizer(vectors: list[tuple[float, ...]]) -> tuple[tuple[float, ...], tu
     )
     std = tuple(value**0.5 if value > 1e-8 else 1.0 for value in variance)
     return mean, std
+
+
+def _dtw_feature_value(
+    row: FrameFeatureRow,
+    feature_name: str,
+    *,
+    origin_x: float,
+    origin_y: float,
+) -> float:
+    if feature_name == "palm_rel_x":
+        return row.palm_x - origin_x
+    if feature_name == "palm_rel_y":
+        return row.palm_y - origin_y
+    value = getattr(row, feature_name)
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"DTW feature must be numeric: {feature_name}")
 
 
 def _normalize_sequence(
@@ -552,7 +578,11 @@ def _negative_distances(
             if not _usable_row(start_row):
                 continue
             for window_rows in _candidate_windows(rows, start_index, scratch_model):
-                sequence = _normalize_sequence(_raw_sequence(window_rows), mean, std)
+                sequence = _normalize_sequence(
+                    _raw_sequence(window_rows, DTW_FEATURE_NAMES),
+                    mean,
+                    std,
+                )
                 if len(sequence) < min_points:
                     continue
                 for template in templates:

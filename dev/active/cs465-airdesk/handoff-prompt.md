@@ -185,7 +185,9 @@ Current Sprint 4 dataset/evidence:
 - Caden recorded a structured chained session at `data/recordings/sprint4-chained-002/chained-structured-swipes-001.jsonl` with intended movement-direction sequence `R L R R L L R R L L`. `airdesk gesture score-sequence` compared the gated DTW detections `R L R R L R R L` against that sequence: 8/10 matched in order, 2 missed-or-wrong-order, 0 extra-or-wrong-order.
 - The causal TCN scaffold now has deterministic manifests, optional PyTorch training, same-batch evaluation, and holdout evaluation. Same-batch TCN matched 16/16 with 1 false activation, but holdout TCN matched 2/4 and missed both held-out left swipes.
 - `airdesk gesture diagnose-features` now compares feature, timing, and tracking-quality summaries across the same holdout split. The current evidence points to held-out left swipes being weaker/slower than train-left examples, with no obvious label timing problem.
-- Next best task: decide whether feature export should add explicit signed displacement/velocity summary features, then rerun DTW/TCN holdouts. Do not wire DTW or TCN swipes into live desktop actions yet.
+- Feature export now includes causal trailing-window signed displacement, hand-scale-normalized displacement, peak horizontal velocity, and direction consistency. DTW saved-model inference remains backward-compatible with old feature vectors.
+- Rerun evidence: DTW with the new features can match 4/4 held-out swipes with 0 false activations using `--negative-distance-margin 0.75`, but that conservative model under-detected the structured chained stream. The looser `1.3` gated DTW window-feature variant scored 9/10 in order with 1 extra-or-wrong-order detection on the structured chained stream. TCN still matched only 2/4 held-out swipes and missed both held-out left swipes.
+- Next best task: validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams before making a Sprint 5 recognizer decision. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Current Sprint 5 direction:
 

@@ -232,6 +232,8 @@ DTW holdout evidence:
 - Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
 - TCN scaffold evidence: deterministic manifest/window building, optional PyTorch training, same-batch evaluation, and holdout evaluation exist. Same-batch TCN matched 16/16 with 1 false activation, but holdout TCN matched 2/4 and missed both held-out left swipes.
 - Feature diagnostics: `airdesk gesture diagnose-features` now compares the same holdout split. On `sprint4-swipes-001`, held-out left swipes are weaker/slower than train-left examples (`palm_dx` about `0.181` vs `0.235`, normalized displacement about `1.387` vs `1.857`, max speed about `3.230` vs `5.163`) while label/frame alignment is roughly one frame inside the event interval.
+- Window-feature update: feature export now includes causal trailing-window signed displacement, hand-scale-normalized displacement, peak horizontal velocity, and direction consistency. DTW saved-model inference remains backward-compatible with old feature vectors.
+- Rerun evidence: with regenerated features, DTW plus `--negative-distance-margin 0.75` matched 4/4 held-out swipes with 0 false activations on the isolated holdout. TCN still matched only 2/4 and missed both held-out left swipes. On the structured chained session, the looser `1.3` gated DTW window-feature variant scored 9/10 in order with 1 extra-or-wrong-order detection, while the conservative `0.75` variant under-detected badly.
 
 Fresh chained-session evidence:
 
@@ -254,15 +256,15 @@ Structured chained-session evidence:
 
 ## Current Next Task
 
-Decide whether feature export should add explicit displacement/velocity summary features for swipe windows, then rerun DTW and TCN holdouts. Do not wire DTW or TCN swipes into live desktop actions yet.
+Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams before making a Sprint 5 recognizer decision. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
 1. Read the existing feature, label, DTW, and evaluation modules before editing.
-2. Add targeted window-level features only if they directly address the measured gap: signed horizontal displacement, hand-scale-normalized displacement, peak horizontal velocity, and direction consistency.
-3. Keep the base runtime dependency-free; do not add new mandatory ML/runtime dependencies.
-4. Add tests for feature export and downstream manifest compatibility.
-5. Rerun `holdout-dtw`, gated `holdout-dtw`, `holdout-tcn`, and `diagnose-features`.
+2. Add or refine timestamp labels for a continuous chained stream, or collect one fresh timestamp-aware continuous stream if Caden is available.
+3. Evaluate the best DTW window-feature variants against event-level labels, not only remembered order.
+4. Keep TCN offline unless it improves on held-out continuous streams.
+5. Document the Sprint 5 recognizer decision and explicitly defer LSTM/GRU unless the TCN path fails in a way worth comparing.
 6. Document results and limitations in README/tasks/tracking-samples.
 7. Run `uv run ruff check .` and `uv run pytest`.
 8. Commit and push.

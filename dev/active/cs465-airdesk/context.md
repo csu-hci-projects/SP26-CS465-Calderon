@@ -204,10 +204,12 @@ Sprint 2 established a working live and replay foundation:
 - `airdesk gesture score-sequence` now compares spotted DTW candidates with a remembered R/L order. On structured chained recording `data/recordings/sprint4-chained-002/chained-structured-swipes-001.jsonl`, expected sequence `R L R R L L R R L L` scored against detected sequence `R L R R L R R L` as 8/10 matched in order, 2 missed-or-wrong-order, and 0 extra-or-wrong-order.
 - The causal TCN scaffold now has deterministic manifest/window building, optional PyTorch training, same-batch evaluation, and holdout evaluation. Same-batch TCN was optimistic: 16/16 matched with 1 false activation. Holdout TCN reproduced the plain-DTW weakness: 2/4 held-out swipes matched, both held-out left swipes missed, and 0 false activations.
 - `airdesk gesture diagnose-features` now compares feature, timing, and tracking-quality summaries across that same split. On `sprint4-swipes-001`, held-out left swipes are weaker/slower than train-left examples (`palm_dx` about `0.181` vs `0.235`, normalized `palm_dx_per_hand_scale` about `1.387` vs `1.857`, max palm speed about `3.230` vs `5.163`), while label/frame alignment looks consistent at about one frame inside the event interval.
+- Feature export now includes causal trailing-window swipe features: signed horizontal palm displacement, hand-scale-normalized displacement, peak absolute horizontal velocity, and direction consistency. DTW models remain backward-compatible with older saved feature vectors.
+- With the new features, DTW on the same deterministic holdout can match 4/4 held-out swipes with 0 false activations using `--negative-distance-margin 0.75`, but this was tuned on existing evidence. TCN holdout still misses both held-out left swipes and adds 1 false activation. On the structured chained session, the looser `1.3` gated DTW variant with new features scored 9/10 in order with 1 extra-or-wrong-order detection, while the conservative `0.75` variant under-detected badly.
 
 Current next step:
 
-> Decide whether feature export should add explicit displacement/velocity summary features for swipe windows, then rerun DTW and TCN holdouts. Do not wire DTW or TCN swipes into live desktop actions yet.
+> Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams before making a Sprint 5 recognizer decision. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 ## Current Roadmap
 

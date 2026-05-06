@@ -29,6 +29,10 @@ class FrameFeatureRow:
     palm_speed: float
     palm_ax: float
     palm_ay: float
+    palm_window_dx: float
+    palm_window_dx_per_hand_scale: float
+    palm_window_peak_abs_vx: float
+    palm_window_direction_consistency: float
     index_rel_x: float
     index_rel_y: float
     index_rel_vx: float
@@ -55,6 +59,7 @@ class _HandHistory:
     index_rel_x: float = 0.0
     index_rel_y: float = 0.0
     pinch_distance: float = 0.0
+    tracked_rows: list[tuple[float, float, float, float]] | None = None
 
 
 def extract_feature_rows(
@@ -94,6 +99,7 @@ def _row_for_frame(
     if hand is None:
         dt = _dt(history, frame.timestamp)
         history.timestamp = frame.timestamp
+        history.tracked_rows = []
         return FrameFeatureRow(
             frame_index=frame_index,
             timestamp=frame.timestamp,
@@ -110,6 +116,10 @@ def _row_for_frame(
             palm_speed=0.0,
             palm_ax=0.0,
             palm_ay=0.0,
+            palm_window_dx=0.0,
+            palm_window_dx_per_hand_scale=0.0,
+            palm_window_peak_abs_vx=0.0,
+            palm_window_direction_consistency=0.0,
             index_rel_x=0.0,
             index_rel_y=0.0,
             index_rel_vx=0.0,
@@ -136,6 +146,13 @@ def _row_for_frame(
     pinch_distance = _pinch_distance(hand)
     pinch_velocity = (pinch_distance - history.pinch_distance) / dt if dt > 0 else 0.0
     hand_scale = max(0.0, hand.bbox[2] - hand.bbox[0])
+    window_motion = _update_window_motion(
+        history,
+        timestamp=frame.timestamp,
+        palm_x=palm_x,
+        palm_vx=palm_vx,
+        hand_scale=hand_scale,
+    )
     pose_features = pose_recognizer.features_for_hand(hand)
     extended = pose_features.extended_fingers if pose_features else 0
     folded = pose_features.folded_fingers if pose_features else 0
@@ -165,6 +182,10 @@ def _row_for_frame(
         palm_speed=(palm_vx**2 + palm_vy**2) ** 0.5,
         palm_ax=palm_ax,
         palm_ay=palm_ay,
+        palm_window_dx=window_motion[0],
+        palm_window_dx_per_hand_scale=window_motion[1],
+        palm_window_peak_abs_vx=window_motion[2],
+        palm_window_direction_consistency=window_motion[3],
         index_rel_x=index_rel_x,
         index_rel_y=index_rel_y,
         index_rel_vx=index_rel_vx,
@@ -183,6 +204,51 @@ def _dt(history: _HandHistory, timestamp: float) -> float:
     if history.timestamp is None or timestamp <= history.timestamp:
         return 0.0
     return timestamp - history.timestamp
+
+
+def _update_window_motion(
+    history: _HandHistory,
+    *,
+    timestamp: float,
+    palm_x: float,
+    palm_vx: float,
+    hand_scale: float,
+    window_seconds: float = 0.8,
+) -> tuple[float, float, float, float]:
+    tracked_rows = history.tracked_rows or []
+    tracked_rows.append((timestamp, palm_x, palm_vx, hand_scale))
+    cutoff = timestamp - window_seconds
+    tracked_rows = [row for row in tracked_rows if row[0] >= cutoff]
+    history.tracked_rows = tracked_rows
+    if len(tracked_rows) < 2:
+        return 0.0, 0.0, abs(palm_vx), 0.0
+    palm_dx = tracked_rows[-1][1] - tracked_rows[0][1]
+    mean_scale = sum(row[3] for row in tracked_rows) / len(tracked_rows)
+    peak_abs_vx = max(abs(row[2]) for row in tracked_rows)
+    return (
+        palm_dx,
+        palm_dx / mean_scale if mean_scale > 0 else 0.0,
+        peak_abs_vx,
+        _direction_consistency(tracked_rows, palm_dx),
+    )
+
+
+def _direction_consistency(
+    tracked_rows: list[tuple[float, float, float, float]],
+    palm_dx: float,
+) -> float:
+    if len(tracked_rows) < 2 or palm_dx == 0:
+        return 0.0
+    expected_sign = 1 if palm_dx > 0 else -1
+    steps = [
+        tracked_rows[index][1] - tracked_rows[index - 1][1]
+        for index in range(1, len(tracked_rows))
+    ]
+    moving_steps = [step for step in steps if step != 0]
+    if not moving_steps:
+        return 0.0
+    aligned = sum(1 for step in moving_steps if (1 if step > 0 else -1) == expected_sign)
+    return aligned / len(moving_steps)
 
 
 def _index_relative(landmarks: object, palm_x: float, palm_y: float) -> tuple[float, float]:
