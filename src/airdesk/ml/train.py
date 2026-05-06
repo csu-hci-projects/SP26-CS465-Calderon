@@ -8,6 +8,7 @@ from typing import Any
 
 from airdesk.ml.dataset import (
     TcnDatasetManifest,
+    TcnWindowSample,
     feature_window_matrix,
     load_tcn_dataset_manifest,
 )
@@ -61,6 +62,24 @@ class CausalTcnTrainingResult:
     validation_accuracy: float | None
     targets: tuple[str, ...]
     feature_columns: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CausalTcnPrediction:
+    """One non-background TCN prediction over a manifest window."""
+
+    sample_id: str
+    feature_path: str
+    label_path: str | None
+    start_time: float
+    end_time: float
+    target: str
+    target_index: int
+    confidence: float
+    probabilities: dict[str, float]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -208,6 +227,88 @@ def train_causal_tcn(
     )
 
 
+def predict_causal_tcn_manifest(
+    *,
+    model_path: Path,
+    manifest_path: Path,
+    confidence_threshold: float = 0.5,
+    cooldown_seconds: float = 0.5,
+    include_background: bool = False,
+) -> list[CausalTcnPrediction]:
+    """Run a trained TCN checkpoint over a manifest and return window predictions."""
+    torch, nn, functional = _require_torch()
+    if not 0 <= confidence_threshold <= 1:
+        raise ValueError("confidence_threshold must be in [0, 1]")
+    if cooldown_seconds < 0:
+        raise ValueError("cooldown_seconds must be non-negative")
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+    metadata = checkpoint["metadata"]
+    model_config = checkpoint["model_config"]
+    targets = tuple(str(target) for target in metadata["targets"])
+    feature_columns = tuple(str(column) for column in metadata["feature_columns"])
+    if tuple(manifest.feature_columns) != feature_columns:
+        raise ValueError("Manifest feature columns do not match TCN checkpoint metadata")
+    if tuple(manifest.targets) != targets:
+        raise ValueError("Manifest targets do not match TCN checkpoint metadata")
+
+    model = _make_causal_tcn_model(
+        torch=torch,
+        nn=nn,
+        functional=functional,
+        input_features=int(model_config["input_features"]),
+        targets=int(model_config["targets"]),
+        hidden_channels=int(model_config["hidden_channels"]),
+        levels=int(model_config["levels"]),
+        kernel_size=int(model_config["kernel_size"]),
+        dropout=float(model_config["dropout"]),
+    )
+    model.load_state_dict(checkpoint["model_state"])
+    model.eval()
+    feature_mean = tuple(float(value) for value in metadata["feature_mean"])
+    feature_std = tuple(float(value) for value in metadata["feature_std"])
+
+    predictions: list[CausalTcnPrediction] = []
+    with torch.no_grad():
+        for window in manifest.windows:
+            sample = _normalized_window_tensor(
+                torch,
+                window,
+                feature_columns=feature_columns,
+                feature_mean=feature_mean,
+                feature_std=feature_std,
+            )
+            lengths = torch.tensor([sample.shape[1]], dtype=torch.long)
+            logits = model(sample, lengths)
+            probabilities_tensor = torch.softmax(logits, dim=1)[0]
+            target_index = int(probabilities_tensor.argmax().item())
+            target = targets[target_index]
+            confidence = float(probabilities_tensor[target_index].item())
+            if target == "background" and not include_background:
+                continue
+            if confidence < confidence_threshold:
+                continue
+            predictions.append(
+                CausalTcnPrediction(
+                    sample_id=window.sample_id,
+                    feature_path=window.feature_path,
+                    label_path=window.label_path,
+                    start_time=window.start_time,
+                    end_time=window.end_time,
+                    target=target,
+                    target_index=target_index,
+                    confidence=confidence,
+                    probabilities={
+                        targets[index]: float(value.item())
+                        for index, value in enumerate(probabilities_tensor)
+                    },
+                )
+            )
+    if include_background:
+        return sorted(predictions, key=lambda item: (item.feature_path, item.end_time))
+    return _suppress_predictions(predictions, cooldown_seconds=cooldown_seconds)
+
+
 def _normalization_stats(
     samples: tuple[tuple[tuple[float, ...], ...], ...],
     feature_count: int,
@@ -272,6 +373,49 @@ def _tensors_from_arrays(
     lengths = torch.tensor(arrays.lengths, dtype=torch.long)
     labels = torch.tensor(arrays.labels, dtype=torch.long)
     return padded, lengths, labels
+
+
+def _normalized_window_tensor(
+    torch: Any,
+    window: TcnWindowSample,
+    *,
+    feature_columns: tuple[str, ...],
+    feature_mean: tuple[float, ...],
+    feature_std: tuple[float, ...],
+) -> Any:
+    matrix = feature_window_matrix(window, feature_columns=feature_columns)
+    normalized = [
+        [
+            (value - feature_mean[index]) / feature_std[index]
+            for index, value in enumerate(row)
+        ]
+        for row in matrix
+    ]
+    return torch.tensor([normalized], dtype=torch.float32)
+
+
+def _suppress_predictions(
+    predictions: list[CausalTcnPrediction],
+    *,
+    cooldown_seconds: float,
+) -> list[CausalTcnPrediction]:
+    selected: list[CausalTcnPrediction] = []
+    for prediction in sorted(predictions, key=lambda item: item.confidence, reverse=True):
+        overlaps = False
+        for existing in selected:
+            if prediction.feature_path != existing.feature_path:
+                continue
+            if prediction.target != existing.target:
+                continue
+            if (
+                prediction.start_time <= existing.end_time + cooldown_seconds
+                and existing.start_time <= prediction.end_time
+            ):
+                overlaps = True
+                break
+        if not overlaps:
+            selected.append(prediction)
+    return sorted(selected, key=lambda item: (item.feature_path, item.end_time))
 
 
 def _split_indices(

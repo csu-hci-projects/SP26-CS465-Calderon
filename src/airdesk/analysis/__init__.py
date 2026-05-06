@@ -8,8 +8,10 @@ from airdesk.analysis.evaluation import (
     evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
+    evaluate_tcn_manifest,
     format_evaluation,
     format_holdout_evaluation,
+    holdout_totals,
     save_evaluation_json,
     save_holdout_json,
 )
@@ -25,9 +27,11 @@ __all__ = [
     "evaluate_dtw_holdout",
     "evaluate_dtw_recognizer",
     "evaluate_rule_recognizer",
+    "evaluate_tcn_manifest",
     "format_analysis",
     "format_evaluation",
     "format_holdout_evaluation",
+    "holdout_totals",
     "save_holdout_json",
     "save_evaluation_json",
 ]

@@ -105,6 +105,15 @@ def test_train_tcn_help_exposes_optional_training_controls() -> None:
     assert "--hidden-channels" in result.stdout
 
 
+def test_evaluate_tcn_help_exposes_optional_evaluation_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "evaluate-tcn", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--confidence-threshold" in result.stdout
+    assert "--cooldown-seconds" in result.stdout
+
+
 def test_collect_help_describes_prompted_collection() -> None:
     result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
 

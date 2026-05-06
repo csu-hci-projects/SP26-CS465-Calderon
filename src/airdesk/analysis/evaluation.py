@@ -18,6 +18,7 @@ from airdesk.gestures.dtw import (
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import GestureEventLabel, GestureLabelFile, load_label_file
+from airdesk.ml import CausalTcnPrediction, load_tcn_dataset_manifest, predict_causal_tcn_manifest
 from airdesk.recording.jsonl import iter_recording
 from airdesk.state.types import GestureCandidate, TrackingFrame
 
@@ -171,6 +172,67 @@ def evaluate_dtw_recognizer(
         candidates=candidates,
         match_tolerance_seconds=0.5,
     )
+
+
+def evaluate_tcn_manifest(
+    *,
+    manifest_path: Path,
+    model_path: Path,
+    confidence_threshold: float = 0.5,
+    cooldown_seconds: float = 0.5,
+    match_tolerance_seconds: float = 0.5,
+) -> tuple[GestureEvaluation, ...]:
+    """Evaluate a trained TCN checkpoint against all labeled sources in a manifest."""
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    predictions = predict_causal_tcn_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+        confidence_threshold=confidence_threshold,
+        cooldown_seconds=cooldown_seconds,
+    )
+    predictions_by_source: dict[tuple[str, str], list[CausalTcnPrediction]] = {}
+    for prediction in predictions:
+        if prediction.label_path is None:
+            continue
+        predictions_by_source.setdefault(
+            (prediction.feature_path, prediction.label_path),
+            [],
+        ).append(prediction)
+
+    evaluations: list[GestureEvaluation] = []
+    for source in manifest.sources:
+        if source.label_path is None:
+            continue
+        feature_path = source.feature_path
+        label_path = source.label_path
+        label_file = load_label_file(Path(label_path))
+        candidates = [
+            GestureCandidate(
+                name=prediction.target,
+                confidence=prediction.confidence,
+                timestamp=prediction.end_time,
+                hand_id=None,
+                metadata={
+                    "recognizer": "tcn",
+                    "sample_id": prediction.sample_id,
+                    "window_start": prediction.start_time,
+                    "window_end": prediction.end_time,
+                    "probabilities": prediction.probabilities,
+                },
+            )
+            for prediction in predictions_by_source.get((feature_path, label_path), [])
+        ]
+        evaluations.append(
+            evaluate_candidates(
+                recording_path=Path(feature_path),
+                label_path=Path(label_path),
+                labels=label_file,
+                recognizer="tcn",
+                candidates=candidates,
+                match_tolerance_seconds=match_tolerance_seconds,
+            )
+        )
+    return tuple(evaluations)
 
 
 def evaluate_candidates(

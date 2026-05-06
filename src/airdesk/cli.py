@@ -28,9 +28,11 @@ from airdesk.analysis import (
     evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
+    evaluate_tcn_manifest,
     format_analysis,
     format_evaluation,
     format_holdout_evaluation,
+    holdout_totals,
     save_evaluation_json,
     save_holdout_json,
 )
@@ -740,6 +742,71 @@ def gesture_train_tcn(
         f"validation={result.validation_samples} final_loss={result.final_train_loss:.4f} "
         f"train_accuracy={result.train_accuracy:.3f} validation_accuracy={validation}"
     )
+
+
+@gesture_app.command("evaluate-tcn")
+def gesture_evaluate_tcn(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN dataset manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN checkpoint path."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON summary output path.")] = None,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(help="Minimum softmax confidence for a non-background candidate."),
+    ] = 0.5,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Suppress repeated same-gesture windows within this many seconds."),
+    ] = 0.5,
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for window-end matching."),
+    ] = 0.5,
+) -> None:
+    """Evaluate a trained TCN checkpoint over a labeled feature manifest."""
+    try:
+        evaluations = evaluate_tcn_manifest(
+            manifest_path=manifest,
+            model_path=model,
+            confidence_threshold=confidence_threshold,
+            cooldown_seconds=cooldown_seconds,
+            match_tolerance_seconds=match_tolerance_seconds,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    summary = holdout_totals(evaluations)
+    payload = {
+        "recognizer": "tcn",
+        "manifest": str(manifest),
+        "model": str(model),
+        "confidence_threshold": confidence_threshold,
+        "cooldown_seconds": cooldown_seconds,
+        "match_tolerance_seconds": match_tolerance_seconds,
+        "summary": summary,
+        "evaluations": [evaluation.to_dict() for evaluation in evaluations],
+    }
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    latency = summary["mean_latency_seconds"]
+    formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
+    typer.echo(
+        f"recognizer=tcn recordings={summary['recordings']} "
+        f"intended={summary['intended_events']} matched={summary['matched_events']} "
+        f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']} mean_latency={formatted_latency}"
+    )
+    if out is not None:
+        typer.echo(f"wrote evaluation={out}")
 
 
 @app.command()

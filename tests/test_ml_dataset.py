@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from airdesk.analysis import evaluate_tcn_manifest
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
     GestureEventLabel,
@@ -20,6 +21,7 @@ from airdesk.ml import (
     feature_window_matrix,
     load_feature_rows_csv,
     load_tcn_dataset_manifest,
+    predict_causal_tcn_manifest,
     prepare_tcn_training_arrays,
     save_tcn_dataset_manifest,
     train_causal_tcn,
@@ -221,6 +223,81 @@ def test_train_causal_tcn_smoke_when_torch_is_installed(tmp_path: Path) -> None:
     assert model_path.exists()
     assert result.samples == len(manifest.windows)
     assert result.validation_accuracy is None
+
+
+def test_tcn_prediction_and_evaluation_smoke_when_torch_is_installed(tmp_path: Path) -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("optional PyTorch dependency is not installed")
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "swipe-left-positive-001.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event=""),
+            _row(timestamp=1.1, frame_index=1, event=""),
+            _row(timestamp=1.2, frame_index=2, event="swipe_left"),
+            _row(timestamp=1.3, frame_index=3, event="swipe_left"),
+            _row(timestamp=1.4, frame_index=4, event=""),
+            _row(timestamp=1.5, frame_index=5, event=""),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.5,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="swipe_left",
+                    start_time=1.2,
+                    end_time=1.3,
+                ),
+            ),
+        ),
+        labels_dir / "swipe-left-positive-001.labels.json",
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    model_path = tmp_path / "model.pt"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+    train_causal_tcn(
+        manifest_path=manifest_path,
+        out_path=model_path,
+        config=CausalTcnTrainingConfig(epochs=1, batch_size=2, validation_fraction=0.0, seed=1),
+    )
+
+    predictions = predict_causal_tcn_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+        confidence_threshold=0.0,
+        include_background=True,
+    )
+    evaluations = evaluate_tcn_manifest(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        confidence_threshold=0.0,
+    )
+
+    assert len(predictions) == len(manifest.windows)
+    assert len(evaluations) == 1
+    assert evaluations[0].recognizer == "tcn"
+    assert evaluations[0].intended_events == 1
 
 
 def _write_features(path: Path, rows: list[FrameFeatureRow]) -> None:
