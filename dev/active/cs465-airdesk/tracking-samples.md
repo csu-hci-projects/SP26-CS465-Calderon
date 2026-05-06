@@ -255,3 +255,18 @@ uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-chained-001/
 - Gated DTW produced 16 candidates: 10 `swipe_right` and 6 `swipe_left`.
 - Candidate timestamps in seconds from recording start: right at 2.36, 24.58, 27.75, 50.24, 52.67, 59.89, 75.20, 77.29, 86.43, 87.94; left at 5.80, 8.76, 58.10, 60.29, 81.74, 83.76.
 - This aligns with Caden's rough "15-ish" swipe count and includes back-to-back clusters. It still needs human timestamp review or event labels before reporting matched/missed/false-activation metrics.
+
+Sprint 4 structured chained session `data/recordings/sprint4-chained-002`:
+
+- Caden recorded one structured continuous take, `chained-structured-swipes-001.jsonl`.
+- Intended movement-direction sequence: `R L R R L L R R L L`. Here `R` means palm motion toward the right side of the preview/screen and `L` means palm motion toward the left side, regardless of which hand was used.
+- Recording health: 2670 frames, 1220 hand-present frames, about 29.66 FPS, and about 90 seconds of data.
+- Gated DTW spotting produced 8 candidates: detected sequence `R L R R L R R L`.
+- Order-level score:
+
+```bash
+uv run airdesk gesture score-sequence --candidates data/evaluations/sprint4-chained-002/gated-dtw-candidates.json --expected-sequence "R L R R L L R R L L" --out data/evaluations/sprint4-chained-002/gated-dtw-sequence-score.json
+```
+
+- Result: 8/10 matched in order, 2 missed-or-wrong-order gestures, 0 extra-or-wrong-order detections.
+- Interpretation: gated DTW is now finding plausible continuous-session swipes without extra order-level detections, but still misses some gestures in a structured stream. That is good enough evidence to continue model work, not enough evidence for live desktop actions.

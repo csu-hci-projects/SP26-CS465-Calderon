@@ -201,10 +201,11 @@ Sprint 2 established a working live and replay foundation:
 - Holdout diagnostics show that loosening the left threshold enough to catch both held-out left swipes also introduces false activations. Treat this as a left-swipe/negative feature-separation problem, not a threshold-tuning win.
 - An optional calibrated horizontal-displacement gate now exists for DTW. With `--negative-distance-margin 1.3 --min-palm-dx-fraction 0.65`, the same deterministic holdout matched 4/4 held-out swipes with 0 false activations and about 0.36 s mean latency. Because this was tuned after viewing the holdout, it needs fresh chained-session validation before live control.
 - `airdesk gesture spot-dtw` now spots DTW candidates in unlabeled continuous recordings. On fresh chained recording `data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl`, gated DTW found 16 candidates, roughly matching Caden's "15-ish" swipe count and including back-to-back swipe clusters.
+- `airdesk gesture score-sequence` now compares spotted DTW candidates with a remembered R/L order. On structured chained recording `data/recordings/sprint4-chained-002/chained-structured-swipes-001.jsonl`, expected sequence `R L R R L L R R L L` scored against detected sequence `R L R R L R R L` as 8/10 matched in order, 2 missed-or-wrong-order, and 0 extra-or-wrong-order.
 
 Current next step:
 
-> Review/label the chained-session candidate timestamps, then compute matched/missed/false-activation metrics before starting causal TCN work or wiring dynamic swipes into live control.
+> Decide whether to collect one more timestamp-aware continuous stream or start the causal TCN prototype. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
 
 ## Current Roadmap
 

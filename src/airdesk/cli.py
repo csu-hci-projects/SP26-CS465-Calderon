@@ -584,6 +584,51 @@ def gesture_spot_dtw(
         typer.echo(f"wrote candidates={out}")
 
 
+@gesture_app.command("score-sequence")
+def gesture_score_sequence(
+    candidates: Annotated[Path, typer.Option(exists=True, readable=True, help="Candidate JSON.")],
+    expected_sequence: Annotated[
+        str,
+        typer.Option(help="Expected sequence, e.g. 'R L R R L L'."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON score output path.")] = None,
+) -> None:
+    """Compare spotted candidates against an expected gesture order."""
+    with candidates.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    detected = [
+        _sequence_token(item["gesture"])
+        for item in payload.get("candidates", [])
+        if "gesture" in item
+    ]
+    expected = [_sequence_token(token) for token in expected_sequence.split()]
+    matched = _lcs_length(expected, detected)
+    result = {
+        "candidates": str(candidates),
+        "expected": expected,
+        "detected": detected,
+        "expected_count": len(expected),
+        "detected_count": len(detected),
+        "matched_in_order": matched,
+        "missed_or_wrong_order": len(expected) - matched,
+        "extra_or_wrong_order": len(detected) - matched,
+    }
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    typer.echo(
+        "expected="
+        f"{' '.join(expected)} detected={' '.join(detected)} "
+        f"matched_in_order={matched}/{len(expected)} "
+        f"missed_or_wrong_order={result['missed_or_wrong_order']} "
+        f"extra_or_wrong_order={result['extra_or_wrong_order']}"
+    )
+    if out is not None:
+        typer.echo(f"wrote score={out}")
+
+
 @app.command()
 def track(
     backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
@@ -1928,6 +1973,28 @@ def _average_fps_from_timestamps(timestamps: list[float]) -> float | None:
     if not intervals:
         return None
     return 1.0 / fmean(intervals)
+
+
+def _sequence_token(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_")
+    if normalized in {"r", "right", "swipe_right"}:
+        return "R"
+    if normalized in {"l", "left", "swipe_left"}:
+        return "L"
+    raise typer.BadParameter(f"unsupported sequence token: {value}")
+
+
+def _lcs_length(left: list[str], right: list[str]) -> int:
+    previous = [0] * (len(right) + 1)
+    for left_item in left:
+        current = [0] * (len(right) + 1)
+        for index, right_item in enumerate(right, start=1):
+            if left_item == right_item:
+                current[index] = previous[index - 1] + 1
+            else:
+                current[index] = max(previous[index], current[index - 1])
+        previous = current
+    return previous[-1]
 
 
 def _make_tracker(

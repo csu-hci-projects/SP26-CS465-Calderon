@@ -240,9 +240,19 @@ Fresh chained-session evidence:
 - Result: 16 DTW candidates, 10 `swipe_right` and 6 `swipe_left`, with timestamps recorded in `tracking-samples.md`.
 - Caveat: this is candidate spotting, not event-level accuracy yet. Human timestamp review or labels are needed before reporting matched/missed/false-activation metrics.
 
+Structured chained-session evidence:
+
+- Recording: `data/recordings/sprint4-chained-002/chained-structured-swipes-001.jsonl`
+- Intended movement-direction sequence: `R L R R L L R R L L`
+- Health: 2670 frames, 1220 hand-present frames, about 29.66 FPS, roughly 90 seconds.
+- Gated DTW detected sequence: `R L R R L R R L`
+- Command: `uv run airdesk gesture score-sequence --candidates data/evaluations/sprint4-chained-002/gated-dtw-candidates.json --expected-sequence "R L R R L L R R L L" --out data/evaluations/sprint4-chained-002/gated-dtw-sequence-score.json`
+- Result: 8/10 matched in order, 2 missed-or-wrong-order gestures, 0 extra-or-wrong-order detections.
+- Interpretation: promising for a lightweight personalized baseline, but still not reliable enough for live desktop actions.
+
 ## Current Next Task
 
-Review/label the chained-session candidate timestamps, then compute matched/missed/false-activation metrics before starting the causal TCN.
+Decide whether to collect one more timestamp-aware continuous stream or start the causal TCN prototype. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
 
 ## Useful Commands
 

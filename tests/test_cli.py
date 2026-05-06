@@ -424,6 +424,44 @@ def test_gesture_spot_dtw_cli_writes_unlabeled_candidates(tmp_path: Path) -> Non
     assert payload["candidates"][0]["gesture"] == "swipe_left"
 
 
+def test_gesture_score_sequence_cli_scores_ordered_candidates(tmp_path: Path) -> None:
+    candidates = tmp_path / "candidates.json"
+    score = tmp_path / "score.json"
+    candidates.write_text(
+        json.dumps(
+            {
+                "candidates": [
+                    {"gesture": "swipe_right"},
+                    {"gesture": "swipe_left"},
+                    {"gesture": "swipe_right"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "score-sequence",
+            "--candidates",
+            str(candidates),
+            "--expected-sequence",
+            "R L L R",
+            "--out",
+            str(score),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "matched_in_order=3/4" in result.stdout
+    payload = json.loads(score.read_text(encoding="utf-8"))
+    assert payload["expected"] == ["R", "L", "L", "R"]
+    assert payload["detected"] == ["R", "L", "R"]
+    assert payload["missed_or_wrong_order"] == 1
+
+
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:
     recordings_dir = tmp_path / "recordings"
     labels_dir = tmp_path / "labels"

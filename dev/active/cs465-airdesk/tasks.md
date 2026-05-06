@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: review/label the fresh chained continuous recording and compute event-level DTW metrics.
+Current next sprint: use chained-session evidence to decide whether to start the causal TCN or collect one more labeled stream.
 
 ## Phase 0: Project Setup
 
@@ -85,8 +85,9 @@ Current next sprint: review/label the fresh chained continuous recording and com
 - [x] Evaluate gated DTW variant on `sprint4-swipes-001` holdout
 - [x] Record and spot-check a fresh 60-90 second chained continuous recording
 - [x] Add `airdesk gesture spot-dtw` for unlabeled continuous DTW candidate review
-- [ ] Review/label chained-session candidate timestamps
-- [ ] Compute matched/missed/false-activation metrics on the chained session
+- [x] Add `airdesk gesture score-sequence` for remembered R/L order checks
+- [x] Score structured chained-session DTW order against `R L R R L L R R L L`
+- [ ] Decide whether to collect one more timestamp-aware stream or start causal TCN prototype
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
