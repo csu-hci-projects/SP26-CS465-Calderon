@@ -276,8 +276,10 @@ TCN dataset scaffold:
 
 ```bash
 uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/models/gestures/tcn-sprint4-swipes-001-manifest.json
+uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-swipes-001-manifest.json --out data/models/gestures/tcn-sprint4-swipes-001.pt --epochs 25
 ```
 
 - The first TCN target is narrow by design: `background`, `swipe_left`, and `swipe_right`.
 - The manifest is dependency-free JSON. It points to exported feature CSV files and records deterministic sliding-window row ranges, target labels, target indexes, feature columns, and per-target counts.
-- This is a training-data scaffold only. It does not train a TCN, does not require PyTorch, and must not be wired into live desktop actions until a later evaluation beats the current DTW baseline on held-out continuous sessions.
+- TCN training is optional and requires `uv sync --dev --extra ml`. It saves a Torch checkpoint with model weights, target mapping, feature columns, normalization stats, window settings, and training metrics.
+- This remains an offline training/evaluation path. It must not be wired into live desktop actions until a later evaluation beats the current DTW baseline on held-out continuous sessions.

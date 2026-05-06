@@ -16,6 +16,9 @@ live = [
     "mediapipe>=0.10.35",
     "opencv-python>=4.13.0.92",
 ]
+ml = [
+    "torch>=2.5.0",
+]
 
 [dependency-groups]
 dev = [
@@ -38,4 +41,3 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-

@@ -80,6 +80,23 @@ class TcnFeatureSource:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TcnFeatureSource:
+        return cls(
+            feature_path=str(data["feature_path"]),
+            label_path=str(data["label_path"]) if data.get("label_path") is not None else None,
+            row_count=int(data["row_count"]),
+            start_time=(
+                float(data["start_time"]) if data.get("start_time") is not None else None
+            ),
+            end_time=float(data["end_time"]) if data.get("end_time") is not None else None,
+            duration_seconds=float(data["duration_seconds"]),
+            target_frame_counts={
+                str(target): int(count)
+                for target, count in data.get("target_frame_counts", {}).items()
+            },
+        )
+
 
 @dataclass(frozen=True)
 class TcnWindowSample:
@@ -99,6 +116,25 @@ class TcnWindowSample:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TcnWindowSample:
+        return cls(
+            sample_id=str(data["sample_id"]),
+            feature_path=str(data["feature_path"]),
+            label_path=str(data["label_path"]) if data.get("label_path") is not None else None,
+            start_row=int(data["start_row"]),
+            end_row=int(data["end_row"]),
+            start_time=float(data["start_time"]),
+            end_time=float(data["end_time"]),
+            row_count=int(data["row_count"]),
+            target=str(data["target"]),
+            target_index=int(data["target_index"]),
+            target_frame_counts={
+                str(target): int(count)
+                for target, count in data.get("target_frame_counts", {}).items()
+            },
+        )
 
 
 @dataclass(frozen=True)
@@ -129,12 +165,32 @@ class TcnDatasetManifest:
             "summary": summarize_tcn_manifest(self),
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TcnDatasetManifest:
+        return cls(
+            schema_version=int(data["schema_version"]),
+            targets=tuple(str(target) for target in data["targets"]),
+            feature_columns=tuple(str(column) for column in data["feature_columns"]),
+            window_seconds=float(data["window_seconds"]),
+            stride_seconds=float(data["stride_seconds"]),
+            min_rows=int(data["min_rows"]),
+            min_gesture_fraction=float(data["min_gesture_fraction"]),
+            sources=tuple(TcnFeatureSource.from_dict(item) for item in data.get("sources", [])),
+            windows=tuple(TcnWindowSample.from_dict(item) for item in data.get("windows", [])),
+        )
+
 
 def load_feature_rows_csv(path: Path) -> list[FrameFeatureRow]:
     """Load exported AirDesk CSV feature rows."""
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         return [_feature_row_from_csv(row) for row in reader]
+
+
+def load_tcn_dataset_manifest(path: Path) -> TcnDatasetManifest:
+    """Load a TCN dataset manifest from stable JSON."""
+    with path.open(encoding="utf-8") as handle:
+        return TcnDatasetManifest.from_dict(json.load(handle))
 
 
 def build_tcn_dataset_manifest(
@@ -209,6 +265,16 @@ def save_tcn_dataset_manifest(manifest: TcnDatasetManifest, path: Path) -> None:
         handle.write("\n")
 
 
+def feature_window_matrix(
+    window: TcnWindowSample,
+    *,
+    feature_columns: tuple[str, ...],
+) -> list[list[float]]:
+    """Load numeric feature values for one manifest window."""
+    rows = load_feature_rows_csv(Path(window.feature_path))[window.start_row : window.end_row]
+    return [[_numeric_feature_value(row, column) for column in feature_columns] for row in rows]
+
+
 def summarize_tcn_manifest(manifest: TcnDatasetManifest) -> dict[str, Any]:
     """Return compact count totals for display and JSON exports."""
     window_counts = {target: 0 for target in manifest.targets}
@@ -237,6 +303,13 @@ def _feature_row_from_csv(row: dict[str, str]) -> FrameFeatureRow:
         else:
             values[field.name] = raw
     return FrameFeatureRow(**values)
+
+
+def _numeric_feature_value(row: FrameFeatureRow, column: str) -> float:
+    value = getattr(row, column)
+    if isinstance(value, int | float):
+        return float(value)
+    raise ValueError(f"TCN feature column must be numeric: {column}")
 
 
 def _matching_labels(

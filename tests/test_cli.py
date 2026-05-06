@@ -96,6 +96,15 @@ def test_cursor_run_help_exposes_cursor_controls() -> None:
     assert "--events-out" in result.stdout
 
 
+def test_train_tcn_help_exposes_optional_training_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "train-tcn", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--epochs" in result.stdout
+    assert "--hidden-channels" in result.stdout
+
+
 def test_collect_help_describes_prompted_collection() -> None:
     result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
 

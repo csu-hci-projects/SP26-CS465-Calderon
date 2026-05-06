@@ -92,7 +92,9 @@ Current next sprint: start the causal TCN dataset/training scaffold, using gated
 - [x] Add deterministic dataset/window builder over exported AirDesk features
 - [x] Add dependency-free `airdesk gesture build-tcn-dataset` manifest command
 - [x] Add tests for TCN manifest/window construction and label assignment
-- [ ] Train/prototype a small causal TCN over AirDesk features
+- [x] Add optional PyTorch extra for offline ML training without changing base runtime
+- [x] Add optional `airdesk gesture train-tcn` training scaffold and checkpoint metadata
+- [ ] Run first real TCN training pass over the local Sprint 4 manifest
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
 - [ ] Document Sprint 5 recognizer decision

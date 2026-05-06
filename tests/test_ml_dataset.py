@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 from pathlib import Path
+
+import pytest
 
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
@@ -12,9 +15,14 @@ from airdesk.labels import (
     save_label_file,
 )
 from airdesk.ml import (
+    CausalTcnTrainingConfig,
     build_tcn_dataset_manifest,
+    feature_window_matrix,
     load_feature_rows_csv,
+    load_tcn_dataset_manifest,
+    prepare_tcn_training_arrays,
     save_tcn_dataset_manifest,
+    train_causal_tcn,
 )
 
 
@@ -145,6 +153,74 @@ def test_save_tcn_dataset_manifest_writes_summary(tmp_path: Path) -> None:
     assert payload["targets"] == ["background", "swipe_left", "swipe_right"]
     assert payload["feature_columns"][0] == "dt"
     assert payload["summary"]["window_counts"]["background"] == 1
+
+
+def test_manifest_loads_and_extracts_window_matrix(tmp_path: Path) -> None:
+    features = tmp_path / "swipe-left-positive-001.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event=""),
+            _row(timestamp=1.1, frame_index=1, event="swipe_left"),
+            _row(timestamp=1.2, frame_index=2, event="swipe_left"),
+        ],
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+    output = tmp_path / "manifest.json"
+    save_tcn_dataset_manifest(manifest, output)
+
+    loaded = load_tcn_dataset_manifest(output)
+    matrix = feature_window_matrix(loaded.windows[0], feature_columns=("dt", "confidence"))
+    arrays = prepare_tcn_training_arrays(loaded)
+
+    assert loaded == manifest
+    assert matrix == [[0.0, 1.0], [0.1, 1.0], [0.1, 1.0]]
+    assert arrays.labels == (1,)
+    assert arrays.lengths == (3,)
+    assert len(arrays.feature_mean) == len(loaded.feature_columns)
+
+
+def test_train_causal_tcn_smoke_when_torch_is_installed(tmp_path: Path) -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("optional PyTorch dependency is not installed")
+    features = tmp_path / "features.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event=""),
+            _row(timestamp=1.1, frame_index=1, event=""),
+            _row(timestamp=1.2, frame_index=2, event="swipe_left"),
+            _row(timestamp=1.3, frame_index=3, event="swipe_left"),
+            _row(timestamp=1.4, frame_index=4, event=""),
+            _row(timestamp=1.5, frame_index=5, event=""),
+        ],
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+    manifest_path = tmp_path / "manifest.json"
+    model_path = tmp_path / "model.pt"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+
+    result = train_causal_tcn(
+        manifest_path=manifest_path,
+        out_path=model_path,
+        config=CausalTcnTrainingConfig(epochs=1, batch_size=2, validation_fraction=0.0, seed=1),
+    )
+
+    assert model_path.exists()
+    assert result.samples == len(manifest.windows)
+    assert result.validation_accuracy is None
 
 
 def _write_features(path: Path, rows: list[FrameFeatureRow]) -> None:

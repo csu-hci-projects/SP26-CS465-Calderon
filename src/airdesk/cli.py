@@ -54,7 +54,13 @@ from airdesk.labels import (
     suggest_stroke_label,
     validate_label_file,
 )
-from airdesk.ml import build_tcn_dataset_manifest, save_tcn_dataset_manifest
+from airdesk.ml import (
+    CausalTcnTrainingConfig,
+    MissingMlDependencyError,
+    build_tcn_dataset_manifest,
+    save_tcn_dataset_manifest,
+    train_causal_tcn,
+)
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
@@ -684,6 +690,55 @@ def gesture_build_tcn_dataset(
     typer.echo(
         f"wrote tcn_manifest={out} sources={summary['source_count']} "
         f"windows={summary['window_count']} {window_counts}"
+    )
+
+
+@gesture_app.command("train-tcn")
+def gesture_train_tcn(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN dataset manifest JSON path."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output Torch checkpoint path.")],
+    epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
+    learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
+    batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
+    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 24,
+    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 2,
+    kernel_size: Annotated[int, typer.Option(help="Causal convolution kernel size.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.0,
+    validation_fraction: Annotated[
+        float,
+        typer.Option(help="Deterministic validation split fraction."),
+    ] = 0.2,
+    seed: Annotated[int, typer.Option(help="Deterministic training seed.")] = 7,
+) -> None:
+    """Train the first optional offline causal TCN classifier."""
+    config = CausalTcnTrainingConfig(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        hidden_channels=hidden_channels,
+        levels=levels,
+        kernel_size=kernel_size,
+        dropout=dropout,
+        validation_fraction=validation_fraction,
+        seed=seed,
+    )
+    try:
+        result = train_causal_tcn(manifest_path=manifest, out_path=out, config=config)
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    validation = (
+        f"{result.validation_accuracy:.3f}"
+        if result.validation_accuracy is not None
+        else "none"
+    )
+    typer.echo(
+        f"wrote tcn_model={out} samples={result.samples} train={result.train_samples} "
+        f"validation={result.validation_samples} final_loss={result.final_train_loss:.4f} "
+        f"train_accuracy={result.train_accuracy:.3f} validation_accuracy={validation}"
     )
 
 
