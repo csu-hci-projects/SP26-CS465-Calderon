@@ -206,10 +206,11 @@ Sprint 2 established a working live and replay foundation:
 - `airdesk gesture diagnose-features` now compares feature, timing, and tracking-quality summaries across that same split. On `sprint4-swipes-001`, held-out left swipes are weaker/slower than train-left examples (`palm_dx` about `0.181` vs `0.235`, normalized `palm_dx_per_hand_scale` about `1.387` vs `1.857`, max palm speed about `3.230` vs `5.163`), while label/frame alignment looks consistent at about one frame inside the event interval.
 - Feature export now includes causal trailing-window swipe features: signed horizontal palm displacement, hand-scale-normalized displacement, peak absolute horizontal velocity, and direction consistency. DTW models remain backward-compatible with older saved feature vectors.
 - With the new features, DTW on the same deterministic holdout can match 4/4 held-out swipes with 0 false activations using `--negative-distance-margin 0.75`, but this was tuned on existing evidence. TCN holdout still misses both held-out left swipes and adds 1 false activation. On the structured chained session, the looser `1.3` gated DTW variant with new features scored 9/10 in order with 1 extra-or-wrong-order detection, while the conservative `0.75` variant under-detected badly.
+- Caden recorded `data/recordings/sprint4-chained-003/chained-structured-swipes-001.jsonl` with a 10-seconds-active / 10-seconds-rest protocol and coarse half-window event labels for sequence `R L R R L L R R L L`. Old gated DTW matched 7/10 event windows with 0 false activations and scored 8/10 in order. The looser window-feature gated DTW matched 8/10 event windows, scored 10/10 in order, but produced 3 extra-or-wrong-order sequence detections and 2 repeated fires. Conservative `0.75` DTW matched only 1/10 in the continuous stream. TCN matched 3/10.
 
 Current next step:
 
-> Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams before making a Sprint 5 recognizer decision. Do not wire DTW or TCN swipes into live desktop actions yet.
+> Decide the Sprint 5 recognizer stance: DTW/template remains the best current candidate, but it needs extra-detection filtering or a narrower pilot task before guarded use. TCN should stay offline for now. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 ## Current Roadmap
 

@@ -310,3 +310,15 @@ Window-feature rerun:
 - TCN holdout with the new features still matched only 2/4 held-out swipes, missed both held-out left swipes, and produced 1 false activation. So the feature addition currently helps the DTW/template path more than the small TCN path.
 - Continuous sanity check: the conservative `0.75` gated DTW variant under-detected the structured chained session, scoring only 3/10 in order. The looser `1.3` gated DTW variant with the new window features detected `R L R L L R R L L R`, scoring 9/10 matched in order with 1 extra-or-wrong-order detection.
 - Interpretation: the new representation is promising for DTW recall and may improve the structured stream, but the threshold/gate setting is still tuned on existing data and remains unstable across isolated vs chained recordings. Treat this as a hypothesis for the next labeled continuous pass, not live-control evidence.
+
+Sprint 4 structured chained session `data/recordings/sprint4-chained-003`:
+
+- Caden recorded one timestamp-aware structured continuous take, `chained-structured-swipes-001.jsonl`.
+- Protocol: 10 seconds active, 10 seconds rest, two swipes per active window. Intended sequence was `R L R R L L R R L L`.
+- Recording health: 2670 frames, 592 hand-present frames, about 29.66 FPS, and about 90 seconds of data.
+- Coarse labels were generated as half-window event intervals: `0-5`, `5-10`, `20-25`, `25-30`, `40-45`, `45-50`, `60-65`, `65-70`, `80-85`, and `85-89.8` seconds.
+- Old gated DTW (`negative_distance_margin=1.3`, `min_palm_dx_fraction=0.65`, old feature set) matched 7/10 coarse event windows, missed 3, produced 8 candidates, 0 false activations, 1 repeated fire, and about 2.14 s mean latency. Order-level score was detected `R L R R L R R L`, or 8/10 matched in order with 0 extra-or-wrong-order detections.
+- Window-feature gated DTW with margin `1.3` matched 8/10 coarse event windows, missed 2, produced 13 candidates, 0 false activations, 2 repeated fires, and about 2.05 s mean latency. Order-level score was detected `R L L R R L R L R L R L L`, or 10/10 matched in order with 3 extra-or-wrong-order detections.
+- Conservative window-feature gated DTW with margin `0.75` matched only 1/10, so it is too strict for continuous streams despite its clean isolated holdout result.
+- TCN with the window-feature holdout checkpoint matched 3/10, missed 7, produced 5 candidates, 0 false activations, and 1 repeated fire.
+- Interpretation: this validates the direction of travel but not live readiness. The best current candidate for Sprint 5 is still a DTW/template recognizer, likely the looser window-feature gated variant if extra detections can be filtered with better cooldown/sequence handling. TCN remains behind and should stay offline unless retrained with more continuous labels.
