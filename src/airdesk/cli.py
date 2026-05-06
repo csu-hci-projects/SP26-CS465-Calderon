@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
+from time import monotonic
 from typing import Annotated
 from uuid import uuid4
 
@@ -898,12 +899,12 @@ def gesture_watch_tcn(
     )
     stream = FeatureRowStream()
     rows = []
-    state = {"status": "warming up"}
+    state = {"status": "warming up", "alert": "", "alert_until": 0.0}
     first_timestamp: float | None = None
     next_prediction_time: float | None = None
 
     if hasattr(tracker, "preview_status_provider"):
-        tracker.preview_status_provider = lambda: state["status"]  # type: ignore[attr-defined]
+        tracker.preview_status_provider = lambda: _live_tcn_preview_status(state)  # type: ignore[attr-defined]
 
     typer.echo(
         "watching tcn "
@@ -925,6 +926,9 @@ def gesture_watch_tcn(
                 continue
             prediction = predictor.predict_rows(rows)
             state["status"] = _format_live_tcn_status(prediction)
+            if prediction.target != "background" and prediction.confidence >= confidence_threshold:
+                state["alert"] = f"{prediction.target} {prediction.confidence:.2f}"
+                state["alert_until"] = monotonic() + 1.25
             next_prediction_time = row.timestamp + predictor.stride_seconds
             if prediction.confidence < confidence_threshold:
                 continue
@@ -2564,7 +2568,8 @@ def _format_feature_diagnostics_summary(report: FeatureDiagnosticsReport) -> str
 
 def _format_live_tcn_status(prediction: CausalTcnLivePrediction) -> str:
     probabilities = _compact_probabilities(prediction.probabilities)
-    return f"tcn={prediction.target} {prediction.confidence:.2f} | {probabilities}"
+    target = _short_tcn_target(prediction.target)
+    return f"TCN {target} {prediction.confidence:.2f} | {probabilities}"
 
 
 def _format_live_tcn_prediction(
@@ -2584,8 +2589,26 @@ def _format_live_tcn_prediction(
 
 def _compact_probabilities(probabilities: dict[str, float]) -> str:
     return " ".join(
-        f"{target}={probability:.2f}" for target, probability in sorted(probabilities.items())
+        f"{_short_tcn_target(target)}={probability:.2f}"
+        for target, probability in sorted(probabilities.items())
     )
+
+
+def _short_tcn_target(target: str) -> str:
+    return {
+        "background": "bg",
+        "swipe_left": "left",
+        "swipe_right": "right",
+    }.get(target, target)
+
+
+def _live_tcn_preview_status(state: dict[str, object]) -> str:
+    status = str(state["status"])
+    alert_until = float(state.get("alert_until", 0.0))
+    alert = str(state.get("alert", ""))
+    if alert and monotonic() <= alert_until:
+        return f"{status} | GESTURE {alert}"
+    return status
 
 
 def _make_tracker(

@@ -184,6 +184,8 @@ class MediaPipeHandTrackerBackend:
                 height=height,
                 candidate_names=candidates.get(hand.hand_id, ()),
             )
+        if self.preview_status_provider is not None:
+            self._draw_alert_banner(display_image, self.preview_status_provider())
         self._draw_gesture_strip(display_image, candidates)
         self._cv2.imshow(PREVIEW_WINDOW_NAME, display_image)
         key = self._cv2.waitKey(1) & 0xFF
@@ -202,31 +204,62 @@ class MediaPipeHandTrackerBackend:
         mirror = "mirror" if self.preview_mirror else "camera"
         text = (
             f"AirDesk live view | {mirror} | hands={len(hands)} | "
-            f"gestures={gesture_count} | p pauses | q/esc quits"
+            f"gestures={gesture_count} | q/esc quits"
         )
-        self._cv2.rectangle(image, (0, 0), (image.shape[1], 34), (20, 20, 20), -1)
-        self._cv2.putText(
-            image,
-            text,
-            (10, 23),
-            self._cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (240, 240, 240),
-            2,
-            self._cv2.LINE_AA,
+        self._cv2.rectangle(image, (0, 0), (image.shape[1], 64), (20, 20, 20), -1)
+        self._put_text_fit(
+            image=image,
+            text=text,
+            x=10,
+            y=23,
+            max_width=image.shape[1] - 20,
+            scale=0.6,
+            color=(240, 240, 240),
         )
         if self.preview_status_provider is None:
             return
         status = self.preview_status_provider()
-        self._cv2.putText(
+        self._put_text_fit(
+            image=image,
+            text=status,
+            x=10,
+            y=52,
+            max_width=image.shape[1] - 20,
+            scale=0.52,
+            color=(
+                (0, 255, 255)
+                if "GESTURE" in status or "paused" in status
+                else (230, 230, 230)
+            ),
+        )
+
+    def _draw_alert_banner(self, image: Any, status: str) -> None:
+        assert self._cv2 is not None
+        marker = "GESTURE "
+        if marker not in status:
+            return
+        alert = status.split(marker, maxsplit=1)[1].split("|", maxsplit=1)[0].strip()
+        if not alert:
+            return
+        label = f"TCN: {alert}"
+        width = image.shape[1]
+        y_center = max(92, image.shape[0] // 6)
+        self._cv2.rectangle(
             image,
-            f"runtime: {status}",
-            (10, 58),
-            self._cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (0, 255, 255) if "paused" in status else (240, 240, 240),
-            2,
-            self._cv2.LINE_AA,
+            (0, y_center - 36),
+            (width, y_center + 28),
+            (0, 90, 220),
+            -1,
+        )
+        self._put_text_fit(
+            image=image,
+            text=label,
+            x=18,
+            y=y_center + 10,
+            max_width=width - 36,
+            scale=1.1,
+            color=(255, 255, 255),
+            thickness=3,
         )
 
     def _draw_hand_overlay(
@@ -305,16 +338,68 @@ class MediaPipeHandTrackerBackend:
         self._cv2.rectangle(
             image, (0, image.shape[0] - 42), (image.shape[1], image.shape[0]), (20, 20, 20), -1
         )
+        self._put_text_fit(
+            image=image,
+            text=text,
+            x=10,
+            y=y,
+            max_width=image.shape[1] - 20,
+            scale=0.65,
+            color=(0, 255, 255) if names else (190, 190, 190),
+        )
+
+    def _put_text_fit(
+        self,
+        *,
+        image: Any,
+        text: str,
+        x: int,
+        y: int,
+        max_width: int,
+        scale: float,
+        color: tuple[int, int, int],
+        thickness: int = 2,
+    ) -> None:
+        assert self._cv2 is not None
+        fitted = self._fit_text(text, max_width=max_width, scale=scale, thickness=thickness)
         self._cv2.putText(
             image,
-            text,
-            (10, y),
+            fitted,
+            (x, y),
             self._cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            (0, 255, 255) if names else (190, 190, 190),
-            2,
+            scale,
+            color,
+            thickness,
             self._cv2.LINE_AA,
         )
+
+    def _fit_text(self, text: str, *, max_width: int, scale: float, thickness: int) -> str:
+        assert self._cv2 is not None
+        if self._text_width(text, scale=scale, thickness=thickness) <= max_width:
+            return text
+        suffix = "..."
+        low = 0
+        high = max(0, len(text) - len(suffix))
+        best = suffix
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = text[:middle].rstrip() + suffix
+            if self._text_width(candidate, scale=scale, thickness=thickness) <= max_width:
+                best = candidate
+                low = middle + 1
+            else:
+                high = middle - 1
+        return best
+
+    def _text_width(self, text: str, *, scale: float, thickness: int) -> int:
+        assert self._cv2 is not None
+        size, _baseline = self._cv2.getTextSize(
+            text,
+            self._cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            thickness,
+        )
+        return int(size[0])
 
     def _preview_candidates(
         self,
