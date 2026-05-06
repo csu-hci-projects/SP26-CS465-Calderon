@@ -193,3 +193,17 @@ Sprint 4 smoke collection notes:
 - Caden's first natural swipe/negative batch recorded 15 takes at about 29.6 FPS.
 - Current swipe phrase rules produced zero `swipe_left` / `swipe_right` candidates because they depend on a brittle static `open_palm` arm.
 - Natural negative motion produced substantial crude `pinch` / `fist` counts, which reinforces the need for phase labels, negative data, and a causal temporal recognizer rather than a static-pose-only command path.
+
+Sprint 4 swipe batch `data/recordings/sprint4-swipes-001`:
+
+- Caden recorded 24 prompted takes: 8 `swipe-left-positive`, 8 `swipe-right-positive`, and 8 `normal-desk-motion-negative`.
+- Each take has 238 frames at about 29.65 FPS.
+- Labels were generated under ignored `data/labels/sprint4-swipes-001`:
+  - positive swipes use `airdesk label suggest` phase/event labels,
+  - negative takes use background-only starter labels.
+- Features were exported under ignored `data/features/sprint4-swipes-001`.
+- Rule evaluations were exported under ignored `data/evaluations/sprint4-swipes-001`.
+- Current rule recognizer result on 16 positive swipe takes: 16 intended, 0 matched, 16 missed, 1707 total candidates, 1543 false activations.
+- Current rule recognizer result on 8 negative takes: 1221 candidates, all counted as false activations, mainly `fist` and `pinch`.
+- The `label suggest` observed direction is opposite the intended left/right labels in this batch, likely because user-facing mirrored motion and raw camera coordinates differ. Do not hard-code camera-left/camera-right as the final semantic direction without calibration.
+- This batch is enough to start a DTW/template baseline or first causal TCN prototype; it is not evidence that the current rule recognizer is acceptable for live swipe control.
