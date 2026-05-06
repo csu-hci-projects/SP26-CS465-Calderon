@@ -202,10 +202,12 @@ Sprint 2 established a working live and replay foundation:
 - An optional calibrated horizontal-displacement gate now exists for DTW. With `--negative-distance-margin 1.3 --min-palm-dx-fraction 0.65`, the same deterministic holdout matched 4/4 held-out swipes with 0 false activations and about 0.36 s mean latency. Because this was tuned after viewing the holdout, it needs fresh chained-session validation before live control.
 - `airdesk gesture spot-dtw` now spots DTW candidates in unlabeled continuous recordings. On fresh chained recording `data/recordings/sprint4-chained-001/chained-left-right-swipes-001.jsonl`, gated DTW found 16 candidates, roughly matching Caden's "15-ish" swipe count and including back-to-back swipe clusters.
 - `airdesk gesture score-sequence` now compares spotted DTW candidates with a remembered R/L order. On structured chained recording `data/recordings/sprint4-chained-002/chained-structured-swipes-001.jsonl`, expected sequence `R L R R L L R R L L` scored against detected sequence `R L R R L R R L` as 8/10 matched in order, 2 missed-or-wrong-order, and 0 extra-or-wrong-order.
+- The causal TCN scaffold now has deterministic manifest/window building, optional PyTorch training, same-batch evaluation, and holdout evaluation. Same-batch TCN was optimistic: 16/16 matched with 1 false activation. Holdout TCN reproduced the plain-DTW weakness: 2/4 held-out swipes matched, both held-out left swipes missed, and 0 false activations.
+- `airdesk gesture diagnose-features` now compares feature, timing, and tracking-quality summaries across that same split. On `sprint4-swipes-001`, held-out left swipes are weaker/slower than train-left examples (`palm_dx` about `0.181` vs `0.235`, normalized `palm_dx_per_hand_scale` about `1.387` vs `1.857`, max palm speed about `3.230` vs `5.163`), while label/frame alignment looks consistent at about one frame inside the event interval.
 
 Current next step:
 
-> Start the causal TCN dataset/training scaffold. Keep the first chunk focused on deterministic dataset manifests and window building over exported AirDesk features; compare later against gated DTW. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
+> Decide whether feature export should add explicit displacement/velocity summary features for swipe windows, then rerun DTW and TCN holdouts. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 ## Current Roadmap
 

@@ -230,6 +230,8 @@ DTW holdout evidence:
 - Gated result: 4 intended held-out swipes, 4 matched, 0 missed, 4 candidates, 0 false activations, 0 repeated fires, about 0.36 s mean latency.
 - Gated interpretation: promising, but tuned after seeing this holdout. It needs validation on a fresh chained continuous recording before live-control use.
 - Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
+- TCN scaffold evidence: deterministic manifest/window building, optional PyTorch training, same-batch evaluation, and holdout evaluation exist. Same-batch TCN matched 16/16 with 1 false activation, but holdout TCN matched 2/4 and missed both held-out left swipes.
+- Feature diagnostics: `airdesk gesture diagnose-features` now compares the same holdout split. On `sprint4-swipes-001`, held-out left swipes are weaker/slower than train-left examples (`palm_dx` about `0.181` vs `0.235`, normalized displacement about `1.387` vs `1.857`, max speed about `3.230` vs `5.163`) while label/frame alignment is roughly one frame inside the event interval.
 
 Fresh chained-session evidence:
 
@@ -252,16 +254,16 @@ Structured chained-session evidence:
 
 ## Current Next Task
 
-Start the causal TCN dataset/training scaffold. Keep the first chunk focused on deterministic dataset manifests and window building over exported AirDesk features; compare later against gated DTW. Gated DTW is promising but still misses gestures in a structured stream, so it should not drive live desktop actions yet.
+Decide whether feature export should add explicit displacement/velocity summary features for swipe windows, then rerun DTW and TCN holdouts. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
 1. Read the existing feature, label, DTW, and evaluation modules before editing.
-2. Define the first TCN training target narrowly: background vs `swipe_left` vs `swipe_right` over feature windows.
-3. Add a deterministic dataset manifest/window builder using existing recordings, labels, and feature rows.
-4. Keep ML dependencies optional; do not make base runtime require PyTorch.
-5. Add tests for manifest/window construction and label assignment.
-6. Document commands and limitations in README/tasks/tracking-samples.
+2. Add targeted window-level features only if they directly address the measured gap: signed horizontal displacement, hand-scale-normalized displacement, peak horizontal velocity, and direction consistency.
+3. Keep the base runtime dependency-free; do not add new mandatory ML/runtime dependencies.
+4. Add tests for feature export and downstream manifest compatibility.
+5. Rerun `holdout-dtw`, gated `holdout-dtw`, `holdout-tcn`, and `diagnose-features`.
+6. Document results and limitations in README/tasks/tracking-samples.
 7. Run `uv run ruff check .` and `uv run pytest`.
 8. Commit and push.
 

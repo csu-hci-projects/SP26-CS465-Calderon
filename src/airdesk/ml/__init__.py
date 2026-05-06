@@ -12,6 +12,14 @@ from airdesk.ml.dataset import (
     load_tcn_dataset_manifest,
     save_tcn_dataset_manifest,
 )
+from airdesk.ml.diagnostics import (
+    FeatureDiagnosticsReport,
+    FeatureFileDiagnostic,
+    FeatureHoldoutSplit,
+    build_feature_diagnostics_report,
+    save_feature_diagnostics_report,
+    split_feature_holdout,
+)
 from airdesk.ml.train import (
     CausalTcnPrediction,
     CausalTcnTrainingConfig,
@@ -31,8 +39,12 @@ __all__ = [
     "TcnWindowSample",
     "build_tcn_dataset_manifest",
     "feature_window_matrix",
+    "FeatureDiagnosticsReport",
+    "FeatureFileDiagnostic",
+    "FeatureHoldoutSplit",
     "load_feature_rows_csv",
     "load_tcn_dataset_manifest",
+    "build_feature_diagnostics_report",
     "CausalTcnPrediction",
     "CausalTcnTrainingConfig",
     "CausalTcnTrainingResult",
@@ -41,5 +53,7 @@ __all__ = [
     "prepare_tcn_training_arrays",
     "predict_causal_tcn_manifest",
     "save_tcn_dataset_manifest",
+    "save_feature_diagnostics_report",
+    "split_feature_holdout",
     "train_causal_tcn",
 ]

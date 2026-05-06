@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from airdesk.cli import _handle_collection_preview_key, app
 from airdesk.features import FrameFeatureRow
+from airdesk.labels import GestureEventLabel, GestureLabelFile, SessionMetadata, save_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -121,6 +122,19 @@ def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:
     assert "--features-dir" in result.stdout
     assert "--train-per-gesture" in result.stdout
     assert "--model-out" in result.stdout
+
+
+def test_diagnose_features_help_exposes_holdout_split_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "diagnose-features", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--features-dir" in result.stdout
+    assert "--labels-dir" in result.stdout
+    assert "--train-per-gesture" in result.stdout
 
 
 def test_collect_help_describes_prompted_collection() -> None:
@@ -526,6 +540,56 @@ def test_gesture_build_tcn_dataset_cli_writes_manifest(tmp_path: Path) -> None:
     assert payload["summary"]["window_counts"]["swipe_left"] == 1
 
 
+def test_gesture_diagnose_features_cli_writes_report(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    for stem, gesture in (
+        ("swipe-left-positive-001", "swipe_left"),
+        ("swipe-left-positive-002", "swipe_left"),
+        ("swipe-right-positive-001", "swipe_right"),
+        ("swipe-right-positive-002", "swipe_right"),
+        ("normal-desk-motion-negative-001", None),
+        ("normal-desk-motion-negative-002", None),
+    ):
+        _write_feature_csv(
+            features_dir / f"{stem}.csv",
+            events=("", gesture or "", gesture or "", ""),
+        )
+        _write_feature_label(labels_dir / f"{stem}.labels.json", gesture=gesture)
+    output = tmp_path / "diagnostics.json"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "diagnose-features",
+            "--features-dir",
+            str(features_dir),
+            "--labels-dir",
+            str(labels_dir),
+            "--out",
+            str(output),
+            "--train-per-gesture",
+            "1",
+            "--test-per-gesture",
+            "1",
+            "--train-negatives",
+            "1",
+            "--test-negatives",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "feature_diagnostics files=6" in result.stdout
+    assert "test:swipe_left" in result.stdout
+    assert "wrote diagnostics=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["aggregates"]["test:swipe_left"]["count"] == 1
+
+
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:
     recordings_dir = tmp_path / "recordings"
     labels_dir = tmp_path / "labels"
@@ -863,6 +927,33 @@ def _write_feature_csv(path: Path, *, events: tuple[str, ...]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow(row.to_dict())
+
+
+def _write_feature_label(path: Path, *, gesture: str | None) -> None:
+    event_labels = ()
+    if gesture is not None:
+        event_labels = (
+            GestureEventLabel(
+                label_id="event-001",
+                label_type="gesture",
+                gesture=gesture,
+                start_time=1.1,
+                end_time=1.2,
+            ),
+        )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            event_labels=event_labels,
+        ),
+        path,
+    )
 
 
 def _cli_hand_at(palm_x: float) -> NormalizedHand:

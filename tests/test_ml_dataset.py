@@ -17,6 +17,7 @@ from airdesk.labels import (
 )
 from airdesk.ml import (
     CausalTcnTrainingConfig,
+    build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
     feature_window_matrix,
     load_feature_rows_csv,
@@ -188,6 +189,72 @@ def test_manifest_loads_and_extracts_window_matrix(tmp_path: Path) -> None:
     assert len(arrays.feature_mean) == len(loaded.feature_columns)
 
 
+def test_feature_diagnostics_report_compares_holdout_motion(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "swipe-left-positive-001",
+        gesture="swipe_left",
+        xs=(0.10, 0.20, 0.30, 0.40, 0.50),
+    )
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "swipe-left-positive-002",
+        gesture="swipe_left",
+        xs=(0.10, 0.14, 0.18, 0.22, 0.26),
+    )
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "swipe-right-positive-001",
+        gesture="swipe_right",
+        xs=(0.50, 0.40, 0.30, 0.20, 0.10),
+    )
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "swipe-right-positive-002",
+        gesture="swipe_right",
+        xs=(0.50, 0.45, 0.40, 0.35, 0.30),
+    )
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "normal-desk-motion-negative-001",
+        gesture=None,
+        xs=(0.30, 0.30, 0.30, 0.30, 0.30),
+    )
+    _write_labeled_motion_features(
+        features_dir,
+        labels_dir,
+        "normal-desk-motion-negative-002",
+        gesture=None,
+        xs=(0.31, 0.31, 0.31, 0.31, 0.31),
+    )
+
+    report = build_feature_diagnostics_report(
+        features_dir=features_dir,
+        labels_dir=labels_dir,
+        train_per_gesture=1,
+        test_per_gesture=1,
+        train_negatives=1,
+        test_negatives=1,
+    )
+
+    train_left = report.aggregates["train:swipe_left"]["metrics"]
+    test_left = report.aggregates["test:swipe_left"]["metrics"]
+    assert len(report.files) == 6
+    assert train_left["palm_dx"]["mean"] == pytest.approx(0.2)
+    assert test_left["palm_dx"]["mean"] == pytest.approx(0.08)
+    assert test_left["event_first_row_offset_seconds"]["mean"] == pytest.approx(0.0)
+    assert report.aggregates["test:normal-desk-motion-negative"]["count"] == 1
+
+
 def test_train_causal_tcn_smoke_when_torch_is_installed(tmp_path: Path) -> None:
     if importlib.util.find_spec("torch") is None:
         pytest.skip("optional PyTorch dependency is not installed")
@@ -309,7 +376,60 @@ def _write_features(path: Path, rows: list[FrameFeatureRow]) -> None:
             writer.writerow(row.to_dict())
 
 
-def _row(*, timestamp: float, frame_index: int, event: str) -> FrameFeatureRow:
+def _write_labeled_motion_features(
+    features_dir: Path,
+    labels_dir: Path,
+    stem: str,
+    *,
+    gesture: str | None,
+    xs: tuple[float, ...],
+) -> None:
+    events = ("", gesture or "", gesture or "", gesture or "", "")
+    _write_features(
+        features_dir / f"{stem}.csv",
+        [
+            _row(
+                timestamp=10.0 + index * 0.1,
+                frame_index=index,
+                event=events[index],
+                palm_x=x,
+            )
+            for index, x in enumerate(xs)
+        ],
+    )
+    event_labels = ()
+    if gesture is not None:
+        event_labels = (
+            GestureEventLabel(
+                label_id="event-001",
+                label_type="gesture",
+                gesture=gesture,
+                start_time=10.1,
+                end_time=10.3,
+            ),
+        )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path=f"{stem}.jsonl",
+                start_timestamp=10.0,
+                end_timestamp=10.4,
+            ),
+            event_labels=event_labels,
+        ),
+        labels_dir / f"{stem}.labels.json",
+    )
+
+
+def _row(
+    *,
+    timestamp: float,
+    frame_index: int,
+    event: str,
+    palm_x: float = 0.5,
+) -> FrameFeatureRow:
     return FrameFeatureRow(
         frame_index=frame_index,
         timestamp=timestamp,
@@ -318,12 +438,12 @@ def _row(*, timestamp: float, frame_index: int, event: str) -> FrameFeatureRow:
         hand_count=1,
         hand_id="hand-0",
         confidence=1.0,
-        palm_x=0.5,
+        palm_x=palm_x,
         palm_y=0.5,
         palm_z=0.0,
-        palm_vx=0.0,
+        palm_vx=1.0 if frame_index else 0.0,
         palm_vy=0.0,
-        palm_speed=0.0,
+        palm_speed=1.0 if frame_index else 0.0,
         palm_ax=0.0,
         palm_ay=0.0,
         index_rel_x=0.0,

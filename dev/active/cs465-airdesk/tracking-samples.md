@@ -289,3 +289,15 @@ uv run airdesk gesture holdout-tcn --features-dir data/features/sprint4-swipes-0
 - Interpretation: useful smoke evidence that the model path is functioning, but optimistic because windows come from the same labeled batch. Next required evidence is a deterministic TCN holdout split comparable to `gesture holdout-dtw`.
 - TCN holdout using the same 6 train / 2 test per gesture and negative split shape: 4 intended, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.502 s mean latency. Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.
 - Interpretation: the first causal TCN scaffold works but does not yet beat gated DTW. It reproduces the same left-swipe generalization weakness as plain DTW, so the next useful work is feature/label diagnosis rather than live action wiring.
+
+Feature-diagnostics pass:
+
+```bash
+uv run airdesk gesture diagnose-features --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-feature-diagnostics/summary.json --train-per-gesture 6 --test-per-gesture 2 --train-negatives 6 --test-negatives 2
+```
+
+- The report uses the same filename-ordered train/test split as DTW/TCN holdout and writes per-file plus aggregate feature summaries.
+- Held-out `swipe_left` examples are weaker than train-left examples: mean raw `palm_dx` drops from about `0.235` to `0.181`, mean normalized `palm_dx_per_hand_scale` drops from about `1.857` to `1.387`, and mean max palm speed drops from about `5.163` to `3.230`.
+- Held-out `swipe_right` examples also weaken slightly, but less disruptively for the current recognizers: mean raw `palm_dx` changes from about `-0.296` to `-0.269`, normalized displacement from about `-1.622` to `-1.435`, and mean max speed from about `3.234` to `2.553`.
+- Label/window alignment does not look like the primary failure: the first feature row inside positive event labels is about `0.012 s` after label start, and the last row is about `0.012 s` before label end for both train and test positives.
+- Interpretation: the left-swipe misses are more consistent with feature representation and weak-motion separation than with obviously late/early labels. The next code change should be targeted, likely explicit signed horizontal displacement over windows, hand-scale-normalized displacement, peak horizontal velocity, and a direction-consistency feature, followed by rerunning DTW and TCN holdouts. This is still offline evidence only; do not wire swipes into live actions.

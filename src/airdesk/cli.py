@@ -58,8 +58,11 @@ from airdesk.labels import (
 )
 from airdesk.ml import (
     CausalTcnTrainingConfig,
+    FeatureDiagnosticsReport,
     MissingMlDependencyError,
+    build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
+    save_feature_diagnostics_report,
     save_tcn_dataset_manifest,
     train_causal_tcn,
 )
@@ -950,6 +953,42 @@ def gesture_holdout_tcn(
         f"repeated_fires={summary['repeated_fires']} mean_latency={formatted_latency}"
     )
     typer.echo(f"wrote holdout={out}")
+
+
+@gesture_app.command("diagnose-features")
+def gesture_diagnose_features(
+    features_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Feature CSV directory."),
+    ],
+    labels_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Label directory."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON diagnostics path.")] = None,
+    train_per_gesture: Annotated[int, typer.Option(help="Training files per gesture.")] = 6,
+    test_per_gesture: Annotated[int, typer.Option(help="Held-out test files per gesture.")] = 2,
+    train_negatives: Annotated[int, typer.Option(help="Training negative/background files.")] = 6,
+    test_negatives: Annotated[int, typer.Option(help="Held-out negative/background files.")] = 2,
+) -> None:
+    """Diagnose feature separation and label/window timing on a holdout split."""
+    try:
+        report = build_feature_diagnostics_report(
+            features_dir=features_dir,
+            labels_dir=labels_dir,
+            train_per_gesture=train_per_gesture,
+            test_per_gesture=test_per_gesture,
+            train_negatives=train_negatives,
+            test_negatives=test_negatives,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if out is not None:
+        save_feature_diagnostics_report(report, out)
+    typer.echo(_format_feature_diagnostics_summary(report))
+    if out is not None:
+        typer.echo(f"wrote diagnostics={out}")
 
 
 @app.command()
@@ -2370,6 +2409,29 @@ def _split_tcn_feature_holdout(
     if not test:
         raise typer.BadParameter("TCN holdout requires at least one test feature file")
     return train, test
+
+
+def _format_feature_diagnostics_summary(report: FeatureDiagnosticsReport) -> str:
+    aggregates = report.aggregates
+    lines = [f"feature_diagnostics files={len(report.files)}"]
+    for key, aggregate in aggregates.items():
+        metrics = aggregate["metrics"]
+        palm_dx = metrics["palm_dx"]["mean"]
+        speed = metrics["max_palm_speed"]["mean"]
+        scale_dx = metrics["palm_dx_per_hand_scale"]["mean"]
+        consistency = metrics["direction_consistency"]["mean"]
+        palm_dx_text = f"{palm_dx:.3f}" if isinstance(palm_dx, float) else "unknown"
+        speed_text = f"{speed:.3f}" if isinstance(speed, float) else "unknown"
+        scale_dx_text = f"{scale_dx:.3f}" if isinstance(scale_dx, float) else "unknown"
+        consistency_text = (
+            f"{consistency:.3f}" if isinstance(consistency, float) else "unknown"
+        )
+        lines.append(
+            f"{key} count={aggregate['count']} mean_palm_dx={palm_dx_text} "
+            f"mean_max_speed={speed_text} mean_dx_per_scale={scale_dx_text} "
+            f"mean_direction_consistency={consistency_text}"
+        )
+    return "\n".join(lines)
 
 
 def _make_tracker(
