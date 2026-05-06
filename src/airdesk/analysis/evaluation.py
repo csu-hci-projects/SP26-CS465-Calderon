@@ -9,6 +9,7 @@ from pathlib import Path
 from airdesk.features import extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.dtw import (
+    DtwBestWindow,
     DtwCalibrationInput,
     DtwGestureModel,
     DtwTemplateRecognizer,
@@ -68,6 +69,7 @@ class DtwHoldoutEvaluation:
     train_recordings: tuple[LabeledRecording, ...]
     test_recordings: tuple[LabeledRecording, ...]
     evaluations: tuple[GestureEvaluation, ...]
+    diagnostics: tuple[DtwRecordingDiagnostic, ...] = ()
     model_path: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -80,6 +82,44 @@ class DtwHoldoutEvaluation:
             },
             "summary": holdout_totals(self.evaluations),
             "evaluations": [item.to_dict() for item in self.evaluations],
+            "diagnostics": [item.to_dict() for item in self.diagnostics],
+        }
+
+
+@dataclass(frozen=True)
+class DtwRecordingDiagnostic:
+    """Best rejected/accepted DTW windows for one evaluated recording."""
+
+    recording: str
+    labels: str
+    intended_gesture: str | None
+    intended_start: float | None
+    intended_end: float | None
+    best_by_gesture: dict[str, DtwBestWindow]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "recording": self.recording,
+            "labels": self.labels,
+            "intended_gesture": self.intended_gesture,
+            "intended_start": self.intended_start,
+            "intended_end": self.intended_end,
+            "best_by_gesture": {
+                gesture: {
+                    **window.to_dict(),
+                    "window_start_relative": (
+                        window.window_start - self.intended_start
+                        if self.intended_start is not None
+                        else None
+                    ),
+                    "window_end_relative": (
+                        window.window_end - self.intended_start
+                        if self.intended_start is not None
+                        else None
+                    ),
+                }
+                for gesture, window in self.best_by_gesture.items()
+            },
         }
 
 
@@ -253,12 +293,39 @@ def evaluate_dtw_holdout(
         evaluate_dtw_recognizer(item.recording, item.label_path, item.labels, model)
         for item in test
     )
+    diagnostics = tuple(diagnose_dtw_recording(item, model) for item in test)
     return DtwHoldoutEvaluation(
         recognizer="dtw",
         train_recordings=tuple(train),
         test_recordings=tuple(test),
         evaluations=evaluations,
+        diagnostics=diagnostics,
         model_path=str(model_path) if model_path is not None else None,
+    )
+
+
+def diagnose_dtw_recording(
+    item: LabeledRecording,
+    model: DtwGestureModel,
+) -> DtwRecordingDiagnostic:
+    """Report closest DTW windows for threshold and miss analysis."""
+    frames = [
+        record.payload
+        for record in iter_recording(item.recording)
+        if record.kind == "tracking_frame" and isinstance(record.payload, TrackingFrame)
+    ]
+    rows = extract_feature_rows(frames, labels=item.labels)
+    intended = next(
+        (event for event in item.labels.event_labels if event.label_type == "gesture"),
+        None,
+    )
+    return DtwRecordingDiagnostic(
+        recording=str(item.recording),
+        labels=str(item.label_path),
+        intended_gesture=intended.gesture if intended is not None else None,
+        intended_start=intended.start_time if intended is not None else None,
+        intended_end=intended.end_time if intended is not None else None,
+        best_by_gesture=DtwTemplateRecognizer(model).best_windows_by_gesture(rows),
     )
 
 
@@ -358,8 +425,8 @@ def holdout_totals(evaluations: tuple[GestureEvaluation, ...]) -> dict[str, obje
 def save_evaluation_json(evaluation: GestureEvaluation, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-            json.dump(evaluation.to_dict(), handle, indent=2, sort_keys=True)
-            handle.write("\n")
+        json.dump(evaluation.to_dict(), handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def save_holdout_json(evaluation: DtwHoldoutEvaluation, path: Path) -> None:

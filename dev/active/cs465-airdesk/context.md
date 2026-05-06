@@ -198,10 +198,11 @@ Sprint 2 established a working live and replay foundation:
 - Rule recognizer result on that batch was poor: 0/16 positive swipe matches and high static-pose false activations.
 - DTW calibrated on the same batch matched all 16 intended swipes, missed 0, produced 18 candidates total, 2 false activations, 0 repeated fires, and about 0.44 s mean latency. Negative recordings produced 0 DTW candidates.
 - DTW holdout evaluation now exists via `airdesk gesture holdout-dtw`. On a deterministic `sprint4-swipes-001` split using takes 001-006 for train and 007-008 for test, DTW matched 2/4 held-out swipes, missed both held-out left swipes, produced 0 false activations on two held-out negatives, and had about 0.40 s mean latency on matched events.
+- Holdout diagnostics show that loosening the left threshold enough to catch both held-out left swipes also introduces false activations. Treat this as a left-swipe/negative feature-separation problem, not a threshold-tuning win.
 
 Current next step:
 
-> Diagnose the held-out left-swipe misses before trusting DTW for live command swipes. If the baseline can be made stable without overfitting, collect/evaluate a longer chained continuous gesture session before starting causal TCN work or wiring dynamic swipes into live control.
+> Improve or explain left-swipe/negative feature separation before trusting DTW for live command swipes. If the baseline can be made stable without overfitting, collect/evaluate a longer chained continuous gesture session before starting causal TCN work or wiring dynamic swipes into live control.
 
 ## Current Roadmap
 

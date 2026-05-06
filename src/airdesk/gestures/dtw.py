@@ -142,6 +142,42 @@ class DtwMatch:
     confidence: float
 
 
+@dataclass(frozen=True)
+class DtwBestWindow:
+    """Best observed DTW window for one gesture, including rejected windows."""
+
+    gesture: str
+    template_id: str
+    distance: float
+    threshold: float
+    window_start: float
+    window_end: float
+    window_points: int
+
+    @property
+    def distance_ratio(self) -> float:
+        if self.threshold <= 0:
+            return float("inf")
+        return self.distance / self.threshold
+
+    @property
+    def accepted(self) -> bool:
+        return self.distance <= self.threshold
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gesture": self.gesture,
+            "template_id": self.template_id,
+            "distance": self.distance,
+            "threshold": self.threshold,
+            "distance_ratio": self.distance_ratio,
+            "accepted": self.accepted,
+            "window_start": self.window_start,
+            "window_end": self.window_end,
+            "window_points": self.window_points,
+        }
+
+
 @dataclass
 class DtwTemplateRecognizer:
     """Offline sliding-window DTW recognizer."""
@@ -201,6 +237,42 @@ class DtwTemplateRecognizer:
             threshold=threshold,
             confidence=confidence,
         )
+
+    def best_windows_by_gesture(
+        self,
+        rows: list[FrameFeatureRow],
+    ) -> dict[str, DtwBestWindow]:
+        """Return the closest window per gesture, even if it misses the threshold."""
+        best: dict[str, DtwBestWindow] = {}
+        for start_index, start_row in enumerate(rows):
+            if not _usable_row(start_row):
+                continue
+            for window_rows in _candidate_windows(rows, start_index, self.model):
+                sequence = _normalize_sequence(
+                    _raw_sequence(window_rows),
+                    self.model.mean,
+                    self.model.std,
+                )
+                if len(sequence) < self.model.min_points:
+                    continue
+                for template in self.model.templates:
+                    threshold = self.model.thresholds.get(template.gesture)
+                    if threshold is None:
+                        continue
+                    distance_value = dtw_distance(sequence, template.vectors)
+                    current = best.get(template.gesture)
+                    if current is not None and current.distance <= distance_value:
+                        continue
+                    best[template.gesture] = DtwBestWindow(
+                        gesture=template.gesture,
+                        template_id=template.template_id,
+                        distance=distance_value,
+                        threshold=threshold,
+                        window_start=window_rows[0].timestamp,
+                        window_end=window_rows[-1].timestamp,
+                        window_points=len(window_rows),
+                    )
+        return best
 
 
 def calibrate_dtw_model(

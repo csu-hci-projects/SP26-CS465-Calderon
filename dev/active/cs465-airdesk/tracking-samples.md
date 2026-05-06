@@ -223,3 +223,10 @@ uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swip
 - Per gesture: held-out `swipe_right` matched 2/2; held-out `swipe_left` matched 0/2.
 - Held-out negative recordings `normal-desk-motion-negative-007` and `normal-desk-motion-negative-008` produced 0 candidates.
 - Interpretation: DTW remains promising as a low-data personalized baseline, but the holdout split exposes left-swipe generalization weakness. Do not wire DTW swipes into live desktop actions or start making reliability claims from the same-batch score.
+
+DTW left-miss diagnostic notes:
+
+- The holdout JSON now includes `diagnostics` with the closest DTW window per gesture even when the recognizer rejects it.
+- The train-only model threshold for `swipe_left` is `0.417` because negative calibration clamps it from a raw template threshold of about `2.78`; the closest held-out left distances were about `0.618` and `0.485`.
+- Raising the negative margin enough to match both held-out left swipes also introduced false activations on held-out positive/negative streams, so this should not be solved by simply loosening thresholds.
+- The likely issue is weak separation between current left-swipe features/templates and natural desk-motion negatives. Next, inspect label quality and feature separation for left swipes before collecting a longer chained continuous session.

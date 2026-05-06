@@ -225,11 +225,12 @@ DTW holdout evidence:
 - Split: train on takes 001-006 for each positive gesture and negative/background group; test on takes 007-008.
 - Result: 4 intended held-out swipes, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.40 s mean latency on matched events.
 - Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.
+- Diagnostic update: the holdout JSON includes closest rejected DTW windows. The left threshold is clamped by similar negative motion, and loosening it enough to recover both held-out left swipes introduces false activations. Treat this as a feature-separation problem, not a simple threshold issue.
 - Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
 
 ## Current Next Task
 
-Diagnose the held-out left-swipe misses before trusting DTW for live command swipes. If DTW can be made stable without overfitting, ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate DTW on that conductor-style recording before starting the causal TCN.
+Improve or explain the held-out left-swipe/negative separation before trusting DTW for live command swipes. If DTW can be made stable without overfitting, ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate DTW on that conductor-style recording before starting the causal TCN.
 
 ## Useful Commands
 

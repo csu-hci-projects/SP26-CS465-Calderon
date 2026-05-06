@@ -2,7 +2,9 @@
 
 from airdesk.analysis.evaluation import (
     DtwHoldoutEvaluation,
+    DtwRecordingDiagnostic,
     GestureEvaluation,
+    diagnose_dtw_recording,
     evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
@@ -16,8 +18,10 @@ from airdesk.analysis.recording import RecordingAnalysis, analyze_recording, for
 __all__ = [
     "GestureEvaluation",
     "DtwHoldoutEvaluation",
+    "DtwRecordingDiagnostic",
     "RecordingAnalysis",
     "analyze_recording",
+    "diagnose_dtw_recording",
     "evaluate_dtw_holdout",
     "evaluate_dtw_recognizer",
     "evaluate_rule_recognizer",

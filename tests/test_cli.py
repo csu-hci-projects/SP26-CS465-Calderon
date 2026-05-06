@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -321,7 +322,7 @@ def test_gesture_calibrate_dtw_and_evaluate_cli(tmp_path: Path) -> None:
             "--min-window-seconds",
             "0.2",
             "--max-window-seconds",
-            "0.5",
+            "0.8",
             "--window-step-seconds",
             "0.1",
         ],
@@ -418,7 +419,7 @@ def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> Non
             "--min-window-seconds",
             "0.2",
             "--max-window-seconds",
-            "0.5",
+            "0.8",
             "--window-step-seconds",
             "0.1",
         ],
@@ -430,6 +431,9 @@ def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> Non
     assert "wrote holdout=" in result.stdout
     assert summary.exists()
     assert model.exists()
+    payload = json.loads(summary.read_text(encoding="utf-8"))
+    assert payload["diagnostics"]
+    assert "swipe_left" in payload["diagnostics"][0]["best_by_gesture"]
 
 
 def test_features_export_cli_writes_csv(tmp_path: Path) -> None:

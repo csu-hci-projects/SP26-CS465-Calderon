@@ -99,6 +99,6 @@ In cursor mode, pinch-hold activates relative cursor movement, releasing the pin
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture calibrate --kind dtw` builds a dependency-free personalized template model for replay evaluation; keep it in dry-run/evaluation workflows until false activations are low on negative recordings.
-`airdesk gesture holdout-dtw` runs a deterministic train/test replay evaluation for a collection batch. The first `sprint4-swipes-001` holdout matched 2/4 held-out swipes, missed both held-out left swipes, and produced 0 false activations on two held-out negative recordings, so the same-batch DTW result should still be treated as optimistic.
+`airdesk gesture holdout-dtw` runs a deterministic train/test replay evaluation for a collection batch and writes closest-window diagnostics for rejected DTW matches. The first `sprint4-swipes-001` holdout matched 2/4 held-out swipes, missed both held-out left swipes, and produced 0 false activations on two held-out negative recordings, so the same-batch DTW result should still be treated as optimistic.
 
 Tests and replay do not require webcam, Hyprland, or MediaPipe access.

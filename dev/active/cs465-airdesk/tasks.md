@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: diagnose Sprint 4 DTW left-swipe holdout misses, then continue chained-session recognition.
+Current next sprint: improve left-swipe/negative feature separation, then continue chained-session recognition.
 
 ## Phase 0: Project Setup
 
@@ -79,6 +79,9 @@ Current next sprint: diagnose Sprint 4 DTW left-swipe holdout misses, then conti
 - [x] Add `airdesk gesture evaluate`
 - [x] Add deterministic `airdesk gesture holdout-dtw` train/test evaluation
 - [x] Run DTW holdout on `sprint4-swipes-001` and document mixed evidence
+- [x] Add DTW holdout diagnostics for closest rejected windows
+- [x] Diagnose left-swipe holdout misses as a feature/separation issue rather than a simple threshold issue
+- [ ] Inspect and improve left-swipe label quality or DTW feature separation
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails

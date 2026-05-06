@@ -181,6 +181,7 @@ def test_dtw_holdout_trains_only_on_split_and_exports_summary(tmp_path: Path) ->
     assert summary_path.exists()
     assert len(holdout.train_recordings) == 3
     assert len(holdout.test_recordings) == 3
+    assert len(holdout.diagnostics) == 3
     assert {Path(item.recording).stem for item in holdout.train_recordings} == {
         "normal-desk-motion-negative-001",
         "swipe-left-positive-001",
@@ -188,6 +189,7 @@ def test_dtw_holdout_trains_only_on_split_and_exports_summary(tmp_path: Path) ->
     }
     assert "intended=2" in format_holdout_evaluation(holdout)
     assert holdout.to_dict()["summary"]["intended_events"] == 2
+    assert "swipe_left" in holdout.to_dict()["diagnostics"][0]["best_by_gesture"]
 
 
 def _feature_rows(recording: Path, labels: object) -> object:
