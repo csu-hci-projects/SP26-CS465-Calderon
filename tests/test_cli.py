@@ -354,6 +354,84 @@ def test_gesture_calibrate_dtw_and_evaluate_cli(tmp_path: Path) -> None:
     assert evaluation.exists()
 
 
+def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:
+    recordings_dir = tmp_path / "recordings"
+    labels_dir = tmp_path / "labels"
+    recordings_dir.mkdir()
+    labels_dir.mkdir()
+    first_recording = recordings_dir / "swipe-left-positive-001.jsonl"
+    second_recording = recordings_dir / "swipe-left-positive-002.jsonl"
+    negative_recording = recordings_dir / "normal-desk-motion-negative-001.jsonl"
+    _write_cli_motion_recording(first_recording, xs=(0.7, 0.62, 0.5, 0.4, 0.3))
+    _write_cli_motion_recording(second_recording, xs=(0.72, 0.6, 0.5, 0.4, 0.31))
+    _write_cli_motion_recording(negative_recording, xs=(0.5, 0.5, 0.5, 0.5, 0.5))
+    for recording in (first_recording, second_recording, negative_recording):
+        CliRunner().invoke(
+            app,
+            [
+                "label",
+                "init",
+                str(recording),
+                "--out",
+                str(labels_dir / f"{recording.stem}.labels.json"),
+            ],
+        )
+    for recording in (first_recording, second_recording):
+        CliRunner().invoke(
+            app,
+            [
+                "label",
+                "add-event",
+                str(labels_dir / f"{recording.stem}.labels.json"),
+                "--gesture",
+                "swipe_left",
+                "--start",
+                "0",
+                "--end",
+                "0.8",
+            ],
+        )
+    summary = tmp_path / "summary.json"
+    model = tmp_path / "model.json"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "holdout-dtw",
+            "--recordings-dir",
+            str(recordings_dir),
+            "--labels-dir",
+            str(labels_dir),
+            "--out",
+            str(summary),
+            "--model-out",
+            str(model),
+            "--train-per-gesture",
+            "1",
+            "--test-per-gesture",
+            "1",
+            "--train-negatives",
+            "1",
+            "--test-negatives",
+            "0",
+            "--min-window-seconds",
+            "0.2",
+            "--max-window-seconds",
+            "0.5",
+            "--window-step-seconds",
+            "0.1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=dtw" in result.stdout
+    assert "train=2 test=1" in result.stdout
+    assert "wrote holdout=" in result.stdout
+    assert summary.exists()
+    assert model.exists()
+
+
 def test_features_export_cli_writes_csv(tmp_path: Path) -> None:
     output = tmp_path / "features.csv"
 
@@ -543,10 +621,14 @@ def test_record_command_writes_metadata_events_with_label(tmp_path: Path) -> Non
     assert events[-1].payload["frames"] == 1
 
 
-def _write_cli_motion_recording(path: Path) -> None:
+def _write_cli_motion_recording(
+    path: Path,
+    *,
+    xs: tuple[float, ...] = (0.30, 0.30, 0.34, 0.48, 0.60, 0.62),
+) -> None:
     with JsonlRecordingWriter(path) as writer:
         timestamp = 100.0
-        for sequence, x in enumerate((0.30, 0.30, 0.34, 0.48, 0.60, 0.62)):
+        for sequence, x in enumerate(xs):
             frame = FrameMetadata(
                 timestamp=timestamp,
                 source_id="test",

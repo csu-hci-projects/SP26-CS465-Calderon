@@ -24,11 +24,14 @@ from airdesk.actions.hyprland import (
 )
 from airdesk.analysis import (
     analyze_recording,
+    evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
     format_analysis,
     format_evaluation,
+    format_holdout_evaluation,
     save_evaluation_json,
+    save_holdout_json,
 )
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.features import export_features_csv
@@ -431,6 +434,77 @@ def gesture_calibrate(
     typer.echo(
         f"wrote dtw_model={out} templates={len(model.templates)} gestures={gestures}"
     )
+
+
+@gesture_app.command("holdout-dtw")
+def gesture_holdout_dtw(
+    recordings_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Recording directory."),
+    ],
+    labels_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Label directory."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output JSON summary path.")],
+    model_out: Annotated[
+        Path | None,
+        typer.Option(help="Optional output path for the calibrated train-only DTW model."),
+    ] = None,
+    train_per_gesture: Annotated[
+        int,
+        typer.Option(help="Training recordings per positive gesture."),
+    ] = 6,
+    test_per_gesture: Annotated[
+        int,
+        typer.Option(help="Held-out test recordings per positive gesture."),
+    ] = 2,
+    train_negatives: Annotated[
+        int,
+        typer.Option(help="Training negative/background recordings."),
+    ] = 6,
+    test_negatives: Annotated[
+        int,
+        typer.Option(help="Held-out test negative/background recordings."),
+    ] = 2,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Candidate suppression cooldown in seconds."),
+    ] = 0.5,
+    min_window_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum DTW candidate window duration."),
+    ] = 0.25,
+    max_window_seconds: Annotated[
+        float,
+        typer.Option(help="Maximum DTW candidate window duration."),
+    ] = 1.25,
+    window_step_seconds: Annotated[
+        float,
+        typer.Option(help="DTW candidate window duration step."),
+    ] = 0.1,
+) -> None:
+    """Run deterministic train/test DTW holdout evaluation for a collection batch."""
+    try:
+        evaluation = evaluate_dtw_holdout(
+            recordings_dir=recordings_dir,
+            labels_dir=labels_dir,
+            model_path=model_out,
+            train_per_gesture=train_per_gesture,
+            test_per_gesture=test_per_gesture,
+            train_negatives=train_negatives,
+            test_negatives=test_negatives,
+            cooldown_seconds=cooldown_seconds,
+            min_window_seconds=min_window_seconds,
+            max_window_seconds=max_window_seconds,
+            window_step_seconds=window_step_seconds,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    save_holdout_json(evaluation, out)
+    typer.echo(format_holdout_evaluation(evaluation))
+    typer.echo(f"wrote holdout={out}")
 
 
 @app.command()

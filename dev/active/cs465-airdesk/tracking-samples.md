@@ -211,3 +211,15 @@ Sprint 4 swipe batch `data/recordings/sprint4-swipes-001`:
 - DTW evaluation over all 24 takes: 16 intended, 16 matched, 0 missed, 18 candidates, 2 false activations, 0 repeated fires, about 0.44 s mean latency.
 - Per gesture DTW result: `swipe_left` 8/8 matched with 0 false activations; `swipe_right` 8/8 matched with 2 extra candidates on positive takes; negative recordings produced 0 candidates.
 - DTW is now useful as a personalized replay baseline and calibration tool. It is still not ready for live desktop actions until latency, runtime cost, and chained/background recordings are tested.
+
+DTW holdout evaluation:
+
+```bash
+uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout.json --train-per-gesture 6 --test-per-gesture 2 --train-negatives 6 --test-negatives 2
+```
+
+- The deterministic split trains on takes 001-006 for each positive gesture and negative/background group, then tests on takes 007-008.
+- Holdout result: 4 intended held-out swipes, 2 matched, 2 missed, 2 total candidates, 0 false activations, 0 repeated fires, and about 0.40 s mean latency on matched events.
+- Per gesture: held-out `swipe_right` matched 2/2; held-out `swipe_left` matched 0/2.
+- Held-out negative recordings `normal-desk-motion-negative-007` and `normal-desk-motion-negative-008` produced 0 candidates.
+- Interpretation: DTW remains promising as a low-data personalized baseline, but the holdout split exposes left-swipe generalization weakness. Do not wire DTW swipes into live desktop actions or start making reliability claims from the same-batch score.

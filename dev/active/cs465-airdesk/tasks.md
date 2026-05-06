@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: continue Sprint 4 holdout evaluation and chained-session recognition.
+Current next sprint: diagnose Sprint 4 DTW left-swipe holdout misses, then continue chained-session recognition.
 
 ## Phase 0: Project Setup
 
@@ -77,6 +77,8 @@ Current next sprint: continue Sprint 4 holdout evaluation and chained-session re
 - [x] Add rule/DTW fallback support for personalized dynamic gestures
 - [x] Add gesture evaluation metrics for continuous sessions
 - [x] Add `airdesk gesture evaluate`
+- [x] Add deterministic `airdesk gesture holdout-dtw` train/test evaluation
+- [x] Run DTW holdout on `sprint4-swipes-001` and document mixed evidence
 - [ ] Train/prototype a small causal TCN over AirDesk features
 - [ ] Evaluate causal TCN against rule/DTW fallback on the same continuous sessions
 - [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails

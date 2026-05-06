@@ -219,24 +219,17 @@ DTW baseline evidence on the same calibration/evaluation batch:
 
 This DTW result is promising but optimistic because calibration and evaluation used the same small batch. Do not claim live reliability from it yet.
 
+DTW holdout evidence:
+
+- Command: `uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout.json --train-per-gesture 6 --test-per-gesture 2 --train-negatives 6 --test-negatives 2`
+- Split: train on takes 001-006 for each positive gesture and negative/background group; test on takes 007-008.
+- Result: 4 intended held-out swipes, 2 matched, 2 missed, 2 candidates, 0 false activations, 0 repeated fires, about 0.40 s mean latency on matched events.
+- Per gesture: `swipe_right` matched 2/2; `swipe_left` matched 0/2.
+- Interpretation: DTW is still useful as a personalized baseline, but the left-swipe holdout misses mean it is not ready for live swipe control or reliability claims.
+
 ## Current Next Task
 
-Implement **DTW holdout evaluation** for `sprint4-swipes-001`.
-
-Recommended chunk:
-
-1. Add a repeatable CLI or helper for train/test DTW evaluation.
-2. Split the current batch into train/test, for example:
-   - train: 6 left + 6 right + negatives,
-   - test: 2 left + 2 right + negatives.
-3. Calibrate DTW on train recordings only.
-4. Evaluate on held-out positives and all/held-out negatives.
-5. Export JSON summary with matched, missed, false activations, repeated fires, and latency.
-6. Document results in `tracking-samples.md` and `tasks.md`.
-7. Run `uv run ruff check .` and `uv run pytest`.
-8. Commit and push.
-
-If holdout stays promising, ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate DTW on that conductor-style recording before starting the causal TCN.
+Diagnose the held-out left-swipe misses before trusting DTW for live command swipes. If DTW can be made stable without overfitting, ask Caden to record a 60-90 second chained continuous session with multiple left/right swipes and normal motion between them. Then evaluate DTW on that conductor-style recording before starting the causal TCN.
 
 ## Useful Commands
 

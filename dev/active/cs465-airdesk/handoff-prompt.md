@@ -178,7 +178,8 @@ Current Sprint 4 dataset/evidence:
 - Rule recognizer failed this batch: 0/16 positive swipe matches and high static-pose false activations.
 - DTW model `data/models/gestures/caden-dtw-sprint4-swipes-001.json` matched 16/16 on the same batch, missed 0, produced 18 candidates, 2 false activations, 0 repeated fires, about 0.44 s mean latency, and 0 candidates on negative recordings.
 - This is promising but optimistic because calibration and evaluation used the same batch.
-- Next best task: implement DTW train/test holdout evaluation, run it on `sprint4-swipes-001`, document results, then decide whether to ask Caden for a 60-90 second chained continuous gesture session.
+- `airdesk gesture holdout-dtw` now runs deterministic DTW train/test evaluation. On `sprint4-swipes-001`, training on takes 001-006 and testing on takes 007-008 matched 2/4 held-out swipes, missed both held-out left swipes, produced 0 false activations on held-out negatives, and had about 0.40 s mean latency on matched events.
+- Next best task: diagnose the left-swipe holdout misses before trusting DTW for live command swipes. If the baseline can be made stable without overfitting, ask Caden for a 60-90 second chained continuous gesture session.
 
 Current Sprint 5 direction:
 

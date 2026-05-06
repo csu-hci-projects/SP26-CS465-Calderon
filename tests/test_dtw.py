@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from airdesk.analysis import evaluate_dtw_recognizer
+from airdesk.analysis import (
+    evaluate_dtw_holdout,
+    evaluate_dtw_recognizer,
+    format_holdout_evaluation,
+    save_holdout_json,
+)
 from airdesk.gestures.dtw import (
     DtwCalibrationInput,
     DtwGestureModel,
@@ -108,6 +113,83 @@ def test_evaluate_dtw_recognizer_matches_labeled_event(tmp_path: Path) -> None:
     assert evaluation.missed_events == 0
 
 
+def test_dtw_holdout_trains_only_on_split_and_exports_summary(tmp_path: Path) -> None:
+    recordings_dir = tmp_path / "recordings"
+    labels_dir = tmp_path / "labels"
+    recordings_dir.mkdir()
+    labels_dir.mkdir()
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "swipe-left-positive-001",
+        (0.7, 0.6, 0.45, 0.3),
+        "swipe_left",
+    )
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "swipe-left-positive-002",
+        (0.72, 0.58, 0.44, 0.31),
+        "swipe_left",
+    )
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "swipe-right-positive-001",
+        (0.3, 0.45, 0.6, 0.7),
+        "swipe_right",
+    )
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "swipe-right-positive-002",
+        (0.31, 0.44, 0.58, 0.72),
+        "swipe_right",
+    )
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "normal-desk-motion-negative-001",
+        (0.5, 0.5, 0.5, 0.5),
+        None,
+    )
+    _write_labeled_take(
+        recordings_dir,
+        labels_dir,
+        "normal-desk-motion-negative-002",
+        (0.52, 0.5, 0.51, 0.5),
+        None,
+    )
+    model_path = tmp_path / "holdout-model.json"
+    summary_path = tmp_path / "holdout-summary.json"
+
+    holdout = evaluate_dtw_holdout(
+        recordings_dir=recordings_dir,
+        labels_dir=labels_dir,
+        model_path=model_path,
+        train_per_gesture=1,
+        test_per_gesture=1,
+        train_negatives=1,
+        test_negatives=1,
+        min_window_seconds=0.2,
+        max_window_seconds=0.5,
+        window_step_seconds=0.1,
+    )
+    save_holdout_json(holdout, summary_path)
+
+    assert model_path.exists()
+    assert summary_path.exists()
+    assert len(holdout.train_recordings) == 3
+    assert len(holdout.test_recordings) == 3
+    assert {Path(item.recording).stem for item in holdout.train_recordings} == {
+        "normal-desk-motion-negative-001",
+        "swipe-left-positive-001",
+        "swipe-right-positive-001",
+    }
+    assert "intended=2" in format_holdout_evaluation(holdout)
+    assert holdout.to_dict()["summary"]["intended_events"] == 2
+
+
 def _feature_rows(recording: Path, labels: object) -> object:
     from airdesk.features import extract_feature_rows
     from airdesk.recording.jsonl import iter_recording
@@ -125,6 +207,27 @@ def _label_recording(recording: Path, gesture: str) -> object:
     start = label_file.session.start_timestamp or 0.0
     end = label_file.session.end_timestamp or start
     return add_event_label(label_file, gesture=gesture, start_time=start, end_time=end)
+
+
+def _write_labeled_take(
+    recordings_dir: Path,
+    labels_dir: Path,
+    stem: str,
+    xs: tuple[float, ...],
+    gesture: str | None,
+) -> None:
+    recording = _write_motion_recording(recordings_dir / f"{stem}.jsonl", xs)
+    label_file = init_label_file(recording)
+    if gesture is not None:
+        start = label_file.session.start_timestamp or 0.0
+        end = label_file.session.end_timestamp or start
+        label_file = add_event_label(
+            label_file,
+            gesture=gesture,
+            start_time=start,
+            end_time=end,
+        )
+    save_label_file(label_file, labels_dir / f"{stem}.labels.json")
 
 
 def _write_motion_recording(path: Path, xs: tuple[float, ...]) -> Path:
