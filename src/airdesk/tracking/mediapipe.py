@@ -367,6 +367,7 @@ class MediaPipeHandTrackerBackend:
         )
         self._cv2.circle(image, (focus_x, lane_y), 7, (245, 245, 245), -1)
         pixels_per_second = max(40, int(panel_w * 0.085))
+        cards: list[dict[str, Any]] = []
         for item in segments:
             if not isinstance(item, dict):
                 continue
@@ -384,23 +385,36 @@ class MediaPipeHandTrackerBackend:
                 max_card_w,
                 max(min_card_w, int((end - start) * pixels_per_second)),
             )
-            x0, x1 = _fit_interval_inside(
-                center=x_center,
-                width=card_w,
-                minimum=panel_x + 18,
-                maximum=panel_x + panel_w - 18,
+            cards.append(
+                {
+                    "center": x_center,
+                    "width": card_w,
+                    "text": label_text,
+                    "kind": str(item.get("kind", "prompt")),
+                    "past": end <= elapsed,
+                }
             )
+        intervals = _fit_non_overlapping_intervals(
+            cards=[(int(card["center"]), int(card["width"])) for card in cards],
+            minimum=panel_x + 18,
+            maximum=panel_x + panel_w - 18,
+            gap=10,
+        )
+        for card, interval in zip(cards, intervals, strict=True):
+            if interval is None:
+                continue
+            x0, x1 = interval
             y0 = lane_y - 24
             y1 = lane_y + 24
-            kind = str(item.get("kind", "prompt"))
+            kind = str(card["kind"])
             color = _chart_segment_color(kind)
-            if end <= elapsed:
+            if bool(card["past"]):
                 color = tuple(int(channel * 0.45) for channel in color)
             self._cv2.rectangle(image, (x0, y0), (x1, y1), color, -1)
             self._cv2.rectangle(image, (x0, y0), (x1, y1), (250, 250, 250), 1)
             self._put_text_fit(
                 image=image,
-                text=label_text,
+                text=str(card["text"]),
                 x=x0 + 8,
                 y=y0 + 31,
                 max_width=max(20, x1 - x0 - 16),
@@ -728,6 +742,34 @@ def _fit_interval_inside(
         x1 = maximum
         x0 = x1 - fitted_width
     return x0, x1
+
+
+def _fit_non_overlapping_intervals(
+    *,
+    cards: list[tuple[int, int]],
+    minimum: int,
+    maximum: int,
+    gap: int,
+) -> list[tuple[int, int] | None]:
+    placed: list[tuple[int, int] | None] = []
+    previous_end = minimum - gap
+    for center, width in cards:
+        x0, x1 = _fit_interval_inside(
+            center=center,
+            width=width,
+            minimum=minimum,
+            maximum=maximum,
+        )
+        if x0 < previous_end + gap:
+            fitted_width = x1 - x0
+            x0 = previous_end + gap
+            x1 = x0 + fitted_width
+        if x1 > maximum:
+            placed.append(None)
+            continue
+        placed.append((x0, x1))
+        previous_end = x1
+    return placed
 
 
 def bbox_pixels(

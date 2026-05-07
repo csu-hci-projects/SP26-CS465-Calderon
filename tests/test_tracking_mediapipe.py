@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from airdesk.tracking.mediapipe import (
     _base_options_delegate,
     _fit_interval_inside,
+    _fit_non_overlapping_intervals,
     bbox_pixels,
     hand_label,
     normalized_hands_from_mediapipe_results,
@@ -90,6 +91,15 @@ def test_fit_interval_inside_preserves_width_near_edges() -> None:
     assert _fit_interval_inside(center=50, width=120, minimum=20, maximum=220) == (20, 140)
     assert _fit_interval_inside(center=210, width=120, minimum=20, maximum=220) == (100, 220)
     assert _fit_interval_inside(center=120, width=260, minimum=20, maximum=220) == (20, 220)
+
+
+def test_fit_non_overlapping_intervals_shifts_or_drops_colliding_cards() -> None:
+    assert _fit_non_overlapping_intervals(
+        cards=[(80, 100), (120, 100), (170, 100)],
+        minimum=20,
+        maximum=260,
+        gap=10,
+    ) == [(30, 130), (140, 240), None]
 
 
 def test_hand_label_includes_handedness_and_confidence() -> None:
