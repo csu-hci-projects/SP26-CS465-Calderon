@@ -33,7 +33,7 @@ Recommended architecture:
 
 ```text
 tracking
-  -> wrist/palm-centered, hand-scale-normalized landmark + motion features
+  -> per-hand wrist/palm-centered, hand-scale-normalized landmark + motion features
   -> smoothing / quality gates
   -> gesture energy / candidate proposal
   -> causal stream model or template ranker
@@ -51,6 +51,8 @@ The first serious AirDesk dynamic recognizer should be a **gesture phrase recogn
 - release/commit semantics,
 - cooldown and cancellation,
 - replayable logs.
+
+May 2026 two-hand update: combo and alternating-hand gestures should not require one hand to leave frame before the other hand becomes active. AirDesk's next data/model pass needs two-hand tracking and per-hand stream processing. `--max-num-hands 2` alone is not enough: feature export, DTW/TCN scoring, event decoding, and labels must treat each visible hand as its own temporal stream, then merge decoded events across hands. The one-hand structured combo takes from `sprint4-gpu-swipes-002-structured` were deleted and should not be used for combo training.
 
 The model plan is:
 

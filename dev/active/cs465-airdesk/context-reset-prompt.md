@@ -101,6 +101,7 @@ Important live findings:
 - `/dev/video0` does not appear to support 60 FPS; requesting `640x480 @ 60 FPS MJPG` falls back to 30 FPS.
 - On Caden's Hyprland/Arch/T550 setup, use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` when testing MediaPipe GPU tracking on the T550. Plain `--hand-delegate gpu` may still use Intel/Mesa EGL. Confirm the MediaPipe startup log contains `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
+- Two-hand combo data is the next blocker. The old one-hand default is wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export currently consumes `frame.hands[0]`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted. Do not collect more combo data until AirDesk records with `--max-num-hands 2` and exports/scores per-hand streams.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection remains pending.
 
@@ -115,6 +116,10 @@ The original Sprint 3 research conclusion was:
 The May 2026 update refines that:
 
 > The current TCN window classifier is a scaffold, not the destination. AirDesk should move toward continuous gesture spotting: position-invariant skeleton features, phase/event labels, event decoding, and a small hybrid recognizer that can later grow toward graph/transformer memory.
+
+May 2026 two-hand update:
+
+> Combo/chained gestures should support both hands visible at once. The next implementation chunk should add per-hand feature rows, per-hand recognizer scoring, and cross-hand event merging before collecting new combo data.
 
 Why:
 

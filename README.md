@@ -23,6 +23,7 @@ Start here:
 - `dev/active/cs465-airdesk/tasks.md` - implementation and paper checklist
 - `dev/active/cs465-airdesk/handoff-prompt.md` - prompt for a fresh agent
 - `dev/active/cs465-airdesk/context-reset-prompt.md` - concise prompt for clearing context and restarting
+- `dev/active/cs465-airdesk/next-session-prompt.md` - current copy-paste prompt for the next implementation session
 
 ## Development
 
@@ -55,7 +56,7 @@ The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model
 MediaPipe tuning flags include `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`.
 Live TCN/DTW watch commands also expose `--hand-delegate cpu|gpu`; CPU remains the default until the local GPU path is benchmarked on the T550.
 On Caden's Hyprland/Arch/T550 setup, plain `--hand-delegate gpu` can still initialize MediaPipe on the Intel/Mesa EGL renderer. Use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` to launch AirDesk with the NVIDIA GLVND EGL vendor and Wayland EGL platform selected before Python starts. A successful T550 path prints a MediaPipe log line containing `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
-The CLI defaults to one hand for lower latency; use `--max-num-hands 2` when comparing two-hand tracking.
+The CLI defaults to one hand for lower latency, but this is no longer acceptable for swipe-combo data. May 2026 finding: one-hand tracking contaminated structured combo collection because the active tracked hand could block the other visible hand from becoming active. Before collecting new combo/chained swipe data, update the collection and feature/evaluation pipeline for two simultaneously visible hands. Use `--max-num-hands 2` for future combo collection only after per-hand feature export and replay scoring are updated.
 
 Offline ML training is also optional:
 
@@ -82,7 +83,8 @@ uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --reps 5 --duration 6 --countdown 3 --show
 scripts/airdesk-nvidia-mediapipe-wayland collect --out-dir data/recordings/sprint4-gpu-swipes-001 --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --hand-delegate gpu --show
 scripts/airdesk-nvidia-mediapipe-wayland record --out data/recordings/sprint4-gpu-swipes-002-structured/structured-a-right-heavy.jsonl --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 82 --countdown 3 --wait-for-space --label structured-a-right-heavy --hand-delegate gpu --show --segment "0:10:R R" --segment "10:20:rest" --segment "20:30:R L" --segment "30:40:rest" --segment "40:50:R R R" --segment "50:60:rest" --segment "60:70:R L R" --segment "70:80:rest"
-scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-002-structured/chart-a-right-heavy.jsonl --chart "RR | rest | RL | rest | RRR | rest | RLR | rest" --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+# Hold off on new chart-combo collection until the two-hand feature/evaluation path is implemented.
+# Future combo collection should use --max-num-hands 2.
 uv run airdesk collection-summary data/recordings/sprint4-smoke
 uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json
 uv run airdesk label suggest data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --gesture swipe_left --out data/labels/swipe-left-positive-001.labels.json --apply

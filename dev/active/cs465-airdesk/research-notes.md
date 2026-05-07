@@ -67,6 +67,13 @@ Sprint 2 implementation note:
 - CLI live commands default to one hand because lower latency matters more than two-hand recognition until the gesture vocabulary requires both hands.
 - Use `airdesk benchmark` to compare model bundles, hand count, confidence thresholds, camera modes, hand-present frames, and average FPS before changing defaults.
 
+May 2026 two-hand gesture note:
+
+- Combo/chained swipe collection now requires both hands to be tracked when both are visible.
+- The old one-hand default is still useful for latency-sensitive cursor/static primitive work, but it is the wrong assumption for alternating-hand combos.
+- `--max-num-hands 2` must be paired with per-hand feature export and per-hand recognizer scoring. The current feature path uses the first visible hand, so changing the collection flag alone would still lose information downstream.
+- The `sprint4-gpu-swipes-002-structured` combo takes were removed because they were collected under the one-hand assumption. The `sprint4-gpu-swipes-002-singles` takes remain local but should be considered legacy/single-hand-only until reviewed or recollected under two-hand background/rest conditions.
+
 May 2026 T550/Arch implementation note:
 
 - MediaPipe GPU support on Linux is EGL/OpenGL ES based, not CUDA-first for the Python Tasks Hand Landmarker path.
