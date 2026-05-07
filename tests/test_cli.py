@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 from airdesk.cli import (
     _format_tracker_timing,
     _handle_collection_preview_key,
+    _handle_record_preview_key,
     _parse_record_prompt_segments,
     _record_preview_status,
     app,
@@ -76,6 +77,7 @@ def test_record_help_exposes_countdown_segments_and_hand_delegate() -> None:
     assert result.exit_code == 0
     assert "--countdown" in result.stdout
     assert "--segment" in result.stdout
+    assert "--wait-for-space" in result.stdout
     assert "--hand-delegate" in result.stdout
 
 
@@ -815,13 +817,23 @@ def test_record_prompt_segments_format_status() -> None:
         elapsed=4.5,
         duration=22.0,
         segments=segments,
-    ) == "recording 4.5/22.0s | R R | 5.5s left"
+    ) == "recording 4.5/22.0s | NOW R R | 5.5s left | NEXT rest"
     assert _record_preview_status(
         label="structured",
         elapsed=21.0,
         duration=22.0,
         segments=segments,
     ) == "recording 21.0/22.0s | structured"
+
+
+def test_record_preview_key_can_start_and_quit() -> None:
+    state: dict[str, object] = {"phase": "waiting", "quit": False}
+
+    assert _handle_record_preview_key(ord(" "), state) is True
+    assert state == {"phase": "countdown", "quit": False}
+
+    assert _handle_record_preview_key(ord("q"), state) is True
+    assert state == {"phase": "countdown", "quit": True}
 
 
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:

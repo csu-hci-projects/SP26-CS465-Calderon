@@ -1768,6 +1768,10 @@ def record(
             help="Preview prompt segment as start:end:text, e.g. 0:10:R R. Repeatable.",
         ),
     ] = None,
+    wait_for_space: Annotated[
+        bool,
+        typer.Option(help="When previewing, wait for space before starting countdown."),
+    ] = False,
     model_path: Annotated[
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
@@ -1823,8 +1827,16 @@ def record(
         delegate=hand_delegate,
     )
     status = {"text": f"ready: {label or out.stem}"}
+    preview_state = {
+        "phase": "waiting" if wait_for_space and show else "countdown",
+        "quit": False,
+    }
     if isinstance(tracker, MediaPipeHandTrackerBackend):
         tracker.preview_status_provider = lambda: status["text"]
+        tracker.preview_key_handler = lambda key: _handle_record_preview_key(
+            key,
+            preview_state,
+        )
     frame_count = 0
     interrupted = False
     countdown_started_at: float | None = None
@@ -1842,6 +1854,7 @@ def record(
                         "max_frames": max_frames,
                         "duration": duration,
                         "countdown": countdown,
+                        "wait_for_space": wait_for_space,
                         "label": label,
                         "model_path": str(model_path),
                         "prompt_segments": [asdict(item) for item in prompt_segments],
@@ -1863,6 +1876,14 @@ def record(
             )
             try:
                 for frame in tracker.frames():
+                    if preview_state["quit"]:
+                        interrupted = True
+                        break
+                    if preview_state["phase"] == "waiting":
+                        status["text"] = (
+                            f"ready: {label or out.stem} | space=start q/esc=quit"
+                        )
+                        continue
                     if recording_started_at is None:
                         if countdown_started_at is None:
                             countdown_started_at = frame.timestamp
@@ -1874,6 +1895,7 @@ def record(
                             )
                             continue
                         recording_started_at = frame.timestamp
+                        preview_state["phase"] = "recording"
                         writer.write_event(
                             EventLogEntry(
                                 event_type="recording_frames_started",
@@ -1911,6 +1933,7 @@ def record(
                         "interrupted": interrupted,
                         "duration": duration,
                         "countdown": countdown,
+                        "wait_for_space": wait_for_space,
                         "label": label,
                     },
                 )
@@ -2549,7 +2572,9 @@ def _record_preview_status(
     if segment is None:
         return f"recording {total} | {label}"
     remaining = max(0.0, segment.end - elapsed)
-    return f"recording {total} | {segment.text} | {remaining:.1f}s left"
+    next_segment = _next_record_prompt_segment(segment, segments)
+    next_text = f" | NEXT {next_segment.text}" if next_segment is not None else ""
+    return f"recording {total} | NOW {segment.text} | {remaining:.1f}s left{next_text}"
 
 
 def _record_prompt_segment_at(
@@ -2560,6 +2585,26 @@ def _record_prompt_segment_at(
         if segment.start <= elapsed < segment.end:
             return segment
     return None
+
+
+def _next_record_prompt_segment(
+    current: RecordPromptSegment,
+    segments: tuple[RecordPromptSegment, ...],
+) -> RecordPromptSegment | None:
+    for segment in segments:
+        if segment.start >= current.end:
+            return segment
+    return None
+
+
+def _handle_record_preview_key(key: int, state: dict[str, object]) -> bool:
+    if state.get("phase") == "waiting" and key == ord(" "):
+        state["phase"] = "countdown"
+        return True
+    if key in (27, ord("q")):
+        state["quit"] = True
+        return True
+    return False
 
 
 def _record_collection_take(
