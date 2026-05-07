@@ -263,27 +263,30 @@ Structured chained-session evidence:
 
 ## Current Next Task
 
-Continue the recognizer pivot:
+The first recognizer-pivot implementation pass has landed:
 
-1. Add a position-invariant feature preset for TCN/stream models that excludes or downweights absolute palm position.
-2. Add phase/event targets for `background`, `stroke_left`, `stroke_right`, and `recovery/reset`.
-3. Add a replayable event decoder over probabilities/candidates with hysteresis, peak confidence, cooldown, and repeated-fire suppression.
-4. Add or improve helpers for ordered chained sessions where Caden can provide a sequence like `R L R R L L` without exact timestamps.
-5. Compare current DTW, current TCN, and the hybrid event decoder on isolated holdout plus chained sessions.
+- position-invariant TCN feature preset: `--feature-preset stream-invariant`;
+- phase target mode: `--target-mode phase` with `background`, `stroke_left`, `stroke_right`, and `recovery`;
+- label vocabulary support for `recovery` / `reset`;
+- coarse sequence helper: `airdesk label add-sequence --sequence "R L R R L L"`;
+- replayable event decoder: `airdesk gesture evaluate-tcn --event-decoder` and `airdesk gesture decode-candidates`.
+
+Initial evidence:
+
+- Current window-feature gated DTW remains best on isolated holdout: 4/4 matched, 0 false activations, 0 repeated fires.
+- Current window-feature TCN remains weak: 2/4 matched, 1 false activation.
+- TCN plus event decoder matched 3/4 on isolated holdout but introduced 2 false activations at permissive thresholds.
+- Stream-invariant phase TCN plus event decoder matched 2/4 with 1 false activation.
+- Event-decoded chained DTW candidates on `sprint4-chained-003` reduced repeated fires from 2 to 0, but dropped matches from 8/10 to 6/10.
 
 Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
-1. Read the existing feature, label, DTW, and evaluation modules before editing.
-2. Add a position-invariant feature preset for TCN/stream models.
-3. Add stream/phase targets that distinguish stroke from recovery/reset.
-4. Add a probability/candidate event decoder with hysteresis, peak confidence, cooldown, and repeated-fire suppression.
-5. Rerun isolated holdout and chained-session evaluation against DTW, current TCN, and the new event-decoded path.
-6. Keep live desktop actions disabled until event-level replay evidence improves.
-7. Document results and limitations in README/tasks/tracking-samples.
-8. Run `uv run ruff check .` and `uv run pytest`.
-9. Commit and push.
+1. Collect or refine recovery-aware chained labels; existing isolated labels have no recovery frames.
+2. Tune/inspect event decoder thresholds against probability traces, not just final summary counts.
+3. Add a small report command or notebook that compares DTW, TCN, and decoded outputs side by side.
+4. Decide the Sprint 5 pilot slice from event-level replay evidence; a narrower dry-run pilot may be the honest path.
 
 ## Useful Commands
 

@@ -174,6 +174,14 @@ Use ordered-sequence notes when exact timestamps are too much to track. For exam
 
 This is not as precise as frame labels, but it is useful for weak sequence scoring and later CTC-style alignment. Keep the direction meaning user-facing: `R` means palm motion toward the right side of the preview/screen and `L` means palm motion toward the left side, regardless of raw camera coordinate sign.
 
+For a coarse active window with a known order, bootstrap weak labels with:
+
+```bash
+uv run airdesk label add-sequence data/labels/sprint4-chained-003/chained-structured-swipes-001.labels.json --sequence "R L R R L L R R L L" --start 0 --end 100
+```
+
+This creates evenly spaced stroke/recovery phases and gesture events. It is intended for quick replay scoring and later weak-alignment experiments; refine timestamps manually before treating the labels as final training truth.
+
 Position/distance should not become the gesture identity. When collecting model data, deliberately vary setup after a few takes:
 
 - hand starts left/center/right in frame,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from airdesk.features import extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.decoder import DecoderFrame, EventDecoder, EventDecoderConfig
 from airdesk.gestures.dtw import (
     DtwBestWindow,
     DtwCalibrationInput,
@@ -181,6 +182,7 @@ def evaluate_tcn_manifest(
     confidence_threshold: float = 0.5,
     cooldown_seconds: float = 0.5,
     match_tolerance_seconds: float = 0.5,
+    event_decoder_config: EventDecoderConfig | None = None,
 ) -> tuple[GestureEvaluation, ...]:
     """Evaluate a trained TCN checkpoint against all labeled sources in a manifest."""
     manifest = load_tcn_dataset_manifest(manifest_path)
@@ -189,6 +191,7 @@ def evaluate_tcn_manifest(
         manifest_path=manifest_path,
         confidence_threshold=confidence_threshold,
         cooldown_seconds=cooldown_seconds,
+        include_background=event_decoder_config is not None,
     )
     predictions_by_source: dict[tuple[str, str], list[CausalTcnPrediction]] = {}
     for prediction in predictions:
@@ -206,33 +209,61 @@ def evaluate_tcn_manifest(
         feature_path = source.feature_path
         label_path = source.label_path
         label_file = load_label_file(Path(label_path))
-        candidates = [
-            GestureCandidate(
-                name=prediction.target,
-                confidence=prediction.confidence,
-                timestamp=prediction.end_time,
-                hand_id=None,
-                metadata={
-                    "recognizer": "tcn",
-                    "sample_id": prediction.sample_id,
-                    "window_start": prediction.start_time,
-                    "window_end": prediction.end_time,
-                    "probabilities": prediction.probabilities,
-                },
-            )
-            for prediction in predictions_by_source.get((feature_path, label_path), [])
-        ]
+        source_predictions = predictions_by_source.get((feature_path, label_path), [])
+        if event_decoder_config is None:
+            candidates = [
+                GestureCandidate(
+                    name=prediction.target,
+                    confidence=prediction.confidence,
+                    timestamp=prediction.end_time,
+                    hand_id=None,
+                    metadata={
+                        "recognizer": "tcn",
+                        "sample_id": prediction.sample_id,
+                        "window_start": prediction.start_time,
+                        "window_end": prediction.end_time,
+                        "probabilities": prediction.probabilities,
+                    },
+                )
+                for prediction in source_predictions
+            ]
+            recognizer = "tcn"
+        else:
+            candidates = _decode_tcn_predictions(source_predictions, event_decoder_config)
+            recognizer = "tcn_event_decoder"
         evaluations.append(
             evaluate_candidates(
                 recording_path=Path(feature_path),
                 label_path=Path(label_path),
                 labels=label_file,
-                recognizer="tcn",
+                recognizer=recognizer,
                 candidates=candidates,
                 match_tolerance_seconds=match_tolerance_seconds,
             )
         )
     return tuple(evaluations)
+
+
+def _decode_tcn_predictions(
+    predictions: list[CausalTcnPrediction],
+    config: EventDecoderConfig,
+) -> list[GestureCandidate]:
+    frames = [
+        DecoderFrame(
+            timestamp=prediction.end_time,
+            scores=prediction.probabilities,
+            source_id=prediction.feature_path,
+            window_start=prediction.start_time,
+            window_end=prediction.end_time,
+            metadata={
+                "recognizer": "tcn",
+                "sample_id": prediction.sample_id,
+                "raw_target": prediction.target,
+            },
+        )
+        for prediction in predictions
+    ]
+    return EventDecoder(config).decode(frames)
 
 
 def evaluate_candidates(

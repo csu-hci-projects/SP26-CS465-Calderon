@@ -40,6 +40,7 @@ from airdesk.analysis import (
 from airdesk.capture.opencv import CameraSettings, camera_modes, format_probe_result, probe_camera
 from airdesk.features import FeatureRowStream, export_features_csv, extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
+from airdesk.gestures.decoder import EventDecoder, EventDecoderConfig, frames_from_candidates
 from airdesk.gestures.dtw import (
     DtwCalibrationInput,
     DtwGestureModel,
@@ -50,6 +51,7 @@ from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import (
     add_event_label,
+    add_ordered_sequence_labels,
     add_phase_label,
     init_label_file,
     load_label_file,
@@ -73,7 +75,13 @@ from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.runtime import AirdeskRuntime, format_runtime_summary
-from airdesk.state.types import ActionRequest, EventLogEntry, TrackingFrame, utc_timestamp
+from airdesk.state.types import (
+    ActionRequest,
+    EventLogEntry,
+    GestureCandidate,
+    TrackingFrame,
+    utc_timestamp,
+)
 from airdesk.tracking.interfaces import HandTrackerBackend
 from airdesk.tracking.mediapipe import (
     DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
@@ -254,6 +262,46 @@ def label_add_event(
     )
     _save_valid_label_file(updated, path)
     typer.echo(f"added event={gesture} labels={path}")
+
+
+@label_app.command("add-sequence")
+def label_add_sequence(
+    path: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    sequence: Annotated[str, typer.Option(help="Ordered tokens, e.g. 'R L R R L L'.")],
+    start: Annotated[
+        float,
+        typer.Option(help="Active-window start seconds relative to recording."),
+    ],
+    end: Annotated[float, typer.Option(help="Active-window end seconds relative to recording.")],
+    gesture_fraction: Annotated[
+        float,
+        typer.Option(help="Fraction of each coarse slot assigned to stroke/event."),
+    ] = 0.65,
+    recovery_fraction: Annotated[
+        float,
+        typer.Option(help="Fraction of each coarse slot assigned to recovery/reset."),
+    ] = 0.35,
+    notes: Annotated[str, typer.Option(help="Optional notes for generated labels.")] = (
+        "Coarse ordered-sequence label; refine timestamps before final training."
+    ),
+) -> None:
+    """Append coarse labels for a remembered chained L/R sequence."""
+    label_file = load_label_file(path)
+    try:
+        updated = add_ordered_sequence_labels(
+            label_file,
+            sequence=sequence.split(),
+            start_time=_relative_label_time(label_file.session.start_timestamp, start),
+            end_time=_relative_label_time(label_file.session.start_timestamp, end),
+            gesture_fraction=gesture_fraction,
+            recovery_fraction=recovery_fraction,
+            notes=notes,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    _save_valid_label_file(updated, path)
+    typer.echo(f"added sequence_count={len(sequence.split())} labels={path}")
 
 
 @label_app.command("suggest")
@@ -599,6 +647,81 @@ def gesture_spot_dtw(
         typer.echo(f"wrote candidates={out}")
 
 
+@gesture_app.command("decode-candidates")
+def gesture_decode_candidates(
+    candidates: Annotated[Path, typer.Option(exists=True, readable=True, help="Candidate JSON.")],
+    out: Annotated[Path | None, typer.Option(help="Optional decoded JSON output path.")] = None,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Confidence needed to start an event."),
+    ] = 0.55,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Confidence below this starts recovery/commit."),
+    ] = 0.35,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum peak confidence required to commit."),
+    ] = 0.60,
+    min_event_separation: Annotated[
+        float,
+        typer.Option(help="Minimum seconds between same-gesture commits."),
+    ] = 0.50,
+    recovery_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds below release threshold before committing."),
+    ] = 0.25,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Same-gesture cooldown seconds after a commit."),
+    ] = 0.50,
+) -> None:
+    """Apply hysteresis/peak/cooldown event decoding to candidate JSON."""
+    with candidates.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    raw_candidates = [
+        _candidate_from_json(item)
+        for item in payload.get("candidates", [])
+        if isinstance(item, dict)
+    ]
+    config = EventDecoderConfig(
+        activation_threshold=activation_threshold,
+        release_threshold=release_threshold,
+        min_peak_confidence=min_peak_confidence,
+        min_event_separation_seconds=min_event_separation,
+        recovery_seconds=recovery_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    try:
+        decoded = EventDecoder(config).decode(frames_from_candidates(raw_candidates))
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    result = {
+        "source_candidates": str(candidates),
+        "decoder_config": config.to_dict(),
+        "candidate_count": len(raw_candidates),
+        "decoded_count": len(decoded),
+        "candidates": [candidate.to_dict() for candidate in decoded],
+    }
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    typer.echo(
+        f"decoded candidates={len(raw_candidates)} events={len(decoded)} "
+        f"source={Path(candidates).name}"
+    )
+    for index, candidate in enumerate(decoded, start=1):
+        typer.echo(
+            f"{index:02d} gesture={candidate.name} "
+            f"t={candidate.timestamp:.3f} confidence={candidate.confidence:.3f}"
+        )
+    if out is not None:
+        typer.echo(f"wrote decoded={out}")
+
+
 @gesture_app.command("score-sequence")
 def gesture_score_sequence(
     candidates: Annotated[Path, typer.Option(exists=True, readable=True, help="Candidate JSON.")],
@@ -672,6 +795,14 @@ def gesture_build_tcn_dataset(
         float,
         typer.Option(help="Minimum in-window gesture-frame fraction for a swipe target."),
     ] = 0.35,
+    feature_preset: Annotated[
+        str,
+        typer.Option(help="Feature preset: legacy or stream-invariant."),
+    ] = "legacy",
+    target_mode: Annotated[
+        str,
+        typer.Option(help="Target mode: event or phase."),
+    ] = "event",
 ) -> None:
     """Build a dependency-free manifest for background/left/right TCN windows."""
     feature_paths = sorted(features_dir.glob(pattern))
@@ -686,6 +817,8 @@ def gesture_build_tcn_dataset(
             stride_seconds=stride_seconds,
             min_rows=min_rows,
             min_gesture_fraction=min_gesture_fraction,
+            feature_preset=feature_preset,
+            target_mode=target_mode,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -697,7 +830,8 @@ def gesture_build_tcn_dataset(
     )
     typer.echo(
         f"wrote tcn_manifest={out} sources={summary['source_count']} "
-        f"windows={summary['window_count']} {window_counts}"
+        f"windows={summary['window_count']} preset={manifest.feature_preset} "
+        f"target_mode={manifest.target_mode} {window_counts}"
     )
 
 
@@ -773,27 +907,56 @@ def gesture_evaluate_tcn(
         float,
         typer.Option(help="Tolerance after an event interval for window-end matching."),
     ] = 0.5,
+    event_decoder: Annotated[
+        bool,
+        typer.Option(help="Decode probability streams with hysteresis/peaks/cooldown."),
+    ] = False,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder activation threshold."),
+    ] = 0.55,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold."),
+    ] = 0.35,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak confidence."),
+    ] = 0.60,
 ) -> None:
     """Evaluate a trained TCN checkpoint over a labeled feature manifest."""
     try:
+        decoder_config = (
+            EventDecoderConfig(
+                activation_threshold=activation_threshold,
+                release_threshold=release_threshold,
+                min_peak_confidence=min_peak_confidence,
+                min_event_separation_seconds=cooldown_seconds,
+                cooldown_seconds=cooldown_seconds,
+            )
+            if event_decoder
+            else None
+        )
         evaluations = evaluate_tcn_manifest(
             manifest_path=manifest,
             model_path=model,
             confidence_threshold=confidence_threshold,
             cooldown_seconds=cooldown_seconds,
             match_tolerance_seconds=match_tolerance_seconds,
+            event_decoder_config=decoder_config,
         )
     except (MissingMlDependencyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     summary = holdout_totals(evaluations)
     payload = {
-        "recognizer": "tcn",
+        "recognizer": "tcn_event_decoder" if event_decoder else "tcn",
         "manifest": str(manifest),
         "model": str(model),
         "confidence_threshold": confidence_threshold,
         "cooldown_seconds": cooldown_seconds,
         "match_tolerance_seconds": match_tolerance_seconds,
+        "event_decoder": decoder_config.to_dict() if decoder_config is not None else None,
         "summary": summary,
         "evaluations": [evaluation.to_dict() for evaluation in evaluations],
     }
@@ -805,7 +968,8 @@ def gesture_evaluate_tcn(
     latency = summary["mean_latency_seconds"]
     formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
     typer.echo(
-        f"recognizer=tcn recordings={summary['recordings']} "
+        f"recognizer={'tcn_event_decoder' if event_decoder else 'tcn'} "
+        f"recordings={summary['recordings']} "
         f"intended={summary['intended_events']} matched={summary['matched_events']} "
         f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
         f"false_activations={summary['false_activations']} "
@@ -975,6 +1139,11 @@ def gesture_holdout_tcn(
         float,
         typer.Option(help="Minimum in-window gesture-frame fraction for a swipe target."),
     ] = 0.35,
+    feature_preset: Annotated[
+        str,
+        typer.Option(help="Feature preset: legacy or stream-invariant."),
+    ] = "legacy",
+    target_mode: Annotated[str, typer.Option(help="Target mode: event or phase.")] = "event",
     epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
     learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
     batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
@@ -999,6 +1168,18 @@ def gesture_holdout_tcn(
         float,
         typer.Option(help="Tolerance after an event interval for window-end matching."),
     ] = 0.5,
+    event_decoder: Annotated[
+        bool,
+        typer.Option(help="Decode probability streams with hysteresis/peaks/cooldown."),
+    ] = False,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold."),
+    ] = 0.35,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak confidence."),
+    ] = 0.55,
 ) -> None:
     """Train/evaluate TCN on a deterministic filename-ordered holdout split."""
     train_features, test_features = _split_tcn_feature_holdout(
@@ -1018,6 +1199,8 @@ def gesture_holdout_tcn(
         stride_seconds=stride_seconds,
         min_rows=min_rows,
         min_gesture_fraction=min_gesture_fraction,
+        feature_preset=feature_preset,
+        target_mode=target_mode,
     )
     test_manifest = build_tcn_dataset_manifest(
         test_features,
@@ -1026,6 +1209,8 @@ def gesture_holdout_tcn(
         stride_seconds=stride_seconds,
         min_rows=min_rows,
         min_gesture_fraction=min_gesture_fraction,
+        feature_preset=feature_preset,
+        target_mode=target_mode,
     )
     save_tcn_dataset_manifest(train_manifest, train_manifest_path)
     save_tcn_dataset_manifest(test_manifest, test_manifest_path)
@@ -1041,6 +1226,17 @@ def gesture_holdout_tcn(
         seed=seed,
     )
     try:
+        decoder_config = (
+            EventDecoderConfig(
+                activation_threshold=confidence_threshold,
+                release_threshold=release_threshold,
+                min_peak_confidence=min_peak_confidence,
+                min_event_separation_seconds=cooldown_seconds,
+                cooldown_seconds=cooldown_seconds,
+            )
+            if event_decoder
+            else None
+        )
         train_result = train_causal_tcn(
             manifest_path=train_manifest_path,
             out_path=model_out,
@@ -1052,6 +1248,7 @@ def gesture_holdout_tcn(
             confidence_threshold=confidence_threshold,
             cooldown_seconds=cooldown_seconds,
             match_tolerance_seconds=match_tolerance_seconds,
+            event_decoder_config=decoder_config,
         )
     except (MissingMlDependencyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -1059,7 +1256,7 @@ def gesture_holdout_tcn(
 
     summary = holdout_totals(evaluations)
     payload = {
-        "recognizer": "tcn",
+        "recognizer": "tcn_event_decoder" if event_decoder else "tcn",
         "model_path": str(model_out),
         "split": {
             "train_manifest": str(train_manifest_path),
@@ -1068,6 +1265,7 @@ def gesture_holdout_tcn(
             "test_features": [str(path) for path in test_features],
         },
         "training": train_result.to_dict(),
+        "event_decoder": decoder_config.to_dict() if decoder_config is not None else None,
         "summary": summary,
         "evaluations": [evaluation.to_dict() for evaluation in evaluations],
     }
@@ -1078,7 +1276,8 @@ def gesture_holdout_tcn(
     latency = summary["mean_latency_seconds"]
     formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
     typer.echo(
-        f"recognizer=tcn train={len(train_features)} test={len(test_features)} "
+        f"recognizer={'tcn_event_decoder' if event_decoder else 'tcn'} "
+        f"train={len(train_features)} test={len(test_features)} "
         f"intended={summary['intended_events']} matched={summary['matched_events']} "
         f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
         f"false_activations={summary['false_activations']} "
@@ -2476,6 +2675,21 @@ def _sequence_token(value: str) -> str:
     if normalized in {"l", "left", "swipe_left"}:
         return "L"
     raise typer.BadParameter(f"unsupported sequence token: {value}")
+
+
+def _candidate_from_json(item: dict[str, object]) -> GestureCandidate:
+    metadata = item.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    name = item.get("gesture", item.get("name", ""))
+    timestamp = item.get("timestamp", item.get("timestamp_relative", 0.0))
+    return GestureCandidate(
+        name=str(name),
+        confidence=float(item.get("confidence", 0.0) or 0.0),
+        timestamp=float(timestamp or 0.0),
+        hand_id=str(item["hand_id"]) if isinstance(item.get("hand_id"), str) else None,
+        metadata=metadata,
+    )
 
 
 def _lcs_length(left: list[str], right: list[str]) -> int:

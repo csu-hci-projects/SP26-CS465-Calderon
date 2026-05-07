@@ -219,6 +219,14 @@ Acceptance criteria:
 - Compare event-decoded TCN/hybrid output against DTW candidates on isolated holdout and chained sessions.
 - Document whether a motion-energy/DTW candidate gate improves false activations or only hides weak model behavior.
 
+Current implementation note:
+
+- `airdesk gesture evaluate-tcn --event-decoder` decodes TCN probability streams.
+- `airdesk gesture decode-candidates` decodes saved DTW candidate JSON.
+- First isolated-holdout smoke: current TCN plus event decoder matched 3/4 but produced 2 false activations at permissive thresholds; stream-invariant phase TCN plus event decoder matched 2/4 with 1 false activation.
+- First chained-session smoke: decoding the looser DTW candidates on `sprint4-chained-003` reduced repeated fires from 2 to 0, but also reduced matches from 8/10 to 6/10.
+- Interpretation: the decoder layer works and is useful for replay analysis, but the current recognizer scores/labels still are not reliable enough for live desktop actions.
+
 ### 6. Evaluation Harness
 
 Acceptance criteria:

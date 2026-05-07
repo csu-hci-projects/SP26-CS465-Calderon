@@ -5,7 +5,9 @@ from pathlib import Path
 from airdesk.labels import (
     GestureLabelFile,
     GesturePhaseLabel,
+    SessionMetadata,
     add_event_label,
+    add_ordered_sequence_labels,
     add_phase_label,
     init_label_file,
     load_label_file,
@@ -69,6 +71,18 @@ def test_validate_label_file_rejects_unknown_phase() -> None:
     assert "unsupported phase=mystery" in result.errors[0]
 
 
+def test_validate_label_file_accepts_recovery_phase() -> None:
+    label_file = init_label_file(Path("tests/fixtures/replay-one-frame.jsonl"))
+    updated = add_phase_label(
+        label_file,
+        phase="recovery",
+        start_time=label_file.session.start_timestamp or 0.0,
+        end_time=label_file.session.end_timestamp or 0.0,
+    )
+
+    assert validate_label_file(updated).ok is True
+
+
 def test_add_phase_and_event_labels_generate_ids() -> None:
     label_file = init_label_file(Path("tests/fixtures/replay-one-frame.jsonl"))
 
@@ -89,6 +103,33 @@ def test_add_phase_and_event_labels_generate_ids() -> None:
     assert updated.phase_labels[-1].label_id == "phase-002"
     assert updated.event_labels[-1].label_id == "event-001"
     assert validate_label_file(updated).ok is True
+
+
+def test_add_ordered_sequence_labels_creates_stroke_recovery_and_events() -> None:
+    label_file = GestureLabelFile(
+        schema_version=1,
+        created_at=1.0,
+        session=SessionMetadata(
+            recording_path="recording.jsonl",
+            start_timestamp=1.0,
+            end_timestamp=3.0,
+        ),
+    )
+
+    updated = add_ordered_sequence_labels(
+        label_file,
+        sequence=["R", "L"],
+        start_time=1.0,
+        end_time=3.0,
+    )
+
+    assert [event.gesture for event in updated.event_labels] == ["swipe_right", "swipe_left"]
+    assert [phase.phase for phase in updated.phase_labels[-4:]] == [
+        "stroke_right",
+        "recovery",
+        "stroke_left",
+        "recovery",
+    ]
 
 
 def test_suggest_stroke_label_finds_strongest_motion_window(tmp_path: Path) -> None:

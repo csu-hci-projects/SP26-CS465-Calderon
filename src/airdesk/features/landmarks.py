@@ -283,10 +283,13 @@ def _pinch_distance(hand: NormalizedHand) -> float:
 def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:
     if labels is None:
         return ""
+    fallback = ""
     for phase in labels.phase_labels:
         if phase.start_time <= timestamp <= phase.end_time:
-            return phase.phase
-    return ""
+            if phase.phase != "background":
+                return phase.phase
+            fallback = phase.phase
+    return fallback
 
 
 def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:

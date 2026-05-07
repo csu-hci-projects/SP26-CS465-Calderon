@@ -11,8 +11,10 @@ from typing import Any
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import GestureLabelFile, load_label_file
 
-TCN_TARGETS = ("background", "swipe_left", "swipe_right")
-TCN_FEATURE_COLUMNS = (
+TCN_EVENT_TARGETS = ("background", "swipe_left", "swipe_right")
+TCN_PHASE_TARGETS = ("background", "stroke_left", "stroke_right", "recovery")
+TCN_TARGETS = TCN_EVENT_TARGETS
+TCN_LEGACY_FEATURE_COLUMNS = (
     "dt",
     "tracking_present",
     "hand_count",
@@ -39,6 +41,36 @@ TCN_FEATURE_COLUMNS = (
     "extended_fingers",
     "folded_fingers",
 )
+TCN_STREAM_INVARIANT_FEATURE_COLUMNS = (
+    "dt",
+    "tracking_present",
+    "hand_count",
+    "confidence",
+    "palm_vx",
+    "palm_vy",
+    "palm_speed",
+    "palm_ax",
+    "palm_ay",
+    "palm_window_dx",
+    "palm_window_dx_per_hand_scale",
+    "palm_window_peak_abs_vx",
+    "palm_window_direction_consistency",
+    "index_rel_x",
+    "index_rel_y",
+    "index_rel_vx",
+    "index_rel_vy",
+    "pinch_distance",
+    "pinch_velocity",
+    "hand_scale",
+    "extended_fingers",
+    "folded_fingers",
+)
+TCN_FEATURE_COLUMNS = TCN_LEGACY_FEATURE_COLUMNS
+TCN_FEATURE_PRESETS = {
+    "legacy": TCN_LEGACY_FEATURE_COLUMNS,
+    "stream-invariant": TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
+}
+TCN_TARGET_MODES = ("event", "phase")
 
 _INT_FIELDS = {
     "frame_index",
@@ -158,6 +190,8 @@ class TcnDatasetManifest:
     min_gesture_fraction: float
     sources: tuple[TcnFeatureSource, ...]
     windows: tuple[TcnWindowSample, ...]
+    feature_preset: str = "legacy"
+    target_mode: str = "event"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -168,6 +202,8 @@ class TcnDatasetManifest:
             "stride_seconds": self.stride_seconds,
             "min_rows": self.min_rows,
             "min_gesture_fraction": self.min_gesture_fraction,
+            "feature_preset": self.feature_preset,
+            "target_mode": self.target_mode,
             "sources": [source.to_dict() for source in self.sources],
             "windows": [window.to_dict() for window in self.windows],
             "summary": summarize_tcn_manifest(self),
@@ -185,6 +221,8 @@ class TcnDatasetManifest:
             min_gesture_fraction=float(data["min_gesture_fraction"]),
             sources=tuple(TcnFeatureSource.from_dict(item) for item in data.get("sources", [])),
             windows=tuple(TcnWindowSample.from_dict(item) for item in data.get("windows", [])),
+            feature_preset=str(data.get("feature_preset", "legacy")),
+            target_mode=str(data.get("target_mode", "event")),
         )
 
 
@@ -210,22 +248,31 @@ def build_tcn_dataset_manifest(
     min_rows: int = 4,
     min_gesture_fraction: float = 0.35,
     targets: tuple[str, ...] = TCN_TARGETS,
-    feature_columns: tuple[str, ...] = TCN_FEATURE_COLUMNS,
+    feature_columns: tuple[str, ...] | None = None,
+    feature_preset: str = "legacy",
+    target_mode: str = "event",
 ) -> TcnDatasetManifest:
     """Build deterministic sliding-window metadata over exported feature CSVs."""
+    resolved_feature_columns = feature_columns or feature_columns_for_preset(feature_preset)
+    resolved_targets = targets_for_mode(target_mode) if targets == TCN_TARGETS else targets
     _validate_manifest_config(
         window_seconds=window_seconds,
         stride_seconds=stride_seconds,
         min_rows=min_rows,
         min_gesture_fraction=min_gesture_fraction,
-        targets=targets,
+        targets=resolved_targets,
+        feature_preset=feature_preset,
+        target_mode=target_mode,
     )
     sources: list[TcnFeatureSource] = []
     windows: list[TcnWindowSample] = []
     for feature_path in sorted(feature_paths):
         rows = load_feature_rows_csv(feature_path)
         label_path, labels = _matching_labels(feature_path, labels_dir)
-        target_by_row = [_target_for_row(row, labels, targets) for row in rows]
+        target_by_row = [
+            _target_for_row(row, labels, resolved_targets, target_mode=target_mode)
+            for row in rows
+        ]
         sources.append(
             TcnFeatureSource(
                 feature_path=str(feature_path),
@@ -234,7 +281,7 @@ def build_tcn_dataset_manifest(
                 start_time=rows[0].timestamp if rows else None,
                 end_time=rows[-1].timestamp if rows else None,
                 duration_seconds=_duration(rows),
-                target_frame_counts=_target_counts(target_by_row, targets),
+                target_frame_counts=_target_counts(target_by_row, resolved_targets),
             )
         )
         windows.extend(
@@ -247,22 +294,44 @@ def build_tcn_dataset_manifest(
                 stride_seconds=stride_seconds,
                 min_rows=min_rows,
                 min_gesture_fraction=min_gesture_fraction,
-                targets=targets,
+                targets=resolved_targets,
                 sample_offset=len(windows),
             )
         )
 
     return TcnDatasetManifest(
         schema_version=1,
-        targets=targets,
-        feature_columns=feature_columns,
+        targets=resolved_targets,
+        feature_columns=resolved_feature_columns,
         window_seconds=window_seconds,
         stride_seconds=stride_seconds,
         min_rows=min_rows,
         min_gesture_fraction=min_gesture_fraction,
         sources=tuple(sources),
         windows=tuple(windows),
+        feature_preset=feature_preset,
+        target_mode=target_mode,
     )
+
+
+def feature_columns_for_preset(feature_preset: str) -> tuple[str, ...]:
+    """Return numeric feature columns for a named TCN/stream-model preset."""
+    try:
+        return TCN_FEATURE_PRESETS[feature_preset]
+    except KeyError as exc:
+        options = ", ".join(sorted(TCN_FEATURE_PRESETS))
+        message = f"unsupported feature_preset={feature_preset}; use one of: {options}"
+        raise ValueError(message) from exc
+
+
+def targets_for_mode(target_mode: str) -> tuple[str, ...]:
+    """Return default targets for a dataset target mode."""
+    if target_mode == "event":
+        return TCN_EVENT_TARGETS
+    if target_mode == "phase":
+        return TCN_PHASE_TARGETS
+    options = ", ".join(TCN_TARGET_MODES)
+    raise ValueError(f"unsupported target_mode={target_mode}; use one of: {options}")
 
 
 def save_tcn_dataset_manifest(manifest: TcnDatasetManifest, path: Path) -> None:
@@ -336,7 +405,20 @@ def _target_for_row(
     row: FrameFeatureRow,
     labels: GestureLabelFile | None,
     targets: tuple[str, ...],
+    *,
+    target_mode: str,
 ) -> str:
+    if target_mode == "phase":
+        phase = (
+            row.phase
+            if row.phase and row.phase != "background"
+            else _phase_at(labels, row.timestamp)
+        )
+        if phase in {"stroke_left", "stroke_right"} and phase in targets:
+            return phase
+        if phase in {"recovery", "reset", "release", "cooldown"} and "recovery" in targets:
+            return "recovery"
+        return "background"
     event = row.event or _event_at(labels, row.timestamp)
     if event in targets and event != "background":
         return event
@@ -350,6 +432,18 @@ def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:
         if event.label_type == "gesture" and event.start_time <= timestamp <= event.end_time:
             return event.gesture
     return ""
+
+
+def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:
+    if labels is None:
+        return ""
+    fallback = ""
+    for phase in labels.phase_labels:
+        if phase.start_time <= timestamp <= phase.end_time:
+            if phase.phase != "background":
+                return phase.phase
+            fallback = phase.phase
+    return fallback
 
 
 def _windows_for_source(
@@ -446,7 +540,11 @@ def _validate_manifest_config(
     min_rows: int,
     min_gesture_fraction: float,
     targets: tuple[str, ...],
+    feature_preset: str,
+    target_mode: str,
 ) -> None:
+    feature_columns_for_preset(feature_preset)
+    targets_for_mode(target_mode)
     if "background" not in targets:
         raise ValueError("TCN targets must include background")
     if window_seconds <= 0:

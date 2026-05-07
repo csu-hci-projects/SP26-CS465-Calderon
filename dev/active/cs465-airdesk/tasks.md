@@ -106,10 +106,11 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams
 - [x] Explicitly defer LSTM/GRU unless the causal TCN/spotting path fails
 - [x] Document the May 2026 research pivot from window classification to continuous gesture spotting
-- [ ] Add a position-invariant TCN/stream-model feature preset
-- [ ] Add stream/phase labels for stroke vs recovery/reset
-- [ ] Add probability/candidate event decoder with hysteresis, confidence peaks, cooldown, and repeated-fire suppression
-- [ ] Add ordered-sequence labeling helper for chained streams when exact timestamps are unavailable
+- [x] Add a position-invariant TCN/stream-model feature preset
+- [x] Add stream/phase labels for stroke vs recovery/reset
+- [x] Add probability/candidate event decoder with hysteresis, confidence peaks, cooldown, and repeated-fire suppression
+- [x] Add ordered-sequence labeling helper for chained streams when exact timestamps are unavailable
+- [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke

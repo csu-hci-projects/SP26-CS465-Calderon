@@ -217,6 +217,21 @@ Current next step:
 
 Caden's live `watch-tcn` test showed that `swipe_left` works better than `swipe_right`, fast consecutive swipes are weak, and the model often needs the hand to reset before another gesture. This is consistent with the continuous-gesture literature: the hard problem is spotting gesture events inside an untrimmed stream, not classifying a clean fixed window.
 
+The first continuous-spotting implementation pass is now in place:
+
+- TCN manifests support `--feature-preset stream-invariant`, which excludes absolute `palm_x`, `palm_y`, and `palm_z`.
+- TCN manifests support `--target-mode phase`, with default targets `background`, `stroke_left`, `stroke_right`, and `recovery`.
+- Label files accept `recovery` / `reset` phases, and `airdesk label add-sequence` can create coarse ordered L/R stroke+recovery labels for chained sessions when exact timestamps are unavailable.
+- `airdesk gesture evaluate-tcn --event-decoder` and `airdesk gesture decode-candidates` add a replayable hysteresis/peak/cooldown decoder over probability or candidate streams.
+
+Initial replay evidence is still mixed:
+
+- Current gated DTW with window features remains the best isolated holdout result: 4/4 matched, 0 false activations, 0 repeated fires.
+- Current TCN with window features remains weak on the same holdout: 2/4 matched, 1 false activation, both held-out left swipes missed.
+- TCN plus the new event decoder on that holdout matched 3/4 but introduced 2 false activations at permissive thresholds, so the decoder is not a free reliability win.
+- A new stream-invariant phase TCN/event-decoder holdout smoke matched 2/4 with 1 false activation. The representation/target plumbing works, but the current local data is not enough to improve the model yet.
+- Decoding the looser chained-session DTW candidates reduced repeated fires from 2 to 0 on `sprint4-chained-003`, but also reduced matches from 8/10 to 6/10. This is useful filtering behavior, not enough evidence for live control.
+
 Updated stance:
 
 - treat the current TCN as a scaffold, not the destination;

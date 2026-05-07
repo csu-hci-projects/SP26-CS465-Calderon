@@ -19,6 +19,8 @@ PHASE_LABELS = frozenset(
         "armed",
         "stroke_left",
         "stroke_right",
+        "recovery",
+        "reset",
         "hold",
         "release",
         "cooldown",
@@ -275,6 +277,65 @@ def add_event_label(
     )
 
 
+def add_ordered_sequence_labels(
+    label_file: GestureLabelFile,
+    *,
+    sequence: list[str],
+    start_time: float,
+    end_time: float,
+    gesture_fraction: float = 0.65,
+    recovery_fraction: float = 0.35,
+    notes: str = "Coarse ordered-sequence label; refine timestamps before final training.",
+) -> GestureLabelFile:
+    """Return a copy with coarse event, stroke, and recovery labels for an ordered stream."""
+    if not sequence:
+        raise ValueError("sequence must contain at least one token")
+    if end_time <= start_time:
+        raise ValueError("end_time must be greater than start_time")
+    if gesture_fraction <= 0:
+        raise ValueError("gesture_fraction must be positive")
+    if recovery_fraction < 0:
+        raise ValueError("recovery_fraction must be non-negative")
+    slot_seconds = (end_time - start_time) / len(sequence)
+    active_fraction = gesture_fraction + recovery_fraction
+    if active_fraction > 1.0:
+        gesture_fraction = gesture_fraction / active_fraction
+        recovery_fraction = recovery_fraction / active_fraction
+
+    updated = label_file
+    for index, token in enumerate(sequence):
+        gesture, phase = _sequence_token_to_gesture(token)
+        slot_start = start_time + index * slot_seconds
+        stroke_end = slot_start + slot_seconds * gesture_fraction
+        slot_end = start_time + (index + 1) * slot_seconds
+        updated = add_phase_label(
+            updated,
+            phase=phase,
+            start_time=slot_start,
+            end_time=stroke_end,
+            gesture=gesture,
+            notes=notes,
+        )
+        if recovery_fraction > 0 and stroke_end < slot_end:
+            updated = add_phase_label(
+                updated,
+                phase="recovery",
+                start_time=stroke_end,
+                end_time=slot_end,
+                gesture=gesture,
+                notes=notes,
+            )
+        updated = add_event_label(
+            updated,
+            gesture=gesture,
+            start_time=slot_start,
+            end_time=stroke_end,
+            commit_time=stroke_end,
+            notes=notes,
+        )
+    return updated
+
+
 def _metadata_from_recording(
     recording_path: Path,
     *,
@@ -360,3 +421,12 @@ def _next_label_id(prefix: str, existing_ids: list[str]) -> str:
         except ValueError:
             continue
     return f"{prefix}-{max_id + 1:03d}"
+
+
+def _sequence_token_to_gesture(token: str) -> tuple[str, str]:
+    normalized = token.strip().lower()
+    if normalized in {"l", "left", "swipe_left", "stroke_left"}:
+        return "swipe_left", "stroke_left"
+    if normalized in {"r", "right", "swipe_right", "stroke_right"}:
+        return "swipe_right", "stroke_right"
+    raise ValueError(f"unsupported sequence token={token!r}; use L/R or swipe_left/swipe_right")

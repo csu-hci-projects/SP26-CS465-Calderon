@@ -12,10 +12,12 @@ from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
     GestureEventLabel,
     GestureLabelFile,
+    GesturePhaseLabel,
     SessionMetadata,
     save_label_file,
 )
 from airdesk.ml import (
+    TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
     CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
     build_feature_diagnostics_report,
@@ -131,6 +133,69 @@ def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path:
     assert manifest.sources[0].label_path == str(
         labels_dir / "swipe-right-positive-001.labels.json"
     )
+
+
+def test_build_tcn_manifest_supports_stream_invariant_phase_targets(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "chained.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="background"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_left"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="stroke_left"),
+            _row(timestamp=1.3, frame_index=3, event="", phase="recovery"),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            phase_labels=(
+                GesturePhaseLabel(
+                    label_id="phase-001",
+                    phase="stroke_left",
+                    start_time=1.1,
+                    end_time=1.2,
+                ),
+                GesturePhaseLabel(
+                    label_id="phase-002",
+                    phase="recovery",
+                    start_time=1.3,
+                    end_time=1.3,
+                ),
+            ),
+        ),
+        labels_dir / "chained.labels.json",
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.3,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        feature_preset="stream-invariant",
+        target_mode="phase",
+    )
+
+    assert manifest.targets == ("background", "stroke_left", "stroke_right", "recovery")
+    assert manifest.feature_columns == TCN_STREAM_INVARIANT_FEATURE_COLUMNS
+    assert "palm_x" not in manifest.feature_columns
+    assert "palm_y" not in manifest.feature_columns
+    assert "palm_z" not in manifest.feature_columns
+    assert manifest.feature_preset == "stream-invariant"
+    assert manifest.target_mode == "phase"
+    assert manifest.windows[0].target == "stroke_left"
 
 
 def test_save_tcn_dataset_manifest_writes_summary(tmp_path: Path) -> None:
@@ -466,6 +531,7 @@ def _row(
     timestamp: float,
     frame_index: int,
     event: str,
+    phase: str = "",
     palm_x: float = 0.5,
 ) -> FrameFeatureRow:
     return FrameFeatureRow(
@@ -497,6 +563,6 @@ def _row(
         hand_scale=0.2,
         extended_fingers=4,
         folded_fingers=0,
-        phase="",
+        phase=phase,
         event=event,
     )
