@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from math import ceil
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -86,6 +87,7 @@ class MediaPipeHandTrackerBackend:
     preview_extended_threshold: float = 0.08
     preview_pinch_threshold: float = 0.06
     preview_status_provider: Callable[[], str] | None = None
+    preview_chart_provider: Callable[[], dict[str, Any] | None] | None = None
     preview_key_handler: Callable[[int], bool] | None = None
     name: str = "mediapipe"
 
@@ -224,6 +226,10 @@ class MediaPipeHandTrackerBackend:
                 height=height,
                 candidate_names=candidates.get(hand.hand_id, ()),
             )
+        if self.preview_chart_provider is not None:
+            chart = self.preview_chart_provider()
+            if chart is not None:
+                self._draw_chart_overlay(display_image, chart)
         if self.preview_status_provider is not None:
             self._draw_alert_banner(display_image, self.preview_status_provider())
         self._draw_gesture_strip(display_image, candidates)
@@ -256,7 +262,7 @@ class MediaPipeHandTrackerBackend:
             scale=0.6,
             color=(240, 240, 240),
         )
-        if self.preview_status_provider is None:
+        if self.preview_status_provider is None or self.preview_chart_provider is not None:
             return
         status = self.preview_status_provider()
         self._put_text_fit(
@@ -272,6 +278,125 @@ class MediaPipeHandTrackerBackend:
                 else (230, 230, 230)
             ),
         )
+
+    def _draw_chart_overlay(self, image: Any, chart: dict[str, Any]) -> None:
+        assert self._cv2 is not None
+        height, width = image.shape[:2]
+        phase = str(chart.get("phase", "recording"))
+        label = str(chart.get("label", "chart"))
+        elapsed = float(chart.get("elapsed", 0.0))
+        duration = chart.get("duration")
+        segments = chart.get("segments", [])
+
+        panel_x = max(18, int(width * 0.06))
+        panel_y = max(82, int(height * 0.18))
+        panel_w = min(width - panel_x * 2, max(420, int(width * 0.88)))
+        panel_h = min(230, max(170, int(height * 0.38)))
+        self._cv2.rectangle(
+            image,
+            (panel_x, panel_y),
+            (panel_x + panel_w, panel_y + panel_h),
+            (18, 22, 28),
+            -1,
+        )
+        self._cv2.rectangle(
+            image,
+            (panel_x, panel_y),
+            (panel_x + panel_w, panel_y + panel_h),
+            (82, 92, 110),
+            2,
+        )
+
+        if phase == "waiting":
+            headline = "READY"
+            subline = f"{label} | press space"
+            accent = (255, 190, 60)
+        elif phase == "countdown":
+            remaining = float(chart.get("countdown_remaining", 0.0))
+            headline = f"{ceil(max(0.0, remaining))}"
+            subline = f"{label} starts next"
+            accent = (0, 220, 255)
+        else:
+            total = (
+                f"{elapsed:.1f}s"
+                if duration is None
+                else f"{elapsed:.1f}/{float(duration):.1f}s"
+            )
+            headline = str(chart.get("current_text", label))
+            subline = total
+            accent = _chart_segment_color(str(chart.get("current_kind", "prompt")))
+
+        self._cv2.rectangle(
+            image,
+            (panel_x, panel_y),
+            (panel_x + 10, panel_y + panel_h),
+            accent,
+            -1,
+        )
+        self._put_text_fit(
+            image=image,
+            text=headline,
+            x=panel_x + 24,
+            y=panel_y + 54,
+            max_width=panel_w - 48,
+            scale=1.25,
+            color=(255, 255, 255),
+            thickness=3,
+        )
+        self._put_text_fit(
+            image=image,
+            text=subline,
+            x=panel_x + 26,
+            y=panel_y + 88,
+            max_width=panel_w - 52,
+            scale=0.62,
+            color=(215, 220, 230),
+            thickness=2,
+        )
+        if phase != "recording":
+            return
+
+        lane_y = panel_y + panel_h - 74
+        focus_x = panel_x + int(panel_w * 0.28)
+        self._cv2.line(
+            image,
+            (focus_x, lane_y - 42),
+            (focus_x, lane_y + 42),
+            (245, 245, 245),
+            2,
+        )
+        self._cv2.circle(image, (focus_x, lane_y), 7, (245, 245, 245), -1)
+        pixels_per_second = max(54, int(panel_w * 0.12))
+        for item in segments:
+            if not isinstance(item, dict):
+                continue
+            start = float(item.get("start", 0.0))
+            end = float(item.get("end", start))
+            if end < elapsed - 1.2 or start > elapsed + 7.0:
+                continue
+            center_time = (start + end) / 2.0
+            x_center = focus_x + int((center_time - elapsed) * pixels_per_second)
+            card_w = min(190, max(72, int((end - start) * pixels_per_second)))
+            x0 = max(panel_x + 18, x_center - card_w // 2)
+            x1 = min(panel_x + panel_w - 18, x_center + card_w // 2)
+            y0 = lane_y - 24
+            y1 = lane_y + 24
+            kind = str(item.get("kind", "prompt"))
+            color = _chart_segment_color(kind)
+            if end <= elapsed:
+                color = tuple(int(channel * 0.45) for channel in color)
+            self._cv2.rectangle(image, (x0, y0), (x1, y1), color, -1)
+            self._cv2.rectangle(image, (x0, y0), (x1, y1), (250, 250, 250), 1)
+            self._put_text_fit(
+                image=image,
+                text=str(item.get("text", "")),
+                x=x0 + 8,
+                y=y0 + 31,
+                max_width=max(20, x1 - x0 - 16),
+                scale=0.58,
+                color=(255, 255, 255),
+                thickness=2,
+            )
 
     def _draw_alert_banner(self, image: Any, status: str) -> None:
         assert self._cv2 is not None
@@ -558,6 +683,18 @@ def pixel_point(
     x = min(width - 1, max(0, round(x_value * width)))
     y = min(height - 1, max(0, round(landmark.y * height)))
     return x, y
+
+
+def _chart_segment_color(kind: str) -> tuple[int, int, int]:
+    if kind == "cue":
+        return (0, 165, 255)
+    if kind == "stroke":
+        return (40, 190, 80)
+    if kind == "recovery":
+        return (210, 130, 45)
+    if kind == "rest":
+        return (95, 100, 112)
+    return (90, 120, 210)
 
 
 def bbox_pixels(

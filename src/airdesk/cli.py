@@ -806,6 +806,7 @@ def gesture_chart_record(
         extra_started_payload={
             "chart": _record_chart_payload(plan),
         },
+        chart_plan=plan,
     )
     typer.echo(
         f"chart recorded frames={frame_count} gestures={len(plan.gestures)} "
@@ -2047,6 +2048,7 @@ def record(
         max_frames=max_frames,
         show=show,
         extra_started_payload={},
+        chart_plan=None,
     )
     typer.echo(f"recorded frames={frame_count} out={out}")
 
@@ -2075,6 +2077,7 @@ def _record_tracking(
     max_frames: int | None,
     show: bool,
     extra_started_payload: dict[str, object],
+    chart_plan: RecordChartPlan | None,
 ) -> int:
     """Record normalized tracking frames with shared prompt/countdown behavior."""
     tracker = _make_tracker(
@@ -2095,9 +2098,18 @@ def _record_tracking(
     preview_state = {
         "phase": "waiting" if wait_for_space and show else "countdown",
         "quit": False,
+        "elapsed": 0.0,
+        "duration": duration,
+        "countdown_remaining": countdown,
     }
     if isinstance(tracker, MediaPipeHandTrackerBackend):
         tracker.preview_status_provider = lambda: status["text"]
+        if chart_plan is not None:
+            tracker.preview_chart_provider = lambda: _record_chart_preview_payload(
+                label=label or out.stem,
+                state=preview_state,
+                plan=chart_plan,
+            )
         tracker.preview_key_handler = lambda key: _handle_record_preview_key(
             key,
             preview_state,
@@ -2146,6 +2158,7 @@ def _record_tracking(
                         interrupted = True
                         break
                     if preview_state["phase"] == "waiting":
+                        preview_state["elapsed"] = 0.0
                         status["text"] = (
                             f"ready: {label or out.stem} | space=start q/esc=quit"
                         )
@@ -2156,6 +2169,7 @@ def _record_tracking(
                         countdown_elapsed = frame.timestamp - countdown_started_at
                         if countdown_elapsed < countdown:
                             remaining = countdown - countdown_elapsed
+                            preview_state["countdown_remaining"] = remaining
                             status["text"] = (
                                 f"countdown {remaining:.1f}s | {label or out.stem}"
                             )
@@ -2173,6 +2187,7 @@ def _record_tracking(
                     if duration is not None and recorded_elapsed >= duration:
                         status["text"] = f"done frames={frame_count} | q/esc quits"
                         break
+                    preview_state["elapsed"] = recorded_elapsed
                     status["text"] = _record_preview_status(
                         label=label or out.stem,
                         elapsed=recorded_elapsed,
@@ -2866,53 +2881,56 @@ def _parse_record_chart(
             )
             elapsed += rest_seconds
             continue
-        for token in tokens:
-            gesture, phase, display = _record_chart_token_to_gesture(token)
-            gesture_index += 1
-            cue_start = elapsed
-            stroke_start = cue_start + cue_seconds
-            stroke_end = stroke_start + gesture_seconds
-            recovery_end = stroke_end + recovery_seconds
-            if cue_seconds > 0:
-                segments.append(
-                    RecordPromptSegment(
-                        start=cue_start,
-                        end=stroke_start,
-                        text=f"{display} ready",
-                        kind="cue",
-                        gesture=display,
-                        block_index=block_index,
-                        gesture_index=gesture_index,
-                    )
-                )
+        block_gestures = [_record_chart_token_to_gesture(token) for token in tokens]
+        block_display = " ".join(display for _gesture, _phase, display in block_gestures)
+        cue_start = elapsed
+        stroke_start = cue_start + cue_seconds
+        stroke_duration = gesture_seconds * len(block_gestures)
+        stroke_end = stroke_start + stroke_duration
+        recovery_end = stroke_end + recovery_seconds
+        if cue_seconds > 0:
             segments.append(
                 RecordPromptSegment(
-                    start=stroke_start,
-                    end=stroke_end,
-                    text=f"SWIPE {display}",
-                    kind="stroke",
-                    gesture=display,
+                    start=cue_start,
+                    end=stroke_start,
+                    text=f"{block_display} ready",
+                    kind="cue",
+                    gesture=block_display,
                     block_index=block_index,
-                    gesture_index=gesture_index,
                 )
             )
-            if recovery_seconds > 0:
-                segments.append(
-                    RecordPromptSegment(
-                        start=stroke_end,
-                        end=recovery_end,
-                        text="reset",
-                        kind="recovery",
-                        gesture=display,
-                        block_index=block_index,
-                        gesture_index=gesture_index,
-                    )
+        segments.append(
+            RecordPromptSegment(
+                start=stroke_start,
+                end=stroke_end,
+                text=f"SWIPE {block_display}",
+                kind="stroke",
+                gesture=block_display,
+                block_index=block_index,
+            )
+        )
+        if recovery_seconds > 0:
+            segments.append(
+                RecordPromptSegment(
+                    start=stroke_end,
+                    end=recovery_end,
+                    text="reset",
+                    kind="recovery",
+                    gesture=block_display,
+                    block_index=block_index,
                 )
+            )
+        slot_seconds = stroke_duration / len(block_gestures)
+        for block_offset, (_token_gesture, _token_phase, _display) in enumerate(block_gestures):
+            gesture, phase, display = _token_gesture, _token_phase, _display
+            gesture_index += 1
+            token_start = stroke_start + block_offset * slot_seconds
+            token_end = stroke_start + (block_offset + 1) * slot_seconds
             gestures.append(
                 ChartGestureWindow(
                     start=cue_start,
-                    stroke_start=stroke_start,
-                    stroke_end=stroke_end,
+                    stroke_start=token_start,
+                    stroke_end=token_end,
                     recovery_end=recovery_end,
                     token=display,
                     gesture=gesture,
@@ -2921,7 +2939,7 @@ def _parse_record_chart(
                     gesture_index=gesture_index,
                 )
             )
-            elapsed = recovery_end
+        elapsed = recovery_end
     if not gestures:
         raise ValueError("chart must contain at least one R or L gesture")
     return RecordChartPlan(
@@ -2961,6 +2979,26 @@ def _record_chart_payload(plan: RecordChartPlan) -> dict[str, object]:
     }
 
 
+def _record_chart_preview_payload(
+    *,
+    label: str,
+    state: dict[str, object],
+    plan: RecordChartPlan,
+) -> dict[str, object]:
+    elapsed = float(state.get("elapsed", 0.0))
+    current = _record_prompt_segment_at(elapsed, plan.segments)
+    return {
+        "label": label,
+        "phase": state.get("phase", "recording"),
+        "elapsed": elapsed,
+        "duration": plan.duration,
+        "countdown_remaining": state.get("countdown_remaining", 0.0),
+        "current_text": current.text if current is not None else label,
+        "current_kind": current.kind if current is not None else "prompt",
+        "segments": [asdict(segment) for segment in plan.segments],
+    }
+
+
 def _write_chart_label_file(
     *,
     recording: Path,
@@ -2988,6 +3026,9 @@ def _write_chart_label_file(
 
     updated = label_file
     notes = "Generated from chart timing; refine before final training."
+    last_gesture_index_by_block = {
+        gesture.block_index: gesture.gesture_index for gesture in plan.gestures
+    }
     for gesture in plan.gestures:
         stroke_start = recording_start + gesture.stroke_start
         stroke_end = recording_start + gesture.stroke_end
@@ -2999,7 +3040,10 @@ def _write_chart_label_file(
             gesture=gesture.gesture,
             notes=notes,
         )
-        if gesture.recovery_end > gesture.stroke_end:
+        if (
+            gesture.gesture_index == last_gesture_index_by_block[gesture.block_index]
+            and gesture.recovery_end > gesture.stroke_end
+        ):
             updated = add_phase_label(
                 updated,
                 phase="recovery",

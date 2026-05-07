@@ -223,7 +223,7 @@ For structured chained takes, `record --show` can display a countdown and prompt
 scripts/airdesk-nvidia-mediapipe-wayland record --out data/recordings/sprint4-gpu-swipes-002-structured/structured-a-right-heavy.jsonl --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 82 --countdown 3 --wait-for-space --label structured-a-right-heavy --hand-delegate gpu --show --segment "0:10:R R" --segment "10:20:rest" --segment "20:30:R L" --segment "30:40:rest" --segment "40:50:R R R" --segment "50:60:rest" --segment "60:70:R L R" --segment "70:80:rest"
 ```
 
-The faster path is now the chart recorder. It expands a compact pattern into get-ready, stroke, reset, and rest prompt windows; waits for space by default; and writes coarse stroke/recovery/event labels beside the recording:
+The faster path is now the chart recorder. It expands a compact pattern into an on-screen colored timing lane with get-ready, stroke, reset, and rest windows; waits for space by default; and writes coarse stroke/recovery/event labels beside the recording. A combo block such as `RRR` stays grouped as one active prompt (`SWIPE R R R`) so the individual swipes can happen at a natural pace inside that block instead of being flashed one at a time:
 
 ```bash
 scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-002-structured/chart-a-right-heavy.jsonl --chart "RR | rest | RL | rest | RRR | rest | RLR | rest" --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show

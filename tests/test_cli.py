@@ -853,7 +853,7 @@ def test_record_chart_expands_compact_pattern_with_cues_and_labels() -> None:
         rest_seconds=3.0,
     )
 
-    assert plan.duration == 11.0
+    assert plan.duration == 8.0
     assert [gesture.token for gesture in plan.gestures] == ["R", "R", "R", "L"]
     assert [gesture.gesture for gesture in plan.gestures] == [
         "swipe_right",
@@ -866,13 +866,13 @@ def test_record_chart_expands_compact_pattern_with_cues_and_labels() -> None:
         elapsed=0.2,
         duration=plan.duration,
         segments=plan.segments,
-    ) == "recording 0.2/11.0s | GET READY R in 1 | NEXT SWIPE R"
+    ) == "recording 0.2/8.0s | GET READY R R in 1 | NEXT SWIPE R R"
     assert _record_preview_status(
         label="chart",
         elapsed=1.1,
         duration=plan.duration,
         segments=plan.segments,
-    ) == "recording 1.1/11.0s | SWIPE R | 0.4s | NEXT reset"
+    ) == "recording 1.1/8.0s | SWIPE R R | 0.9s | NEXT reset"
 
 
 def test_record_preview_key_can_start_and_quit() -> None:
@@ -1054,9 +1054,8 @@ def test_chart_label_command_writes_coarse_stroke_and_recovery_labels(tmp_path: 
     assert result.exit_code == 0
     label_file = load_label_file(labels)
     assert [event.gesture for event in label_file.event_labels] == ["swipe_right", "swipe_left"]
-    assert [phase.phase for phase in label_file.phase_labels[-4:]] == [
+    assert [phase.phase for phase in label_file.phase_labels[-3:]] == [
         "stroke_right",
-        "recovery",
         "stroke_left",
         "recovery",
     ]
