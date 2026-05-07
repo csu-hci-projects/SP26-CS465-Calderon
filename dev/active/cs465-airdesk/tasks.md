@@ -34,6 +34,8 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Tune webcam exposure/focus/FPS settings where possible
 - [x] Expose MediaPipe model/threshold/hand-count tuning knobs
 - [x] Add live backend benchmark command for FPS and hand-present frames
+- [x] Add live MediaPipe timing breakdown for capture, inference, preview, and total loop cost
+- [x] Add opt-in NVIDIA EGL launcher for T550 MediaPipe GPU testing on Hyprland/Arch
 - [x] Run MediaPipe hand tracking locally
 - [x] Draw/debug 21 hand landmarks
 - [ ] Measure landmark stability under normal desk lighting

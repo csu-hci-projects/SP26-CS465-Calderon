@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from airdesk.cli import _handle_collection_preview_key, app
+from airdesk.cli import _format_tracker_timing, _handle_collection_preview_key, app
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import GestureEventLabel, GestureLabelFile, SessionMetadata, save_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
@@ -73,6 +73,27 @@ def test_benchmark_replay_reports_frame_counts() -> None:
     assert "frames=1" in result.stdout
     assert "hand_frames=0" in result.stdout
     assert "average_fps=unknown" in result.stdout
+
+
+def test_tracker_timing_summary_reports_mean_and_p95() -> None:
+    class FakeTiming:
+        def __init__(self, value: float) -> None:
+            self.capture_read_ms = value
+            self.color_convert_ms = value + 1
+            self.inference_ms = value + 2
+            self.normalize_ms = value + 3
+            self.preview_draw_ms = 0.0
+            self.total_ms = value + 4
+
+    class FakeTracker:
+        name = "fake"
+        timing_samples = [FakeTiming(1.0), FakeTiming(3.0)]
+
+    summary = _format_tracker_timing(FakeTracker())
+
+    assert "timing_frames=2" in summary
+    assert "capture_read_mean_ms=2.00" in summary
+    assert "mediapipe_inference_p95_ms=5.00" in summary
 
 
 def test_run_help_exposes_live_tuning_options() -> None:

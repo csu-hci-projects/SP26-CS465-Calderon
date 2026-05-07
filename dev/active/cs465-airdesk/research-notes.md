@@ -67,6 +67,14 @@ Sprint 2 implementation note:
 - CLI live commands default to one hand because lower latency matters more than two-hand recognition until the gesture vocabulary requires both hands.
 - Use `airdesk benchmark` to compare model bundles, hand count, confidence thresholds, camera modes, hand-present frames, and average FPS before changing defaults.
 
+May 2026 T550/Arch implementation note:
+
+- MediaPipe GPU support on Linux is EGL/OpenGL ES based, not CUDA-first for the Python Tasks Hand Landmarker path.
+- On Caden's Hyprland hybrid-graphics setup, `prime-run glxinfo` can report the T550 while MediaPipe still initializes EGL on Intel/Mesa.
+- A working local T550 path is now captured by `scripts/airdesk-nvidia-mediapipe-wayland`, which sets the NVIDIA GLVND EGL vendor file and `EGL_PLATFORM=wayland` before Python starts.
+- Confirm the path from MediaPipe's startup log: it should include `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
+- Short local smoke timings showed the T550 GPU delegate reducing MediaPipe inference to about 4 ms per frame, while capture remains camera-paced around 30 FPS. This is promising for fast swipes, but tracking quality still needs hand-in-frame benchmark runs under real movement and lighting.
+
 References:
 
 - https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/python

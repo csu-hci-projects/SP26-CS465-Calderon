@@ -85,6 +85,39 @@ uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 
 
 Lower thresholds may keep hands present through motion but can admit shakier detections. Higher thresholds may reduce false positives but can drop hands during fast movement. Record the FPS, hand-present frames, lighting, and visible jitter for each setup.
 
+## NVIDIA T550 / Hyprland GPU Path
+
+On Caden's current Arch/Hyprland hybrid-graphics setup, plain `--hand-delegate gpu` can initialize MediaPipe on the Intel/Mesa EGL renderer even though `prime-run glxinfo` uses the T550. MediaPipe's GPU delegate uses EGL/OpenGL ES, so the useful local check is the MediaPipe startup log, not just `glxinfo`.
+
+The working opt-in launcher is:
+
+```bash
+scripts/airdesk-nvidia-mediapipe-wayland benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --max-frames 120
+```
+
+Use the same launcher for live previews:
+
+```bash
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+```
+
+A successful T550 MediaPipe run prints a startup line like:
+
+```text
+GL version: 3.2 (OpenGL ES 3.2 NVIDIA ...), renderer: NVIDIA T550 Laptop GPU/PCIe/SSE2
+```
+
+If it prints `Mesa Intel(R) Iris(R) Xe Graphics`, MediaPipe is using the integrated GPU path. If it fails with `eglGetDisplay`, check that `/usr/share/glvnd/egl_vendor.d/10_nvidia.json` exists and that the launcher is being used from the repo root. The launcher sets `__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json`, and `EGL_PLATFORM=wayland` before Python starts; setting these inside the Python backend was not reliable because GLVND/EGL selection can happen before backend initialization.
+
+Short smoke evidence from 2026-05-06 on `/dev/video0` at `640x480 @ 30 FPS MJPG`:
+
+- CPU delegate on Intel/Mesa EGL: MediaPipe inference mean about `16.84 ms`, p95 about `22.39 ms`.
+- Plain GPU delegate on Intel/Mesa EGL: MediaPipe inference mean about `13.60 ms`, p95 about `19.89 ms`.
+- NVIDIA launcher plus GPU delegate on T550: MediaPipe inference mean about `4.17 ms`, p95 about `3.91 ms` in a 20-frame smoke.
+
+Treat those as bounded startup smokes, not final tracking-quality evidence. The benchmark now reports timing slices for capture read, color conversion, MediaPipe inference, normalization, preview draw, and total loop time. Capture read is camera-paced and often dominates at 30 FPS; the key T550 win is inference headroom and lower tracking latency under real hand motion.
+
 If a heavier or alternate Hand Landmarker `.task` bundle is available, keep it in ignored `data/models/` and compare it directly:
 
 ```bash

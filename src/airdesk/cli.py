@@ -2072,6 +2072,9 @@ def benchmark(
         f"min_presence={min_presence_confidence:.2f} "
         f"min_tracking={min_tracking_confidence:.2f}"
     )
+    timing_text = _format_tracker_timing(tracker)
+    if timing_text:
+        typer.echo(timing_text)
 
 
 @app.command()
@@ -2850,6 +2853,42 @@ def _average_fps_from_timestamps(timestamps: list[float]) -> float | None:
     if not intervals:
         return None
     return 1.0 / fmean(intervals)
+
+
+def _format_tracker_timing(tracker: HandTrackerBackend) -> str:
+    samples = getattr(tracker, "timing_samples", None)
+    if not samples:
+        return ""
+    fields = (
+        ("capture_read", "capture_read_ms"),
+        ("color_convert", "color_convert_ms"),
+        ("mediapipe_inference", "inference_ms"),
+        ("normalize", "normalize_ms"),
+        ("preview_draw", "preview_draw_ms"),
+        ("tracker_total", "total_ms"),
+    )
+    parts = [f"timing_frames={len(samples)}"]
+    for label, attr in fields:
+        values = [
+            float(value)
+            for sample in samples
+            if (value := getattr(sample, attr, None)) is not None
+        ]
+        if not values:
+            continue
+        parts.append(f"{label}_mean_ms={fmean(values):.2f}")
+        parts.append(f"{label}_p95_ms={_percentile(values, 0.95):.2f}")
+    return " ".join(parts)
+
+
+def _percentile(values: list[float], quantile: float) -> float:
+    if not values:
+        raise ValueError("percentile requires at least one value")
+    if len(values) == 1:
+        return values[0]
+    ordered = sorted(values)
+    index = round((len(ordered) - 1) * quantile)
+    return ordered[index]
 
 
 def _sequence_token(value: str) -> str:

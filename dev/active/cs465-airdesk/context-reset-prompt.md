@@ -99,6 +99,8 @@ Important live findings:
 - CLI live commands default to one tracked hand for latency.
 - MediaPipe Tasks exposes model asset path and confidence/hand-count options, not the old `model_complexity` flag.
 - `/dev/video0` does not appear to support 60 FPS; requesting `640x480 @ 60 FPS MJPG` falls back to 30 FPS.
+- On Caden's Hyprland/Arch/T550 setup, use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` when testing MediaPipe GPU tracking on the T550. Plain `--hand-delegate gpu` may still use Intel/Mesa EGL. Confirm the MediaPipe startup log contains `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
+- `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection remains pending.
 

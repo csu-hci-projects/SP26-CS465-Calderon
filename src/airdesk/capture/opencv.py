@@ -8,6 +8,7 @@ import subprocess
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from airdesk.state.types import CapturedFrame, FrameMetadata, utc_timestamp
@@ -145,6 +146,7 @@ class OpenCVCaptureBackend:
     def __post_init__(self) -> None:
         self._cv2: Any | None = None
         self._capture: Any | None = None
+        self.last_read_duration_ms: float | None = None
 
     def start(self) -> None:
         self._cv2 = _import_cv2()
@@ -165,7 +167,9 @@ class OpenCVCaptureBackend:
         assert self._capture is not None
         sequence = 0
         while self.max_frames is None or sequence < self.max_frames:
+            read_started_at = perf_counter()
             ok, image = self._capture.read()
+            self.last_read_duration_ms = (perf_counter() - read_started_at) * 1000
             if not ok or image is None:
                 break
             sequence += 1

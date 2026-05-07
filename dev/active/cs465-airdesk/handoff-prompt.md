@@ -145,6 +145,8 @@ Current implementation state:
 Current hardware/evidence findings:
 
 - `/dev/video0` works reliably at `640x480 @ 30 FPS MJPG`; requesting 60 FPS falls back to 30 FPS.
+- On the current Hyprland/Arch/T550 laptop, plain MediaPipe `--hand-delegate gpu` can initialize on Intel/Mesa EGL. Use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` for T550 testing; confirm the MediaPipe log says `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
+- `airdesk benchmark` reports timing slices for capture read, MediaPipe inference, preview drawing, and total loop cost. Short bounded smokes showed T550 GPU inference around 4 ms per frame, while camera capture remains the 30 FPS pacing limit.
 - Hyprland supports `hyprctl dispatch movecursor x y`.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection is still pending.
 - Raw data and generated labels/features/evaluations live under ignored `data/` and should not be committed unless Caden explicitly asks.

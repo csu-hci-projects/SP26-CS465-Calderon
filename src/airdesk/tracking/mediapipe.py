@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 from urllib.request import urlretrieve
 
@@ -53,6 +54,18 @@ HAND_CONNECTIONS = (
 )
 
 
+@dataclass(frozen=True)
+class MediaPipeTimingSample:
+    """Per-frame live tracking timing sample in milliseconds."""
+
+    capture_read_ms: float | None
+    color_convert_ms: float
+    inference_ms: float
+    normalize_ms: float
+    preview_draw_ms: float
+    total_ms: float
+
+
 @dataclass
 class MediaPipeHandTrackerBackend:
     """Live hand tracker backed by MediaPipe Hands."""
@@ -81,6 +94,7 @@ class MediaPipeHandTrackerBackend:
         self._mp: Any | None = None
         self._landmarker: Any | None = None
         self._capture: OpenCVCaptureBackend | None = None
+        self.timing_samples: list[MediaPipeTimingSample] = []
 
     def start(self) -> None:
         try:
@@ -141,6 +155,7 @@ class MediaPipeHandTrackerBackend:
 
         try:
             for captured in self._capture.frames():
+                frame_started_at = perf_counter()
                 if captured.image is None:
                     yield TrackingFrame(
                         timestamp=captured.metadata.timestamp,
@@ -150,19 +165,41 @@ class MediaPipeHandTrackerBackend:
                     continue
 
                 image = captured.image
+                color_started_at = perf_counter()
                 rgb = self._cv2.cvtColor(image, self._cv2.COLOR_BGR2RGB)
+                color_convert_ms = (perf_counter() - color_started_at) * 1000
                 media_image = self._mp.Image(
                     image_format=self._mp.ImageFormat.SRGB,
                     data=rgb,
                 )
+                inference_started_at = perf_counter()
                 results = self._landmarker.detect_for_video(
                     media_image,
                     int(captured.metadata.timestamp * 1000),
                 )
+                inference_ms = (perf_counter() - inference_started_at) * 1000
+                normalize_started_at = perf_counter()
                 hands = normalized_hands_from_mediapipe_results(results)
+                normalize_ms = (perf_counter() - normalize_started_at) * 1000
 
+                preview_draw_ms = 0.0
                 if self.show and not self._draw_debug_image(image, hands):
                     break
+                if self.show:
+                    preview_draw_ms = (perf_counter() - normalize_started_at) * 1000 - normalize_ms
+                self.timing_samples.append(
+                    MediaPipeTimingSample(
+                        capture_read_ms=self._capture.last_read_duration_ms,
+                        color_convert_ms=color_convert_ms,
+                        inference_ms=inference_ms,
+                        normalize_ms=normalize_ms,
+                        preview_draw_ms=preview_draw_ms,
+                        total_ms=(
+                            (self._capture.last_read_duration_ms or 0.0)
+                            + (perf_counter() - frame_started_at) * 1000
+                        ),
+                    )
+                )
 
                 yield TrackingFrame(
                     timestamp=captured.metadata.timestamp,

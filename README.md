@@ -44,6 +44,7 @@ uv run airdesk view --device /dev/video0
 uv run airdesk tune --device /dev/video0 --max-frames 300 --show
 uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120
 uv run airdesk benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --max-frames 120
+scripts/airdesk-nvidia-mediapipe-wayland benchmark --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --max-frames 120
 uv run airdesk track --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --no-show
 uv run airdesk record --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-frames 120 --out data/recordings/sample.jsonl
 uv run airdesk replay data/recordings/sample.jsonl
@@ -53,6 +54,7 @@ uv run airdesk analyze data/recordings/sample.jsonl
 The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model bundle into ignored `data/models/` on first use.
 MediaPipe tuning flags include `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`.
 Live TCN/DTW watch commands also expose `--hand-delegate cpu|gpu`; CPU remains the default until the local GPU path is benchmarked on the T550.
+On Caden's Hyprland/Arch/T550 setup, plain `--hand-delegate gpu` can still initialize MediaPipe on the Intel/Mesa EGL renderer. Use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` to launch AirDesk with the NVIDIA GLVND EGL vendor and Wayland EGL platform selected before Python starts. A successful T550 path prints a MediaPipe log line containing `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 The CLI defaults to one hand for lower latency; use `--max-num-hands 2` when comparing two-hand tracking.
 
 Offline ML training is also optional:
@@ -93,6 +95,7 @@ uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-swi
 uv run airdesk gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout.json
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary-gated.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --negative-distance-margin 1.3 --min-palm-dx-fraction 0.65
 uv run airdesk gesture holdout-tcn --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-tcn-holdout/summary.json --model-out data/models/gestures/tcn-sprint4-swipes-001-holdout.pt
