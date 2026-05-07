@@ -121,6 +121,7 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert result.exit_code == 0
     assert "--model" in result.stdout
     assert "--hand-model-path" in result.stdout
+    assert "--hand-delegate" in result.stdout
     assert "--confidence-threshold" in result.stdout
 
 
@@ -130,6 +131,7 @@ def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
     assert result.exit_code == 0
     assert "--model" in result.stdout
     assert "--hand-model-path" in result.stdout
+    assert "--hand-delegate" in result.stdout
     assert "--watch-stride-seconds" in result.stdout
 
 

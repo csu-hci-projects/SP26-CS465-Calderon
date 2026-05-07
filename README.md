@@ -51,6 +51,7 @@ uv run airdesk analyze data/recordings/sample.jsonl
 
 The MediaPipe backend uses the Tasks Hand Landmarker API and downloads the model bundle into ignored `data/models/` on first use.
 MediaPipe tuning flags include `--model-path`, `--max-num-hands`, `--min-detection-confidence`, `--min-presence-confidence`, and `--min-tracking-confidence`.
+Live TCN/DTW watch commands also expose `--hand-delegate cpu|gpu`; CPU remains the default until the local GPU path is benchmarked on the T550.
 The CLI defaults to one hand for lower latency; use `--max-num-hands 2` when comparing two-hand tracking.
 
 Offline ML training is also optional:
@@ -90,6 +91,7 @@ uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-sw
 uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-swipes-001-manifest.json --out data/models/gestures/tcn-sprint4-swipes-001.pt --epochs 25
 uv run airdesk gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
+uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout.json
 uv run airdesk gesture holdout-dtw --recordings-dir data/recordings/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-dtw-holdout/summary-gated.json --model-out data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-gated.json --negative-distance-margin 1.3 --min-palm-dx-fraction 0.65
 uv run airdesk gesture holdout-tcn --features-dir data/features/sprint4-swipes-001 --labels-dir data/labels/sprint4-swipes-001 --out data/evaluations/sprint4-swipes-001-tcn-holdout/summary.json --model-out data/models/gestures/tcn-sprint4-swipes-001-holdout.pt

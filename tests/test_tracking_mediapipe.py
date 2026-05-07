@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from airdesk.tracking.mediapipe import (
+    _base_options_delegate,
     bbox_pixels,
     hand_label,
     normalized_hands_from_mediapipe_results,
@@ -94,3 +95,15 @@ def test_hand_label_includes_handedness_and_confidence() -> None:
     )
 
     assert hand_label(hands[0]) == "Left 0.88"
+
+
+def test_base_options_delegate_maps_cpu_and_gpu() -> None:
+    class FakeDelegate:
+        CPU = "cpu"
+        GPU = "gpu"
+
+    class FakeBaseOptions:
+        Delegate = FakeDelegate
+
+    assert _base_options_delegate(FakeBaseOptions, "cpu") == "cpu"
+    assert _base_options_delegate(FakeBaseOptions, "gpu") == "gpu"

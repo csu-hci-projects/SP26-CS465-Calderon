@@ -84,6 +84,7 @@ from airdesk.state.types import (
 )
 from airdesk.tracking.interfaces import HandTrackerBackend
 from airdesk.tracking.mediapipe import (
+    DEFAULT_HAND_LANDMARKER_DELEGATE,
     DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
     DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     DEFAULT_HAND_LANDMARKER_MODEL,
@@ -1017,6 +1018,10 @@ def gesture_watch_tcn(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --hand-model-path if missing."),
@@ -1059,6 +1064,7 @@ def gesture_watch_tcn(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
         preview_mirror=mirror,
     )
     stream = FeatureRowStream()
@@ -1146,6 +1152,10 @@ def gesture_watch_dtw(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --hand-model-path if missing."),
@@ -1187,6 +1197,7 @@ def gesture_watch_dtw(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
         preview_mirror=mirror,
     )
     recognizer = DtwTemplateRecognizer(dtw_model)
@@ -3009,6 +3020,7 @@ def _make_tracker(
     min_detection_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     min_presence_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     min_tracking_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    delegate: str = DEFAULT_HAND_LANDMARKER_DELEGATE,
     preview_mirror: bool = True,
     preview_extended_threshold: float = 0.08,
     preview_pinch_threshold: float = 0.06,
@@ -3026,6 +3038,7 @@ def _make_tracker(
             min_detection_confidence=min_detection_confidence,
             min_hand_presence_confidence=min_presence_confidence,
             min_tracking_confidence=min_tracking_confidence,
+            delegate=delegate,
             show=show,
             preview_mirror=preview_mirror,
             preview_extended_threshold=preview_extended_threshold,

@@ -25,6 +25,7 @@ HAND_LANDMARKER_MODEL_URL = (
 DEFAULT_HAND_LANDMARKER_MODEL = Path("data/models/hand_landmarker.task")
 DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS = 1
 DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE = 0.5
+DEFAULT_HAND_LANDMARKER_DELEGATE = "cpu"
 PREVIEW_WINDOW_NAME = "AirDesk live view"
 
 HAND_CONNECTIONS = (
@@ -65,6 +66,7 @@ class MediaPipeHandTrackerBackend:
     min_detection_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
     min_hand_presence_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
     min_tracking_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE
+    delegate: str = DEFAULT_HAND_LANDMARKER_DELEGATE
     show: bool = False
     preview_mirror: bool = True
     preview_gestures: bool = True
@@ -101,8 +103,9 @@ class MediaPipeHandTrackerBackend:
         )
         self._cv2 = cv2
         self._mp = mp
+        delegate = _base_options_delegate(BaseOptions, self.delegate)
         options = HandLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(model_path)),
+            base_options=BaseOptions(model_asset_path=str(model_path), delegate=delegate),
             running_mode=RunningMode.VIDEO,
             num_hands=self.max_num_hands,
             min_hand_detection_confidence=self.min_detection_confidence,
@@ -495,6 +498,15 @@ def ensure_hand_landmarker_model(
     path.parent.mkdir(parents=True, exist_ok=True)
     urlretrieve(HAND_LANDMARKER_MODEL_URL, path)
     return path
+
+
+def _base_options_delegate(base_options: Any, delegate: str) -> Any:
+    normalized = delegate.strip().lower()
+    if normalized == "cpu":
+        return base_options.Delegate.CPU
+    if normalized == "gpu":
+        return base_options.Delegate.GPU
+    raise RuntimeError("MediaPipe delegate must be 'cpu' or 'gpu'")
 
 
 def pixel_point(
