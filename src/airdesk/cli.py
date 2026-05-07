@@ -3040,10 +3040,11 @@ def _write_chart_label_file(
         raise ValueError("recording has no tracking frames; cannot create chart labels")
     recording_start = label_file.session.start_timestamp
     recording_end = label_file.session.end_timestamp
-    if recording_end is not None and recording_end - recording_start + 1e-6 < plan.duration:
+    required_duration = max(gesture.recovery_end for gesture in plan.gestures)
+    if recording_end is not None and recording_end - recording_start + 1e-6 < required_duration:
         raise ValueError(
-            "recording is shorter than the chart duration; rerun the take or pass the "
-            "same chart timing used during recording"
+            "recording ended before the final gesture/recovery label window; rerun the take "
+            "or pass the same chart timing used during recording"
         )
 
     updated = label_file

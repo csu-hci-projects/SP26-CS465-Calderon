@@ -1062,6 +1062,54 @@ def test_chart_label_command_writes_coarse_stroke_and_recovery_labels(tmp_path: 
     ]
 
 
+def test_chart_label_allows_recording_to_end_during_trailing_rest(tmp_path: Path) -> None:
+    recording = tmp_path / "chart-rest-cut.jsonl"
+    labels = tmp_path / "chart-rest-cut.labels.json"
+    with JsonlRecordingWriter(recording) as writer:
+        for sequence in range(8):
+            frame = FrameMetadata(
+                timestamp=10.0 + sequence,
+                source_id="test",
+                width=640,
+                height=480,
+                sequence=sequence,
+            )
+            writer.write_tracking_frame(
+                TrackingFrame(
+                    timestamp=frame.timestamp,
+                    source_id="test",
+                    frame=frame,
+                    hands=(),
+                )
+            )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "chart-label",
+            str(recording),
+            "--chart",
+            "R | rest",
+            "--out",
+            str(labels),
+            "--lead-in-seconds",
+            "1",
+            "--cue-seconds",
+            "1",
+            "--gesture-seconds",
+            "1",
+            "--recovery-seconds",
+            "1",
+            "--rest-seconds",
+            "10",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert labels.exists()
+
+
 def _write_cli_motion_recording(
     path: Path,
     *,
