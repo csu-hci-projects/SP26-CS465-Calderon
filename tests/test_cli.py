@@ -1075,6 +1075,57 @@ def test_chart_label_command_writes_coarse_stroke_and_recovery_labels(tmp_path: 
     ]
 
 
+def test_refine_chart_labels_help_exposes_motion_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "refine-chart-labels", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--features-dir" in result.stdout
+    assert "--search-padding-seconds" in result.stdout
+    assert "--min-motion-score" in result.stdout
+
+
+def test_refine_chart_labels_writes_diagnostic_report(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    out_dir = tmp_path / "refined"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "chart-a.csv"
+    labels = labels_dir / "chart-a.labels.json"
+    report = tmp_path / "report.json"
+    _write_feature_csv(features, events=("", "swipe_right", "swipe_right", ""))
+    _write_feature_label(labels, gesture="swipe_right")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "refine-chart-labels",
+            "--features-dir",
+            str(features_dir),
+            "--labels-dir",
+            str(labels_dir),
+            "--out-dir",
+            str(out_dir),
+            "--report",
+            str(report),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "status=diagnostic_only" in result.stdout
+    assert load_label_file(out_dir / "chart-a.labels.json").event_labels[0].gesture == (
+        "swipe_right"
+    )
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["status"] == "diagnostic_only"
+    assert payload["summary"]["refined_events"] == 1
+
+
 def test_chart_label_allows_recording_to_end_during_trailing_rest(tmp_path: Path) -> None:
     recording = tmp_path / "chart-rest-cut.jsonl"
     labels = tmp_path / "chart-rest-cut.labels.json"

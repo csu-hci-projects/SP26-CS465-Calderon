@@ -28,6 +28,11 @@ from airdesk.ml.diagnostics import (
     save_feature_diagnostics_report,
     split_feature_holdout,
 )
+from airdesk.ml.label_refinement import (
+    RefinedGestureLabel,
+    RefinedLabelFileResult,
+    refine_motion_aligned_label_file,
+)
 from airdesk.ml.train import (
     CausalTcnLivePrediction,
     CausalTcnLivePredictor,
@@ -58,9 +63,12 @@ __all__ = [
     "FeatureDiagnosticsReport",
     "FeatureFileDiagnostic",
     "FeatureHoldoutSplit",
+    "RefinedGestureLabel",
+    "RefinedLabelFileResult",
     "load_feature_rows_csv",
     "load_tcn_dataset_manifest",
     "build_feature_diagnostics_report",
+    "refine_motion_aligned_label_file",
     "CausalTcnPrediction",
     "CausalTcnLivePrediction",
     "CausalTcnLivePredictor",

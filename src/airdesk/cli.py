@@ -69,6 +69,7 @@ from airdesk.ml import (
     MissingMlDependencyError,
     build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
+    refine_motion_aligned_label_file,
     save_feature_diagnostics_report,
     save_tcn_dataset_manifest,
     train_causal_tcn,
@@ -880,6 +881,112 @@ def gesture_chart_label(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"wrote chart_labels={output} gestures={len(plan.gestures)}")
+
+
+@gesture_app.command("refine-chart-labels")
+def gesture_refine_chart_labels(
+    features_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Feature CSV directory."),
+    ],
+    labels_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Source label directory."),
+    ],
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Output directory for experimental refined label copies."),
+    ],
+    report: Annotated[
+        Path | None,
+        typer.Option(help="Optional JSON report path for refinement diagnostics."),
+    ] = None,
+    pattern: Annotated[str, typer.Option(help="Feature filename glob pattern.")] = "*.csv",
+    search_padding_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds before/after each prompt label to search for motion peaks."),
+    ] = 1.5,
+    min_motion_score: Annotated[
+        float,
+        typer.Option(help="Minimum absolute hand-normalized window displacement to refine."),
+    ] = 0.35,
+    min_direction_consistency: Annotated[
+        float,
+        typer.Option(help="Minimum same-direction motion consistency for refinement peaks."),
+    ] = 0.35,
+    stroke_seconds: Annotated[
+        float | None,
+        typer.Option(help="Override refined stroke duration; defaults to original label duration."),
+    ] = None,
+    recovery_seconds: Annotated[
+        float,
+        typer.Option(help="Recovery phase duration to write after each refined stroke."),
+    ] = 0.35,
+) -> None:
+    """Write non-destructive experimental motion-aligned label copies for chart data."""
+    feature_paths = sorted(features_dir.glob(pattern))
+    if not feature_paths:
+        typer.echo(f"No feature CSV files matched {features_dir}/{pattern}", err=True)
+        raise typer.Exit(code=1)
+    reports: list[dict[str, object]] = []
+    refined_count = 0
+    changed_count = 0
+    for feature_path in feature_paths:
+        label_path = labels_dir / f"{feature_path.stem}.labels.json"
+        if not label_path.exists():
+            typer.echo(f"Missing label file for features={feature_path}: {label_path}", err=True)
+            raise typer.Exit(code=1)
+        try:
+            result = refine_motion_aligned_label_file(
+                feature_path=feature_path,
+                label_path=label_path,
+                search_padding_seconds=search_padding_seconds,
+                min_motion_score=min_motion_score,
+                min_direction_consistency=min_direction_consistency,
+                stroke_seconds=stroke_seconds,
+                recovery_seconds=recovery_seconds,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+        output = out_dir / label_path.name
+        _save_valid_label_file(result.label_file, output)
+        reports.append({**result.to_dict(), "output_label_path": str(output)})
+        refined_count += len(result.refined_events)
+        changed_count += sum(1 for item in result.refined_events if item.changed)
+    payload = {
+        "status": "diagnostic_only",
+        "warning": (
+            "Motion-peak refined labels are experimental weak labels. "
+            "Do not treat them as training truth until they beat prompt labels on holdout replay."
+        ),
+        "features_dir": str(features_dir),
+        "labels_dir": str(labels_dir),
+        "out_dir": str(out_dir),
+        "pattern": pattern,
+        "search_padding_seconds": search_padding_seconds,
+        "min_motion_score": min_motion_score,
+        "min_direction_consistency": min_direction_consistency,
+        "stroke_seconds": stroke_seconds,
+        "recovery_seconds": recovery_seconds,
+        "files": reports,
+        "summary": {
+            "files": len(reports),
+            "refined_events": refined_count,
+            "changed_events": changed_count,
+        },
+    }
+    if report is not None:
+        report.parent.mkdir(parents=True, exist_ok=True)
+        with report.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    typer.echo(
+        f"refined_chart_labels files={len(reports)} events={refined_count} "
+        f"changed={changed_count} out_dir={out_dir} status=diagnostic_only"
+    )
+    if report is not None:
+        typer.echo(f"wrote refinement_report={report}")
 
 
 @gesture_app.command("decode-candidates")

@@ -27,6 +27,7 @@ from airdesk.ml import (
     load_tcn_dataset_manifest,
     predict_causal_tcn_manifest,
     prepare_tcn_training_arrays,
+    refine_motion_aligned_label_file,
     save_tcn_dataset_manifest,
     train_causal_tcn,
 )
@@ -223,6 +224,95 @@ def test_diagnose_candidate_events_lists_matches_misses_false_and_repeats() -> N
     assert false_activation["candidate"]["name"] == "swipe_right"
     nearest = false_activation["nearest_same_gesture_event"]
     assert nearest["seconds_from_event_end"] == pytest.approx(0.8)
+
+
+def test_refine_motion_aligned_label_file_shifts_chart_event_to_motion_peak(
+    tmp_path: Path,
+) -> None:
+    features = tmp_path / "chart.csv"
+    labels = tmp_path / "chart.labels.json"
+    _write_features(
+        features,
+        [
+            _row(timestamp=9.8, frame_index=0, event="", palm_window_dx_per_hand_scale=0.0),
+            _row(
+                timestamp=10.0,
+                frame_index=1,
+                event="swipe_right",
+                palm_window_dx_per_hand_scale=0.1,
+            ),
+            _row(
+                timestamp=10.3,
+                frame_index=2,
+                event="swipe_right",
+                palm_window_dx_per_hand_scale=0.2,
+            ),
+            _row(
+                timestamp=10.8,
+                frame_index=3,
+                event="swipe_right",
+                hand_id="hand-1",
+                palm_window_dx_per_hand_scale=1.4,
+            ),
+            _row(timestamp=11.2, frame_index=4, event="", palm_window_dx_per_hand_scale=0.0),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="chart.jsonl",
+                start_timestamp=9.8,
+                end_timestamp=11.2,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="swipe_right",
+                    start_time=10.0,
+                    end_time=10.4,
+                ),
+            ),
+            phase_labels=(
+                GesturePhaseLabel(
+                    label_id="phase-001",
+                    phase="background",
+                    start_time=9.8,
+                    end_time=11.2,
+                ),
+                GesturePhaseLabel(
+                    label_id="phase-002",
+                    phase="stroke_right",
+                    start_time=10.0,
+                    end_time=10.4,
+                    gesture="swipe_right",
+                ),
+            ),
+        ),
+        labels,
+    )
+
+    result = refine_motion_aligned_label_file(
+        feature_path=features,
+        label_path=labels,
+        search_padding_seconds=1.0,
+        min_motion_score=0.35,
+    )
+
+    refined = result.label_file.event_labels[0]
+    assert refined.start_time == pytest.approx(10.4)
+    assert refined.end_time == pytest.approx(10.8)
+    assert refined.commit_time == pytest.approx(10.8)
+    assert "hand_id=hand-1" in refined.notes
+    assert result.refined_events[0].changed is True
+    assert result.refined_events[0].hand_id == "hand-1"
+    assert [phase.phase for phase in result.label_file.phase_labels] == [
+        "background",
+        "stroke_right",
+        "recovery",
+    ]
 
 
 def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path: Path) -> None:
