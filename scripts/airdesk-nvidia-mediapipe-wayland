@@ -5,5 +5,8 @@ export __NV_PRIME_RENDER_OFFLOAD=1
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
 export EGL_PLATFORM=wayland
+export QT_QPA_PLATFORM=xcb
+
+printf 'AirDesk NVIDIA MediaPipe launcher: NVIDIA EGL vendor + Wayland EGL, Qt preview via Xwayland (xcb)\n' >&2
 
 exec uv run airdesk "$@"
