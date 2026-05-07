@@ -87,7 +87,11 @@ def test_dtw_recognizer_matches_synthetic_swipe_and_rejects_stationary_negative(
     negative_rows = _feature_rows(negative, negative_labels)
 
     assert any(candidate.name == "swipe_left" for candidate in recognizer.recognize_rows(left_rows))
+    assert any(
+        candidate.name == "swipe_left" for candidate in recognizer.recognize_latest_rows(left_rows)
+    )
     assert recognizer.recognize_rows(negative_rows) == []
+    assert recognizer.recognize_latest_rows(negative_rows) == []
     assert model.palm_dx_signs["swipe_left"] < 0
     assert model.min_palm_dx["swipe_left"] > 0
 

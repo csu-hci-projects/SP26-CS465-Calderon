@@ -117,6 +117,8 @@ scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/g
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show --profile-timing
 ```
 
+`watch-dtw` uses a live-optimized latest-window scan. Offline DTW evaluation still scans all candidate windows, but live preview only scores windows ending at the newest usable hand frame so it does not repeatedly rescan the whole rolling buffer.
+
 Short smoke evidence from 2026-05-06 on `/dev/video0` at `640x480 @ 30 FPS MJPG`:
 
 - CPU delegate on Intel/Mesa EGL: MediaPipe inference mean about `16.84 ms`, p95 about `22.39 ms`.

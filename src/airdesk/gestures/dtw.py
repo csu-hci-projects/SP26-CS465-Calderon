@@ -257,6 +257,37 @@ class DtwTemplateRecognizer:
                 )
         return _suppress_candidates(raw_candidates, cooldown_seconds=self.model.cooldown_seconds)
 
+    def recognize_latest_rows(self, rows: list[FrameFeatureRow]) -> list[GestureCandidate]:
+        """Return DTW candidates for windows ending at the latest usable row."""
+        end_index = _latest_usable_index(rows)
+        if end_index is None:
+            return []
+        raw_candidates: list[GestureCandidate] = []
+        for window_rows in _candidate_windows_ending_at(rows, end_index, self.model):
+            match = self.best_match(window_rows)
+            if match is None:
+                continue
+            raw_candidates.append(
+                GestureCandidate(
+                    name=match.gesture,
+                    confidence=match.confidence,
+                    timestamp=window_rows[-1].timestamp,
+                    hand_id=window_rows[-1].hand_id or None,
+                    metadata={
+                        "recognizer": self.name,
+                        "distance": match.distance,
+                        "threshold": match.threshold,
+                        "template_id": match.template_id,
+                        "palm_dx": match.palm_dx,
+                        "palm_dy": match.palm_dy,
+                        "window_start": window_rows[0].timestamp,
+                        "window_end": window_rows[-1].timestamp,
+                        "window_points": len(window_rows),
+                    },
+                )
+            )
+        return _suppress_candidates(raw_candidates, cooldown_seconds=self.model.cooldown_seconds)
+
     def best_match(self, rows: list[FrameFeatureRow]) -> DtwMatch | None:
         sequence = _normalize_sequence(
             _raw_sequence(rows, self.model.feature_names),
@@ -613,6 +644,34 @@ def _candidate_windows(
             windows.append(window_rows)
         next_duration += model.window_step_seconds
     return windows
+
+
+def _candidate_windows_ending_at(
+    rows: list[FrameFeatureRow],
+    end_index: int,
+    model: DtwGestureModel,
+) -> list[list[FrameFeatureRow]]:
+    windows: list[list[FrameFeatureRow]] = []
+    end_time = rows[end_index].timestamp
+    next_duration = model.min_window_seconds
+    while next_duration <= model.max_window_seconds + 1e-9:
+        start_time = end_time - next_duration
+        window_rows = [
+            row
+            for row in rows[: end_index + 1]
+            if start_time <= row.timestamp <= end_time and _usable_row(row)
+        ]
+        if len(window_rows) >= model.min_points:
+            windows.append(window_rows)
+        next_duration += model.window_step_seconds
+    return windows
+
+
+def _latest_usable_index(rows: list[FrameFeatureRow]) -> int | None:
+    for index in range(len(rows) - 1, -1, -1):
+        if _usable_row(rows[index]):
+            return index
+    return None
 
 
 def _palm_dx_gates(

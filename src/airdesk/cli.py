@@ -1246,7 +1246,7 @@ def gesture_watch_dtw(
             scan_started_at = monotonic()
             candidates = [
                 candidate
-                for candidate in recognizer.recognize_rows(rows)
+                for candidate in recognizer.recognize_latest_rows(rows)
                 if candidate.confidence >= confidence_threshold
             ]
             scan_ms = (monotonic() - scan_started_at) * 1000
