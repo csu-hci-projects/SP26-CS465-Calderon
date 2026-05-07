@@ -366,17 +366,22 @@ class MediaPipeHandTrackerBackend:
             2,
         )
         self._cv2.circle(image, (focus_x, lane_y), 7, (245, 245, 245), -1)
-        pixels_per_second = max(54, int(panel_w * 0.12))
+        pixels_per_second = max(40, int(panel_w * 0.085))
         for item in segments:
             if not isinstance(item, dict):
                 continue
             start = float(item.get("start", 0.0))
             end = float(item.get("end", start))
-            if end < elapsed - 1.2 or start > elapsed + 7.0:
+            if end < elapsed - 1.2 or start > elapsed + 10.0:
                 continue
             center_time = (start + end) / 2.0
             x_center = focus_x + int((center_time - elapsed) * pixels_per_second)
-            card_w = min(190, max(72, int((end - start) * pixels_per_second)))
+            label_text = str(item.get("text", ""))
+            text_width = self._text_width(label_text, scale=0.58, thickness=2)
+            card_w = min(
+                max(170, int(panel_w * 0.42)),
+                max(86, int((end - start) * pixels_per_second), text_width + 26),
+            )
             x0 = max(panel_x + 18, x_center - card_w // 2)
             x1 = min(panel_x + panel_w - 18, x_center + card_w // 2)
             y0 = lane_y - 24
@@ -389,7 +394,7 @@ class MediaPipeHandTrackerBackend:
             self._cv2.rectangle(image, (x0, y0), (x1, y1), (250, 250, 250), 1)
             self._put_text_fit(
                 image=image,
-                text=str(item.get("text", "")),
+                text=label_text,
                 x=x0 + 8,
                 y=y0 + 31,
                 max_width=max(20, x1 - x0 - 16),
@@ -688,6 +693,8 @@ def pixel_point(
 def _chart_segment_color(kind: str) -> tuple[int, int, int]:
     if kind == "cue":
         return (0, 165, 255)
+    if kind == "lead_in":
+        return (0, 210, 255)
     if kind == "stroke":
         return (40, 190, 80)
     if kind == "recovery":

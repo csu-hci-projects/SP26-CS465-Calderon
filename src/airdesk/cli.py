@@ -713,6 +713,10 @@ def gesture_chart_record(
     fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
     label: Annotated[str | None, typer.Option(help="Short label for this recording.")] = None,
     countdown: Annotated[float, typer.Option(help="Countdown seconds after space/start.")] = 3.0,
+    lead_in_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds of chart preview before the first gesture block."),
+    ] = 3.0,
     cue_seconds: Annotated[
         float,
         typer.Option(help="Seconds of get-ready cue before each gesture."),
@@ -771,6 +775,7 @@ def gesture_chart_record(
     try:
         plan = _parse_record_chart(
             chart=chart,
+            lead_in_seconds=lead_in_seconds,
             cue_seconds=cue_seconds,
             gesture_seconds=gesture_seconds,
             recovery_seconds=recovery_seconds,
@@ -840,6 +845,10 @@ def gesture_chart_label(
         float,
         typer.Option(help="Seconds of get-ready cue before each gesture."),
     ] = 1.5,
+    lead_in_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds of chart preview before the first gesture block."),
+    ] = 3.0,
     gesture_seconds: Annotated[
         float,
         typer.Option(help="Seconds allocated to each gesture stroke."),
@@ -858,6 +867,7 @@ def gesture_chart_label(
     try:
         plan = _parse_record_chart(
             chart=chart,
+            lead_in_seconds=lead_in_seconds,
             cue_seconds=cue_seconds,
             gesture_seconds=gesture_seconds,
             recovery_seconds=recovery_seconds,
@@ -2844,11 +2854,14 @@ def _parse_record_prompt_segments(values: list[str]) -> tuple[RecordPromptSegmen
 def _parse_record_chart(
     *,
     chart: str,
+    lead_in_seconds: float,
     cue_seconds: float,
     gesture_seconds: float,
     recovery_seconds: float,
     rest_seconds: float,
 ) -> RecordChartPlan:
+    if lead_in_seconds < 0:
+        raise ValueError("--lead-in-seconds cannot be negative")
     if cue_seconds < 0:
         raise ValueError("--cue-seconds cannot be negative")
     if gesture_seconds <= 0:
@@ -2863,8 +2876,17 @@ def _parse_record_chart(
     if not blocks:
         raise ValueError("chart must contain at least one gesture or rest block")
 
-    elapsed = 0.0
+    elapsed = lead_in_seconds
     segments: list[RecordPromptSegment] = []
+    if lead_in_seconds > 0:
+        segments.append(
+            RecordPromptSegment(
+                start=0.0,
+                end=lead_in_seconds,
+                text="get ready",
+                kind="lead_in",
+            )
+        )
     gestures: list[ChartGestureWindow] = []
     gesture_index = 0
     for block_index, block in enumerate(blocks, start=1):

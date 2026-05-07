@@ -847,13 +847,14 @@ def test_record_prompt_segments_format_status() -> None:
 def test_record_chart_expands_compact_pattern_with_cues_and_labels() -> None:
     plan = _parse_record_chart(
         chart="RR | rest | RL",
+        lead_in_seconds=3.0,
         cue_seconds=1.0,
         gesture_seconds=0.5,
         recovery_seconds=0.5,
         rest_seconds=3.0,
     )
 
-    assert plan.duration == 8.0
+    assert plan.duration == 11.0
     assert [gesture.token for gesture in plan.gestures] == ["R", "R", "R", "L"]
     assert [gesture.gesture for gesture in plan.gestures] == [
         "swipe_right",
@@ -866,13 +867,13 @@ def test_record_chart_expands_compact_pattern_with_cues_and_labels() -> None:
         elapsed=0.2,
         duration=plan.duration,
         segments=plan.segments,
-    ) == "recording 0.2/8.0s | GET READY R R in 1 | NEXT SWIPE R R"
+    ) == "recording 0.2/11.0s | NOW get ready | 2.8s left | NEXT R R ready"
     assert _record_preview_status(
         label="chart",
-        elapsed=1.1,
+        elapsed=4.1,
         duration=plan.duration,
         segments=plan.segments,
-    ) == "recording 1.1/8.0s | SWIPE R R | 0.9s | NEXT reset"
+    ) == "recording 4.1/11.0s | SWIPE R R | 0.9s | NEXT reset"
 
 
 def test_record_preview_key_can_start_and_quit() -> None:
