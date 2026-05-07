@@ -10,12 +10,19 @@ from airdesk.cli import (
     _format_tracker_timing,
     _handle_collection_preview_key,
     _handle_record_preview_key,
+    _parse_record_chart,
     _parse_record_prompt_segments,
     _record_preview_status,
     app,
 )
 from airdesk.features import FrameFeatureRow
-from airdesk.labels import GestureEventLabel, GestureLabelFile, SessionMetadata, save_label_file
+from airdesk.labels import (
+    GestureEventLabel,
+    GestureLabelFile,
+    SessionMetadata,
+    load_label_file,
+    save_label_file,
+)
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -181,6 +188,17 @@ def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
     assert "--hand-delegate" in result.stdout
     assert "--watch-stride-seconds" in result.stdout
     assert "--profile-timing" in result.stdout
+
+
+def test_chart_record_help_exposes_compact_chart_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "chart-record", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--chart" in result.stdout
+    assert "--cue-seconds" in result.stdout
+    assert "--gesture-seconds" in result.stdout
+    assert "--rest-seconds" in result.stdout
+    assert "--hand-delegate" in result.stdout
 
 
 def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:
@@ -826,6 +844,37 @@ def test_record_prompt_segments_format_status() -> None:
     ) == "recording 21.0/22.0s | structured"
 
 
+def test_record_chart_expands_compact_pattern_with_cues_and_labels() -> None:
+    plan = _parse_record_chart(
+        chart="RR | rest | RL",
+        cue_seconds=1.0,
+        gesture_seconds=0.5,
+        recovery_seconds=0.5,
+        rest_seconds=3.0,
+    )
+
+    assert plan.duration == 11.0
+    assert [gesture.token for gesture in plan.gestures] == ["R", "R", "R", "L"]
+    assert [gesture.gesture for gesture in plan.gestures] == [
+        "swipe_right",
+        "swipe_right",
+        "swipe_right",
+        "swipe_left",
+    ]
+    assert _record_preview_status(
+        label="chart",
+        elapsed=0.2,
+        duration=plan.duration,
+        segments=plan.segments,
+    ) == "recording 0.2/11.0s | GET READY R in 1 | NEXT SWIPE R"
+    assert _record_preview_status(
+        label="chart",
+        elapsed=1.1,
+        duration=plan.duration,
+        segments=plan.segments,
+    ) == "recording 1.1/11.0s | SWIPE R | 0.4s | NEXT reset"
+
+
 def test_record_preview_key_can_start_and_quit() -> None:
     state: dict[str, object] = {"phase": "waiting", "quit": False}
 
@@ -958,6 +1007,59 @@ def test_record_command_writes_metadata_events_with_label(tmp_path: Path) -> Non
     assert events[0].payload["label"] == "cli-test"
     assert events[0].payload["mediapipe"]["max_num_hands"] == 1
     assert events[-1].payload["frames"] == 1
+
+
+def test_chart_label_command_writes_coarse_stroke_and_recovery_labels(tmp_path: Path) -> None:
+    recording = tmp_path / "chart.jsonl"
+    labels = tmp_path / "chart.labels.json"
+    with JsonlRecordingWriter(recording) as writer:
+        for sequence in range(8):
+            frame = FrameMetadata(
+                timestamp=10.0 + sequence,
+                source_id="test",
+                width=640,
+                height=480,
+                sequence=sequence,
+            )
+            writer.write_tracking_frame(
+                TrackingFrame(
+                    timestamp=frame.timestamp,
+                    source_id="test",
+                    frame=frame,
+                    hands=(),
+                )
+            )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "chart-label",
+            str(recording),
+            "--chart",
+            "RL",
+            "--out",
+            str(labels),
+            "--cue-seconds",
+            "1",
+            "--gesture-seconds",
+            "1",
+            "--recovery-seconds",
+            "1",
+            "--rest-seconds",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0
+    label_file = load_label_file(labels)
+    assert [event.gesture for event in label_file.event_labels] == ["swipe_right", "swipe_left"]
+    assert [phase.phase for phase in label_file.phase_labels[-4:]] == [
+        "stroke_right",
+        "recovery",
+        "stroke_left",
+        "recovery",
+    ]
 
 
 def _write_cli_motion_recording(

@@ -223,6 +223,20 @@ For structured chained takes, `record --show` can display a countdown and prompt
 scripts/airdesk-nvidia-mediapipe-wayland record --out data/recordings/sprint4-gpu-swipes-002-structured/structured-a-right-heavy.jsonl --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --duration 82 --countdown 3 --wait-for-space --label structured-a-right-heavy --hand-delegate gpu --show --segment "0:10:R R" --segment "10:20:rest" --segment "20:30:R L" --segment "30:40:rest" --segment "40:50:R R R" --segment "50:60:rest" --segment "60:70:R L R" --segment "70:80:rest"
 ```
 
+The faster path is now the chart recorder. It expands a compact pattern into get-ready, stroke, reset, and rest prompt windows; waits for space by default; and writes coarse stroke/recovery/event labels beside the recording:
+
+```bash
+scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-002-structured/chart-a-right-heavy.jsonl --chart "RR | rest | RL | rest | RRR | rest | RLR | rest" --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-002-structured/chart-b-mixed.jsonl --chart "LR | rest | RR | rest | LRR | rest | RRL | rest" --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-002-structured/chart-c-alternating.jsonl --chart "RLR | rest | LRL | rest | RRL | rest | LRR | rest" --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+```
+
+Default chart timing is `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:
+
+```bash
+uv run airdesk gesture chart-label data/recordings/sprint4-gpu-swipes-002-structured/chart-a-right-heavy.jsonl --chart "RR | rest | RL | rest | RRR | rest | RLR | rest" --out data/labels/sprint4-gpu-swipes-002-structured/chart-a-right-heavy.labels.json
+```
+
 For a coarse active window with a known order, bootstrap weak labels with:
 
 ```bash

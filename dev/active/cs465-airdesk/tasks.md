@@ -112,6 +112,7 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Add stream/phase labels for stroke vs recovery/reset
 - [x] Add probability/candidate event decoder with hysteresis, confidence peaks, cooldown, and repeated-fire suppression
 - [x] Add ordered-sequence labeling helper for chained streams when exact timestamps are unavailable
+- [x] Add chart-record collection workflow with timed prompts and chart-derived weak labels
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes

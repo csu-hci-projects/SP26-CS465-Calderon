@@ -8,6 +8,7 @@ import platform
 import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from math import ceil
 from pathlib import Path
 from statistics import fmean
 from time import monotonic
@@ -117,6 +118,35 @@ class RecordPromptSegment:
     start: float
     end: float
     text: str
+    kind: str = "prompt"
+    gesture: str | None = None
+    block_index: int | None = None
+    gesture_index: int | None = None
+
+
+@dataclass(frozen=True)
+class ChartGestureWindow:
+    """One generated gesture window from a compact recording chart."""
+
+    start: float
+    stroke_start: float
+    stroke_end: float
+    recovery_end: float
+    token: str
+    gesture: str
+    phase: str
+    block_index: int
+    gesture_index: int
+
+
+@dataclass(frozen=True)
+class RecordChartPlan:
+    """Expanded recording chart with preview prompts and label windows."""
+
+    chart: str
+    duration: float
+    segments: tuple[RecordPromptSegment, ...]
+    gestures: tuple[ChartGestureWindow, ...]
 
 
 app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CLI.")
@@ -656,6 +686,188 @@ def gesture_spot_dtw(
         )
     if out is not None:
         typer.echo(f"wrote candidates={out}")
+
+
+@gesture_app.command("chart-record")
+def gesture_chart_record(
+    out: Annotated[Path, typer.Option(help="Output JSONL recording path.")],
+    chart: Annotated[
+        str,
+        typer.Option(
+            help="Compact chart, e.g. 'RR | rest | RL | rest | RRR'. R/L are swipe cues.",
+        ),
+    ],
+    labels_out: Annotated[
+        Path | None,
+        typer.Option(help="Output label JSON path. Defaults to recording .labels.json."),
+    ] = None,
+    write_labels: Annotated[
+        bool,
+        typer.Option(help="Write coarse stroke/recovery/event labels from the chart."),
+    ] = True,
+    backend: Annotated[str, typer.Option(help="Tracking backend to record.")] = "mediapipe",
+    device: Annotated[str, typer.Option(help="Camera path or numeric index.")] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    label: Annotated[str | None, typer.Option(help="Short label for this recording.")] = None,
+    countdown: Annotated[float, typer.Option(help="Countdown seconds after space/start.")] = 3.0,
+    cue_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds of get-ready cue before each gesture."),
+    ] = 1.5,
+    gesture_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to each gesture stroke."),
+    ] = 0.75,
+    recovery_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to reset/recovery after each gesture."),
+    ] = 0.75,
+    rest_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to each rest/background block."),
+    ] = 10.0,
+    wait_for_space: Annotated[
+        bool,
+        typer.Option(help="When previewing, wait for space before starting countdown."),
+    ] = True,
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV prompt/landmark window.")] = True,
+) -> None:
+    """Record a structured swipe chart with Guitar-Hero-style timing prompts."""
+    if countdown < 0:
+        typer.echo("--countdown cannot be negative.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        plan = _parse_record_chart(
+            chart=chart,
+            cue_seconds=cue_seconds,
+            gesture_seconds=gesture_seconds,
+            recovery_seconds=recovery_seconds,
+            rest_seconds=rest_seconds,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    recording_label = label or out.stem
+    frame_count = _record_tracking(
+        out=out,
+        backend=backend,
+        device=device,
+        width=width,
+        height=height,
+        fps=fps,
+        fourcc=fourcc,
+        label=recording_label,
+        duration=plan.duration,
+        countdown=countdown,
+        prompt_segments=plan.segments,
+        wait_for_space=wait_for_space,
+        model_path=model_path,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+        hand_delegate=hand_delegate,
+        auto_download_model=auto_download_model,
+        max_frames=max_frames,
+        show=show,
+        extra_started_payload={
+            "chart": _record_chart_payload(plan),
+        },
+    )
+    typer.echo(
+        f"chart recorded frames={frame_count} gestures={len(plan.gestures)} "
+        f"duration={plan.duration:.2f}s out={out}"
+    )
+    if not write_labels:
+        return
+    output_labels = labels_out or out.with_suffix(".labels.json")
+    try:
+        _write_chart_label_file(
+            recording=out,
+            out=output_labels,
+            plan=plan,
+            participant="caden",
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"wrote chart_labels={output_labels}")
+
+
+@gesture_app.command("chart-label")
+def gesture_chart_label(
+    recording: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    chart: Annotated[
+        str,
+        typer.Option(help="Compact chart used for the recording, e.g. 'RR | rest | RL'."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Output label JSON path.")] = None,
+    cue_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds of get-ready cue before each gesture."),
+    ] = 1.5,
+    gesture_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to each gesture stroke."),
+    ] = 0.75,
+    recovery_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to reset/recovery after each gesture."),
+    ] = 0.75,
+    rest_seconds: Annotated[
+        float,
+        typer.Option(help="Seconds allocated to each rest/background block."),
+    ] = 10.0,
+    participant: Annotated[str, typer.Option(help="Participant/user identifier.")] = "caden",
+) -> None:
+    """Create coarse labels from a compact chart for an existing recording."""
+    try:
+        plan = _parse_record_chart(
+            chart=chart,
+            cue_seconds=cue_seconds,
+            gesture_seconds=gesture_seconds,
+            recovery_seconds=recovery_seconds,
+            rest_seconds=rest_seconds,
+        )
+        output = out or recording.with_suffix(".labels.json")
+        _write_chart_label_file(recording=recording, out=output, plan=plan, participant=participant)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"wrote chart_labels={output} gestures={len(plan.gestures)}")
 
 
 @gesture_app.command("decode-candidates")
@@ -1812,6 +2024,59 @@ def record(
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
+    frame_count = _record_tracking(
+        out=out,
+        backend=backend,
+        device=device,
+        width=width,
+        height=height,
+        fps=fps,
+        fourcc=fourcc,
+        label=label,
+        duration=duration,
+        countdown=countdown,
+        prompt_segments=prompt_segments,
+        wait_for_space=wait_for_space,
+        model_path=model_path,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+        hand_delegate=hand_delegate,
+        auto_download_model=auto_download_model,
+        max_frames=max_frames,
+        show=show,
+        extra_started_payload={},
+    )
+    typer.echo(f"recorded frames={frame_count} out={out}")
+
+
+def _record_tracking(
+    *,
+    out: Path,
+    backend: str,
+    device: str,
+    width: int | None,
+    height: int | None,
+    fps: float | None,
+    fourcc: str | None,
+    label: str | None,
+    duration: float | None,
+    countdown: float,
+    prompt_segments: tuple[RecordPromptSegment, ...],
+    wait_for_space: bool,
+    model_path: Path,
+    max_num_hands: int,
+    min_detection_confidence: float,
+    min_presence_confidence: float,
+    min_tracking_confidence: float,
+    hand_delegate: str,
+    auto_download_model: bool,
+    max_frames: int | None,
+    show: bool,
+    extra_started_payload: dict[str, object],
+) -> int:
+    """Record normalized tracking frames with shared prompt/countdown behavior."""
     tracker = _make_tracker(
         backend=backend,
         device=device,
@@ -1871,6 +2136,7 @@ def record(
                             fps=fps,
                             fourcc=fourcc,
                         ).to_dict(),
+                        **extra_started_payload,
                     },
                 )
             )
@@ -1943,7 +2209,7 @@ def record(
         raise typer.Exit(code=1) from exc
     finally:
         tracker.stop()
-    typer.echo(f"recorded frames={frame_count} out={out}")
+    return frame_count
 
 
 @app.command()
@@ -2560,6 +2826,199 @@ def _parse_record_prompt_segments(values: list[str]) -> tuple[RecordPromptSegmen
     return tuple(sorted(segments, key=lambda item: (item.start, item.end)))
 
 
+def _parse_record_chart(
+    *,
+    chart: str,
+    cue_seconds: float,
+    gesture_seconds: float,
+    recovery_seconds: float,
+    rest_seconds: float,
+) -> RecordChartPlan:
+    if cue_seconds < 0:
+        raise ValueError("--cue-seconds cannot be negative")
+    if gesture_seconds <= 0:
+        raise ValueError("--gesture-seconds must be positive")
+    if recovery_seconds < 0:
+        raise ValueError("--recovery-seconds cannot be negative")
+    if rest_seconds <= 0:
+        raise ValueError("--rest-seconds must be positive")
+
+    blocks = [block.strip() for block in chart.split("|")]
+    blocks = [block for block in blocks if block]
+    if not blocks:
+        raise ValueError("chart must contain at least one gesture or rest block")
+
+    elapsed = 0.0
+    segments: list[RecordPromptSegment] = []
+    gestures: list[ChartGestureWindow] = []
+    gesture_index = 0
+    for block_index, block in enumerate(blocks, start=1):
+        tokens = _record_chart_block_tokens(block)
+        if len(tokens) == 1 and _is_record_chart_rest(tokens[0]):
+            segments.append(
+                RecordPromptSegment(
+                    start=elapsed,
+                    end=elapsed + rest_seconds,
+                    text="rest",
+                    kind="rest",
+                    block_index=block_index,
+                )
+            )
+            elapsed += rest_seconds
+            continue
+        for token in tokens:
+            gesture, phase, display = _record_chart_token_to_gesture(token)
+            gesture_index += 1
+            cue_start = elapsed
+            stroke_start = cue_start + cue_seconds
+            stroke_end = stroke_start + gesture_seconds
+            recovery_end = stroke_end + recovery_seconds
+            if cue_seconds > 0:
+                segments.append(
+                    RecordPromptSegment(
+                        start=cue_start,
+                        end=stroke_start,
+                        text=f"{display} ready",
+                        kind="cue",
+                        gesture=display,
+                        block_index=block_index,
+                        gesture_index=gesture_index,
+                    )
+                )
+            segments.append(
+                RecordPromptSegment(
+                    start=stroke_start,
+                    end=stroke_end,
+                    text=f"SWIPE {display}",
+                    kind="stroke",
+                    gesture=display,
+                    block_index=block_index,
+                    gesture_index=gesture_index,
+                )
+            )
+            if recovery_seconds > 0:
+                segments.append(
+                    RecordPromptSegment(
+                        start=stroke_end,
+                        end=recovery_end,
+                        text="reset",
+                        kind="recovery",
+                        gesture=display,
+                        block_index=block_index,
+                        gesture_index=gesture_index,
+                    )
+                )
+            gestures.append(
+                ChartGestureWindow(
+                    start=cue_start,
+                    stroke_start=stroke_start,
+                    stroke_end=stroke_end,
+                    recovery_end=recovery_end,
+                    token=display,
+                    gesture=gesture,
+                    phase=phase,
+                    block_index=block_index,
+                    gesture_index=gesture_index,
+                )
+            )
+            elapsed = recovery_end
+    if not gestures:
+        raise ValueError("chart must contain at least one R or L gesture")
+    return RecordChartPlan(
+        chart=chart,
+        duration=elapsed,
+        segments=tuple(segments),
+        gestures=tuple(gestures),
+    )
+
+
+def _record_chart_block_tokens(block: str) -> list[str]:
+    normalized = block.strip()
+    if re.fullmatch(r"[RrLl]+", normalized):
+        return list(normalized.upper())
+    return [token for token in re.split(r"[\s,]+", normalized) if token]
+
+
+def _is_record_chart_rest(token: str) -> bool:
+    return token.strip().lower() in {"rest", "background", "bg", "_", "-"}
+
+
+def _record_chart_token_to_gesture(token: str) -> tuple[str, str, str]:
+    normalized = token.strip().lower()
+    if normalized in {"r", "right", "swipe_right", "stroke_right"}:
+        return "swipe_right", "stroke_right", "R"
+    if normalized in {"l", "left", "swipe_left", "stroke_left"}:
+        return "swipe_left", "stroke_left", "L"
+    raise ValueError(f"unsupported chart token={token!r}; use R, L, or rest")
+
+
+def _record_chart_payload(plan: RecordChartPlan) -> dict[str, object]:
+    return {
+        "source": plan.chart,
+        "duration": plan.duration,
+        "segments": [asdict(segment) for segment in plan.segments],
+        "gestures": [asdict(gesture) for gesture in plan.gestures],
+    }
+
+
+def _write_chart_label_file(
+    *,
+    recording: Path,
+    out: Path,
+    plan: RecordChartPlan,
+    participant: str,
+) -> None:
+    label_file = init_label_file(
+        recording,
+        participant_id=participant,
+        notes=(
+            "Initialized from an AirDesk chart. Coarse stroke/recovery labels are "
+            "timing prompts, not hand-refined ground truth."
+        ),
+    )
+    if label_file.session.start_timestamp is None:
+        raise ValueError("recording has no tracking frames; cannot create chart labels")
+    recording_start = label_file.session.start_timestamp
+    recording_end = label_file.session.end_timestamp
+    if recording_end is not None and recording_end - recording_start + 1e-6 < plan.duration:
+        raise ValueError(
+            "recording is shorter than the chart duration; rerun the take or pass the "
+            "same chart timing used during recording"
+        )
+
+    updated = label_file
+    notes = "Generated from chart timing; refine before final training."
+    for gesture in plan.gestures:
+        stroke_start = recording_start + gesture.stroke_start
+        stroke_end = recording_start + gesture.stroke_end
+        updated = add_phase_label(
+            updated,
+            phase=gesture.phase,
+            start_time=stroke_start,
+            end_time=stroke_end,
+            gesture=gesture.gesture,
+            notes=notes,
+        )
+        if gesture.recovery_end > gesture.stroke_end:
+            updated = add_phase_label(
+                updated,
+                phase="recovery",
+                start_time=stroke_end,
+                end_time=recording_start + gesture.recovery_end,
+                gesture=gesture.gesture,
+                notes=notes,
+            )
+        updated = add_event_label(
+            updated,
+            gesture=gesture.gesture,
+            start_time=stroke_start,
+            end_time=stroke_end,
+            commit_time=stroke_end,
+            notes=notes,
+        )
+    _save_valid_label_file(updated, out)
+
+
 def _record_preview_status(
     *,
     label: str,
@@ -2574,6 +3033,10 @@ def _record_preview_status(
     remaining = max(0.0, segment.end - elapsed)
     next_segment = _next_record_prompt_segment(segment, segments)
     next_text = f" | NEXT {next_segment.text}" if next_segment is not None else ""
+    if segment.kind == "cue" and segment.gesture is not None:
+        return f"recording {total} | GET READY {segment.gesture} in {ceil(remaining)}{next_text}"
+    if segment.kind == "stroke":
+        return f"recording {total} | {segment.text} | {remaining:.1f}s{next_text}"
     return f"recording {total} | NOW {segment.text} | {remaining:.1f}s left{next_text}"
 
 
