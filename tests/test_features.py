@@ -33,6 +33,26 @@ def frame_at(timestamp: float, sequence: int, hand: NormalizedHand) -> TrackingF
     )
 
 
+def frame_with_hands(
+    timestamp: float,
+    sequence: int,
+    *hands: NormalizedHand,
+) -> TrackingFrame:
+    metadata = FrameMetadata(
+        timestamp=timestamp,
+        source_id="feature-test",
+        width=640,
+        height=480,
+        sequence=sequence,
+    )
+    return TrackingFrame(
+        timestamp=timestamp,
+        source_id="feature-test",
+        frame=metadata,
+        hands=hands,
+    )
+
+
 def test_extract_feature_rows_include_motion_and_pose_features(
     make_hand: Callable[[str], NormalizedHand],
 ) -> None:
@@ -93,6 +113,54 @@ def test_feature_row_stream_matches_batch_extraction(
     assert streamed == extract_feature_rows(frames)
 
 
+def test_extract_feature_rows_emit_one_row_per_visible_hand(
+    make_hand: Callable[[str], NormalizedHand],
+) -> None:
+    left = _with_hand_id(_move_hand(make_hand("open_palm"), x=0.3), "left-hand")
+    right = _with_hand_id(_move_hand(make_hand("open_palm"), x=0.7), "right-hand")
+    frames = [
+        frame_with_hands(1.0, 1, left, right),
+        frame_with_hands(
+            1.1,
+            2,
+            _move_hand(left, x=0.4),
+            _move_hand(right, x=0.6),
+        ),
+    ]
+
+    rows = extract_feature_rows(frames)
+
+    assert [(row.frame_index, row.hand_id, row.hand_count) for row in rows] == [
+        (0, "left-hand", 2),
+        (0, "right-hand", 2),
+        (1, "left-hand", 2),
+        (1, "right-hand", 2),
+    ]
+    assert rows[2].palm_vx == pytest.approx(1.0)
+    assert rows[3].palm_vx == pytest.approx(-1.0)
+    assert rows[2].palm_window_dx == pytest.approx(0.1)
+    assert rows[3].palm_window_dx == pytest.approx(-0.1)
+
+
+def test_extract_feature_rows_preserve_no_hand_background_rows() -> None:
+    metadata = FrameMetadata(
+        timestamp=1.0,
+        source_id="feature-test",
+        width=640,
+        height=480,
+        sequence=1,
+    )
+
+    rows = extract_feature_rows(
+        [TrackingFrame(timestamp=1.0, source_id="feature-test", frame=metadata, hands=())]
+    )
+
+    assert len(rows) == 1
+    assert rows[0].tracking_present == 0
+    assert rows[0].hand_count == 0
+    assert rows[0].hand_id == ""
+
+
 def test_export_features_csv_writes_rows(
     tmp_path: Path,
     make_hand: Callable[[str], NormalizedHand],
@@ -131,6 +199,17 @@ def _move_hand(hand: NormalizedHand, *, x: float) -> NormalizedHand:
         ),
         palm_center=(x, hand.palm_center[1], hand.palm_center[2]),
         bbox=(hand.bbox[0] + dx, hand.bbox[1], hand.bbox[2] + dx, hand.bbox[3]),
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _with_hand_id(hand: NormalizedHand, hand_id: str) -> NormalizedHand:
+    return NormalizedHand(
+        hand_id=hand_id,
+        landmarks=hand.landmarks,
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
         handedness=hand.handedness,
         confidence=hand.confidence,
     )

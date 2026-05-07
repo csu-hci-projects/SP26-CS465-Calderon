@@ -69,23 +69,51 @@ class FeatureRowStream:
     labels: GestureLabelFile | None = None
 
     def __post_init__(self) -> None:
-        self._history = _HandHistory()
+        self._history_by_hand_id: dict[str, _HandHistory] = {}
+        self._no_hand_history = _HandHistory()
         self._pose_recognizer = StaticHandPoseRecognizer()
         self._frame_index = 0
 
     def append(self, frame: TrackingFrame) -> FrameFeatureRow:
-        """Convert one tracking frame into a feature row while preserving history."""
-        hand = frame.hands[0] if frame.hands else None
-        row = _row_for_frame(
-            frame_index=self._frame_index,
-            frame=frame,
-            hand=hand,
-            history=self._history,
-            pose_recognizer=self._pose_recognizer,
-            labels=self.labels,
-        )
+        """Convert one tracking frame into the first feature row.
+
+        This keeps the older single-row live callers working. New recognizer paths should
+        call :meth:`append_rows` so both visible hands are represented.
+        """
+        return self.append_rows(frame)[0]
+
+    def append_rows(self, frame: TrackingFrame) -> list[FrameFeatureRow]:
+        """Convert one tracking frame into one no-hand row or one row per visible hand."""
+        frame_index = self._frame_index
         self._frame_index += 1
-        return row
+        if not frame.hands:
+            self._history_by_hand_id.clear()
+            return [
+                _row_for_frame(
+                    frame_index=frame_index,
+                    frame=frame,
+                    hand=None,
+                    history=self._no_hand_history,
+                    pose_recognizer=self._pose_recognizer,
+                    labels=self.labels,
+                )
+            ]
+
+        visible_hand_ids = {hand.hand_id for hand in frame.hands}
+        for missing_hand_id in set(self._history_by_hand_id) - visible_hand_ids:
+            del self._history_by_hand_id[missing_hand_id]
+        self._no_hand_history = _HandHistory()
+        return [
+            _row_for_frame(
+                frame_index=frame_index,
+                frame=frame,
+                hand=hand,
+                history=self._history_by_hand_id.setdefault(hand.hand_id, _HandHistory()),
+                pose_recognizer=self._pose_recognizer,
+                labels=self.labels,
+            )
+            for hand in frame.hands
+        ]
 
 
 def extract_feature_rows(
@@ -95,7 +123,10 @@ def extract_feature_rows(
 ) -> list[FrameFeatureRow]:
     """Extract deterministic per-frame features from tracking frames."""
     stream = FeatureRowStream(labels=labels)
-    return [stream.append(frame) for frame in frames]
+    rows: list[FrameFeatureRow] = []
+    for frame in frames:
+        rows.extend(stream.append_rows(frame))
+    return rows
 
 
 def _row_for_frame(

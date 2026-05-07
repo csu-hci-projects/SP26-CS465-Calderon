@@ -82,6 +82,35 @@ def test_build_tcn_manifest_assigns_background_and_swipe_windows(tmp_path: Path)
     assert manifest.windows[0].target_index == 1
 
 
+def test_build_tcn_manifest_keeps_two_hand_windows_separate(tmp_path: Path) -> None:
+    features = tmp_path / "two-hand.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-0", palm_x=0.5),
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-1", palm_x=0.7),
+            _row(timestamp=1.1, frame_index=1, event="swipe_left", hand_id="hand-0", palm_x=0.5),
+            _row(timestamp=1.1, frame_index=1, event="swipe_left", hand_id="hand-1", palm_x=0.6),
+            _row(timestamp=1.2, frame_index=2, event="swipe_left", hand_id="hand-0", palm_x=0.5),
+            _row(timestamp=1.2, frame_index=2, event="swipe_left", hand_id="hand-1", palm_x=0.4),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+
+    assert {window.hand_id for window in manifest.windows} == {"hand-0", "hand-1"}
+    assert all(window.row_count == 3 for window in manifest.windows)
+    for window in manifest.windows:
+        matrix = feature_window_matrix(window, feature_columns=("palm_x",))
+        assert len(matrix) == 3
+
+
 def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path: Path) -> None:
     features_dir = tmp_path / "features"
     labels_dir = tmp_path / "labels"
@@ -533,6 +562,7 @@ def _row(
     event: str,
     phase: str = "",
     palm_x: float = 0.5,
+    hand_id: str = "hand-0",
 ) -> FrameFeatureRow:
     return FrameFeatureRow(
         frame_index=frame_index,
@@ -540,7 +570,7 @@ def _row(
         dt=0.1 if frame_index else 0.0,
         tracking_present=1,
         hand_count=1,
-        hand_id="hand-0",
+        hand_id=hand_id,
         confidence=1.0,
         palm_x=palm_x,
         palm_y=0.5,

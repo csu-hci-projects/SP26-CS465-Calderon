@@ -115,9 +115,11 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Add chart-record collection workflow with timed prompts and chart-derived weak labels
 - [x] Delete one-hand structured combo recordings from `sprint4-gpu-swipes-002-structured`
 - [x] Document two-hand combo data pivot and pause combo collection
-- [ ] Make chart collection default/recommended path use `--max-num-hands 2` for combo sessions
-- [ ] Export per-hand feature rows with independent motion history instead of only `frame.hands[0]`
-- [ ] Update DTW/TCN evaluation to score per-hand streams and merge decoded events across hands
+- [x] Make chart collection default/recommended path use `--max-num-hands 2` for combo sessions
+- [x] Export per-hand feature rows with independent motion history instead of only `frame.hands[0]`
+- [x] Update DTW/TCN evaluation to score per-hand streams and merge decoded events across hands
+- [x] Add tests for two-hand feature rows, per-hand motion history, per-hand DTW candidates, and merged event ordering
+- [ ] Run replay checks on the two-hand feature/DTW/TCN/event-decoder path before collecting new combo data
 - [ ] Recollect combo/chained swipe charts after two-hand pipeline support lands
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence

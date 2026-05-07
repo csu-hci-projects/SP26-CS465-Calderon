@@ -43,7 +43,7 @@ AirDesk is a secondary spatial input layer for Hyprland, not a keyboard/mouse re
 
 Current pivot:
 
-Stop combo/chained swipe data collection until the pipeline supports two simultaneously visible hands. Caden realized the one-hand default is contaminating combo data: if one hand stays tracked in frame, the other hand's gesture may not become active. Feature export currently consumes `frame.hands[0]`, so just passing `--max-num-hands 2` is not enough.
+Stop combo/chained swipe data collection until the two-hand path passes replay checks. Caden realized the one-hand default contaminated combo data: if one hand stays tracked in frame, the other hand's gesture may not become active. Feature export now emits per-hand rows, DTW/TCN windows are hand-scoped, event decoding merges decoded hand streams with cooldown suppression, and chart recording defaults to `--max-num-hands 2`.
 
 Cleaned data:
 
@@ -53,21 +53,15 @@ Cleaned data:
 
 Next implementation chunk:
 
-1. Read existing feature, DTW, TCN, chart-record, and evaluation code before editing.
-2. Add/adjust chart collection recommendations so future combo sessions use `--max-num-hands 2`.
-3. Update feature export to emit per-hand rows, not only `frame.hands[0]`.
-   - Keep independent motion history per `hand_id`.
-   - Preserve no-hand/background rows when no hands are visible.
-   - Include `hand_count` and `hand_id`.
-4. Update DTW/template recognition and live DTW preview to score per-hand streams without mixing hand histories.
-5. Update TCN dataset/evaluation paths to handle per-hand rows safely.
-6. Update event decoding/merge logic so events from both hands can be decoded and then merged with cooldown/repeated-fire suppression.
-7. Add tests for two-hand feature rows, per-hand motion history, per-hand DTW candidates, and merged event ordering.
-8. Do not collect new combo data until this path is implemented and tested.
-9. Keep live desktop actions disabled.
-10. Update README/tasks/tracking-samples/context docs with the two-hand workflow and exact next collection commands.
-11. Run `uv run ruff check .` and `uv run pytest`.
-12. Commit and push.
+1. Check git status and read the active docs listed above.
+2. Run replay checks on the two-hand feature/DTW/TCN/event-decoder path.
+3. If replay checks pass, recollect combo charts with explicit `--max-num-hands 2` using the `sprint4-gpu-swipes-003-two-hand` commands in `tracking-samples.md`.
+4. Export features immediately after each kept chart and verify both hands appear as separate `hand_id` streams.
+5. Run DTW spotting, event decoding, and sequence scoring on the new charts.
+6. Keep live desktop actions disabled.
+7. Update README/tasks/tracking-samples/context docs with results and any revised collection commands.
+8. Run `uv run ruff check .` and `uv run pytest`.
+9. Commit and push.
 
 Important evidence:
 
@@ -79,4 +73,3 @@ Important evidence:
 - Live TCN is useful as diagnostic preview only.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Current UI for chart collection is a stable HUD with a progress bar and fixed upcoming cards.
-

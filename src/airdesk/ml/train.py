@@ -74,6 +74,7 @@ class CausalTcnPrediction:
     sample_id: str
     feature_path: str
     label_path: str | None
+    hand_id: str
     start_time: float
     end_time: float
     target: str
@@ -89,6 +90,7 @@ class CausalTcnPrediction:
 class CausalTcnLivePrediction:
     """One live/replay TCN prediction over an in-memory feature window."""
 
+    hand_id: str | None
     start_time: float
     end_time: float
     target: str
@@ -167,6 +169,7 @@ class CausalTcnLivePredictor:
             target_index = int(probabilities_tensor.argmax().item())
             confidence = float(probabilities_tensor[target_index].item())
         return CausalTcnLivePrediction(
+            hand_id=rows[-1].hand_id or None,
             start_time=float(rows[0].timestamp),
             end_time=float(rows[-1].timestamp),
             target=self.targets[target_index],
@@ -387,6 +390,7 @@ def predict_causal_tcn_manifest(
                     sample_id=window.sample_id,
                     feature_path=window.feature_path,
                     label_path=window.label_path,
+                    hand_id=window.hand_id,
                     start_time=window.start_time,
                     end_time=window.end_time,
                     target=target,
@@ -505,6 +509,8 @@ def _suppress_predictions(
         overlaps = False
         for existing in selected:
             if prediction.feature_path != existing.feature_path:
+                continue
+            if prediction.hand_id != existing.hand_id:
                 continue
             if prediction.target != existing.target:
                 continue

@@ -229,63 +229,33 @@ class DtwTemplateRecognizer:
 
     def recognize_rows(self, rows: list[FrameFeatureRow]) -> list[GestureCandidate]:
         raw_candidates: list[GestureCandidate] = []
-        for start_index, start_row in enumerate(rows):
-            if not _usable_row(start_row):
-                continue
-            for window_rows in _candidate_windows(rows, start_index, self.model):
-                match = self.best_match(window_rows)
-                if match is None:
+        for stream_rows in _hand_streams(rows):
+            for start_index, start_row in enumerate(stream_rows):
+                if not _usable_row(start_row):
                     continue
-                raw_candidates.append(
-                    GestureCandidate(
-                        name=match.gesture,
-                        confidence=match.confidence,
-                        timestamp=window_rows[-1].timestamp,
-                        hand_id=window_rows[-1].hand_id or None,
-                        metadata={
-                            "recognizer": self.name,
-                            "distance": match.distance,
-                            "threshold": match.threshold,
-                            "template_id": match.template_id,
-                            "palm_dx": match.palm_dx,
-                            "palm_dy": match.palm_dy,
-                            "window_start": window_rows[0].timestamp,
-                            "window_end": window_rows[-1].timestamp,
-                            "window_points": len(window_rows),
-                        },
+                for window_rows in _candidate_windows(stream_rows, start_index, self.model):
+                    match = self.best_match(window_rows)
+                    if match is None:
+                        continue
+                    raw_candidates.append(
+                        _candidate_from_match(match, window_rows, recognizer=self.name)
                     )
-                )
         return _suppress_candidates(raw_candidates, cooldown_seconds=self.model.cooldown_seconds)
 
     def recognize_latest_rows(self, rows: list[FrameFeatureRow]) -> list[GestureCandidate]:
         """Return DTW candidates for windows ending at the latest usable row."""
-        end_index = _latest_usable_index(rows)
-        if end_index is None:
-            return []
         raw_candidates: list[GestureCandidate] = []
-        for window_rows in _candidate_windows_ending_at(rows, end_index, self.model):
-            match = self.best_match(window_rows)
-            if match is None:
+        for stream_rows in _hand_streams(rows):
+            end_index = _latest_usable_index(stream_rows)
+            if end_index is None:
                 continue
-            raw_candidates.append(
-                GestureCandidate(
-                    name=match.gesture,
-                    confidence=match.confidence,
-                    timestamp=window_rows[-1].timestamp,
-                    hand_id=window_rows[-1].hand_id or None,
-                    metadata={
-                        "recognizer": self.name,
-                        "distance": match.distance,
-                        "threshold": match.threshold,
-                        "template_id": match.template_id,
-                        "palm_dx": match.palm_dx,
-                        "palm_dy": match.palm_dy,
-                        "window_start": window_rows[0].timestamp,
-                        "window_end": window_rows[-1].timestamp,
-                        "window_points": len(window_rows),
-                    },
+            for window_rows in _candidate_windows_ending_at(stream_rows, end_index, self.model):
+                match = self.best_match(window_rows)
+                if match is None:
+                    continue
+                raw_candidates.append(
+                    _candidate_from_match(match, window_rows, recognizer=self.name)
                 )
-            )
         return _suppress_candidates(raw_candidates, cooldown_seconds=self.model.cooldown_seconds)
 
     def best_match(self, rows: list[FrameFeatureRow]) -> DtwMatch | None:
@@ -328,42 +298,43 @@ class DtwTemplateRecognizer:
     ) -> dict[str, DtwBestWindow]:
         """Return the closest window per gesture, even if it misses the threshold."""
         best: dict[str, DtwBestWindow] = {}
-        for start_index, start_row in enumerate(rows):
-            if not _usable_row(start_row):
-                continue
-            for window_rows in _candidate_windows(rows, start_index, self.model):
-                sequence = _normalize_sequence(
-                    _raw_sequence(window_rows, self.model.feature_names),
-                    self.model.mean,
-                    self.model.std,
-                )
-                if len(sequence) < self.model.min_points:
+        for stream_rows in _hand_streams(rows):
+            for start_index, start_row in enumerate(stream_rows):
+                if not _usable_row(start_row):
                     continue
-                for template in self.model.templates:
-                    threshold = self.model.thresholds.get(template.gesture)
-                    if threshold is None:
-                        continue
-                    distance_value = dtw_distance(sequence, template.vectors)
-                    current = best.get(template.gesture)
-                    if current is not None and current.distance <= distance_value:
-                        continue
-                    palm_dx, palm_dy = _window_palm_delta(window_rows)
-                    best[template.gesture] = DtwBestWindow(
-                        gesture=template.gesture,
-                        template_id=template.template_id,
-                        distance=distance_value,
-                        threshold=threshold,
-                        window_start=window_rows[0].timestamp,
-                        window_end=window_rows[-1].timestamp,
-                        window_points=len(window_rows),
-                        palm_dx=palm_dx,
-                        palm_dy=palm_dy,
-                        min_palm_dx=self.model.min_palm_dx.get(template.gesture, 0.0),
-                        expected_palm_dx_sign=self.model.palm_dx_signs.get(
-                            template.gesture,
-                            0,
-                        ),
+                for window_rows in _candidate_windows(stream_rows, start_index, self.model):
+                    sequence = _normalize_sequence(
+                        _raw_sequence(window_rows, self.model.feature_names),
+                        self.model.mean,
+                        self.model.std,
                     )
+                    if len(sequence) < self.model.min_points:
+                        continue
+                    for template in self.model.templates:
+                        threshold = self.model.thresholds.get(template.gesture)
+                        if threshold is None:
+                            continue
+                        distance_value = dtw_distance(sequence, template.vectors)
+                        current = best.get(template.gesture)
+                        if current is not None and current.distance <= distance_value:
+                            continue
+                        palm_dx, palm_dy = _window_palm_delta(window_rows)
+                        best[template.gesture] = DtwBestWindow(
+                            gesture=template.gesture,
+                            template_id=template.template_id,
+                            distance=distance_value,
+                            threshold=threshold,
+                            window_start=window_rows[0].timestamp,
+                            window_end=window_rows[-1].timestamp,
+                            window_points=len(window_rows),
+                            palm_dx=palm_dx,
+                            palm_dy=palm_dy,
+                            min_palm_dx=self.model.min_palm_dx.get(template.gesture, 0.0),
+                            expected_palm_dx_sign=self.model.palm_dx_signs.get(
+                                template.gesture,
+                                0,
+                            ),
+                        )
         return best
 
 
@@ -393,31 +364,33 @@ def calibrate_dtw_model(
             negative_rows.append(rows)
             continue
         for event in gesture_events:
-            event_rows = [
-                row
-                for row in rows
-                if event.start_time <= row.timestamp <= event.end_time and _usable_row(row)
-            ]
-            if len(event_rows) < min_points:
-                continue
-            raw_vectors = _raw_sequence(event_rows, DTW_FEATURE_NAMES)
-            normalization_vectors.extend(raw_vectors)
-            raw_templates.append(
-                (
-                    DtwTemplate(
-                        template_id=f"template-{len(raw_templates) + 1:03d}",
-                        gesture=event.gesture,
-                        recording=str(item.recording),
-                        label_id=event.label_id,
-                        start_time=event.start_time,
-                        end_time=event.end_time,
-                        vectors=(),
-                        palm_dx=event_rows[-1].palm_x - event_rows[0].palm_x,
-                        palm_dy=event_rows[-1].palm_y - event_rows[0].palm_y,
-                    ),
-                    raw_vectors,
+            for event_rows in _hand_streams(
+                [
+                    row
+                    for row in rows
+                    if event.start_time <= row.timestamp <= event.end_time and _usable_row(row)
+                ]
+            ):
+                if len(event_rows) < min_points:
+                    continue
+                raw_vectors = _raw_sequence(event_rows, DTW_FEATURE_NAMES)
+                normalization_vectors.extend(raw_vectors)
+                raw_templates.append(
+                    (
+                        DtwTemplate(
+                            template_id=f"template-{len(raw_templates) + 1:03d}",
+                            gesture=event.gesture,
+                            recording=str(item.recording),
+                            label_id=event.label_id,
+                            start_time=event.start_time,
+                            end_time=event.end_time,
+                            vectors=(),
+                            palm_dx=event_rows[-1].palm_x - event_rows[0].palm_x,
+                            palm_dy=event_rows[-1].palm_y - event_rows[0].palm_y,
+                        ),
+                        raw_vectors,
+                    )
                 )
-            )
 
     if not raw_templates:
         raise ValueError("DTW calibration requires at least one labeled gesture event")
@@ -605,24 +578,60 @@ def _negative_distances(
         min_points=min_points,
     )
     for rows in negative_rows:
-        for start_index, start_row in enumerate(rows):
-            if not _usable_row(start_row):
-                continue
-            for window_rows in _candidate_windows(rows, start_index, scratch_model):
-                sequence = _normalize_sequence(
-                    _raw_sequence(window_rows, DTW_FEATURE_NAMES),
-                    mean,
-                    std,
-                )
-                if len(sequence) < min_points:
+        for stream_rows in _hand_streams(rows):
+            for start_index, start_row in enumerate(stream_rows):
+                if not _usable_row(start_row):
                     continue
-                for template in templates:
-                    value = dtw_distance(sequence, template.vectors)
-                    previous = distances.get(template.gesture)
-                    distances[template.gesture] = (
-                        value if previous is None else min(previous, value)
+                for window_rows in _candidate_windows(stream_rows, start_index, scratch_model):
+                    sequence = _normalize_sequence(
+                        _raw_sequence(window_rows, DTW_FEATURE_NAMES),
+                        mean,
+                        std,
                     )
+                    if len(sequence) < min_points:
+                        continue
+                    for template in templates:
+                        value = dtw_distance(sequence, template.vectors)
+                        previous = distances.get(template.gesture)
+                        distances[template.gesture] = (
+                            value if previous is None else min(previous, value)
+                        )
     return distances
+
+
+def _candidate_from_match(
+    match: DtwMatch,
+    window_rows: list[FrameFeatureRow],
+    *,
+    recognizer: str,
+) -> GestureCandidate:
+    return GestureCandidate(
+        name=match.gesture,
+        confidence=match.confidence,
+        timestamp=window_rows[-1].timestamp,
+        hand_id=window_rows[-1].hand_id or None,
+        metadata={
+            "recognizer": recognizer,
+            "distance": match.distance,
+            "threshold": match.threshold,
+            "template_id": match.template_id,
+            "palm_dx": match.palm_dx,
+            "palm_dy": match.palm_dy,
+            "window_start": window_rows[0].timestamp,
+            "window_end": window_rows[-1].timestamp,
+            "window_points": len(window_rows),
+            "hand_id": window_rows[-1].hand_id,
+        },
+    )
+
+
+def _hand_streams(rows: list[FrameFeatureRow]) -> list[list[FrameFeatureRow]]:
+    streams: dict[str, list[FrameFeatureRow]] = {}
+    for row in rows:
+        if not _usable_row(row):
+            continue
+        streams.setdefault(row.hand_id, []).append(row)
+    return [streams[key] for key in sorted(streams)]
 
 
 def _candidate_windows(
@@ -728,6 +737,8 @@ def _suppress_candidates(
             existing_start = float(existing.metadata.get("window_start", existing.timestamp))
             existing_end = float(existing.metadata.get("window_end", existing.timestamp))
             if candidate.name != existing.name:
+                continue
+            if candidate.hand_id != existing.hand_id:
                 continue
             if window_start <= existing_end + cooldown_seconds and existing_start <= window_end:
                 overlaps = True

@@ -225,12 +225,20 @@ scripts/airdesk-nvidia-mediapipe-wayland record --out data/recordings/sprint4-gp
 
 The faster path is now the chart recorder. It expands a compact pattern into an on-screen colored chart HUD with a default 3-second lead-in, a smooth current-cue progress bar, and fixed upcoming cards for get-ready, stroke, reset, and rest windows; waits for space by default; and writes coarse stroke/recovery/event labels beside the recording. A combo block such as `RRR` stays grouped as one active prompt (`SWIPE R R R`) so the individual swipes can happen at a natural pace inside that block instead of being flashed one at a time.
 
-Important two-hand caveat: do not collect new combo/chained swipe data yet. The current collection/feature pipeline was effectively single-hand (`max_num_hands=1` by default and feature export uses `frame.hands[0]`). That means both-hands-visible combo attempts can be wrong: one hand can remain tracked while the other hand gestures. The May 2026 `sprint4-gpu-swipes-002-structured` combo takes were deleted for this reason. Re-enable these chart commands only after two-hand feature/evaluation support lands, and include `--max-num-hands 2`:
+Important two-hand caveat: do not collect new combo/chained swipe data until the two-hand path has passed replay checks. The old collection/feature pipeline was effectively single-hand (`max_num_hands=1` by default and feature export used `frame.hands[0]`). That means both-hands-visible combo attempts can be wrong: one hand can remain tracked while the other hand gestures. The May 2026 `sprint4-gpu-swipes-002-structured` combo takes were deleted for this reason. The feature exporter now writes per-hand rows, DTW/TCN windows are hand-scoped, and chart recording defaults to `--max-num-hands 2`; keep the flag explicit in collection notes anyway:
 
 ```bash
 scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy.jsonl --chart "RR | rest | RL | rest | RRR | rest | RLR | rest" --gesture-seconds 1.25 --max-num-hands 2 --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
 scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-003-two-hand/chart-b-mixed.jsonl --chart "LR | rest | RR | rest | LRR | rest | RRL | rest" --gesture-seconds 1.25 --max-num-hands 2 --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
 scripts/airdesk-nvidia-mediapipe-wayland gesture chart-record --out data/recordings/sprint4-gpu-swipes-003-two-hand/chart-c-alternating.jsonl --chart "RLR | rest | LRL | rest | RRL | rest | LRR | rest" --gesture-seconds 1.25 --max-num-hands 2 --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
+```
+
+After each kept chart, immediately export features and spot-check that both hands appear as separate streams before using the data:
+
+```bash
+uv run airdesk features export data/recordings/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy.jsonl --labels data/labels/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy.labels.json --out data/features/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy.csv
+uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy.jsonl --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --out data/evaluations/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy-dtw-candidates.json
+uv run airdesk gesture decode-candidates --candidates data/evaluations/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy-dtw-candidates.json --out data/evaluations/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy-dtw-decoded.json
 ```
 
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:

@@ -216,10 +216,11 @@ def evaluate_tcn_manifest(
                     name=prediction.target,
                     confidence=prediction.confidence,
                     timestamp=prediction.end_time,
-                    hand_id=None,
+                    hand_id=prediction.hand_id or None,
                     metadata={
                         "recognizer": "tcn",
                         "sample_id": prediction.sample_id,
+                        "hand_id": prediction.hand_id,
                         "window_start": prediction.start_time,
                         "window_end": prediction.end_time,
                         "probabilities": prediction.probabilities,
@@ -253,6 +254,7 @@ def _decode_tcn_predictions(
             timestamp=prediction.end_time,
             scores=prediction.probabilities,
             source_id=prediction.feature_path,
+            hand_id=prediction.hand_id or None,
             window_start=prediction.start_time,
             window_end=prediction.end_time,
             metadata={

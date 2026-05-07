@@ -153,6 +153,7 @@ class TcnWindowSample:
     target: str
     target_index: int
     target_frame_counts: dict[str, int]
+    hand_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -163,6 +164,7 @@ class TcnWindowSample:
             sample_id=str(data["sample_id"]),
             feature_path=str(data["feature_path"]),
             label_path=str(data["label_path"]) if data.get("label_path") is not None else None,
+            hand_id=str(data.get("hand_id", "")),
             start_row=int(data["start_row"]),
             end_row=int(data["end_row"]),
             start_time=float(data["start_time"]),
@@ -284,20 +286,21 @@ def build_tcn_dataset_manifest(
                 target_frame_counts=_target_counts(target_by_row, resolved_targets),
             )
         )
-        windows.extend(
-            _windows_for_source(
-                rows,
-                target_by_row=target_by_row,
-                feature_path=feature_path,
-                label_path=label_path,
-                window_seconds=window_seconds,
-                stride_seconds=stride_seconds,
-                min_rows=min_rows,
-                min_gesture_fraction=min_gesture_fraction,
-                targets=resolved_targets,
-                sample_offset=len(windows),
+        for stream_rows in _feature_streams(rows):
+            windows.extend(
+                _windows_for_source(
+                    stream_rows,
+                    target_by_row=target_by_row,
+                    feature_path=feature_path,
+                    label_path=label_path,
+                    window_seconds=window_seconds,
+                    stride_seconds=stride_seconds,
+                    min_rows=min_rows,
+                    min_gesture_fraction=min_gesture_fraction,
+                    targets=resolved_targets,
+                    sample_offset=len(windows),
+                )
             )
-        )
 
     return TcnDatasetManifest(
         schema_version=1,
@@ -349,6 +352,8 @@ def feature_window_matrix(
 ) -> list[list[float]]:
     """Load numeric feature values for one manifest window."""
     rows = load_feature_rows_csv(Path(window.feature_path))[window.start_row : window.end_row]
+    if window.hand_id:
+        rows = [row for row in rows if row.hand_id == window.hand_id]
     return [[_numeric_feature_value(row, column) for column in feature_columns] for row in rows]
 
 
@@ -447,7 +452,7 @@ def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:
 
 
 def _windows_for_source(
-    rows: list[FrameFeatureRow],
+    indexed_rows: list[tuple[int, FrameFeatureRow]],
     *,
     target_by_row: list[str],
     feature_path: Path,
@@ -459,6 +464,7 @@ def _windows_for_source(
     targets: tuple[str, ...],
     sample_offset: int,
 ) -> list[TcnWindowSample]:
+    rows = [row for _index, row in indexed_rows]
     if not rows:
         return []
     windows: list[TcnWindowSample] = []
@@ -472,7 +478,10 @@ def _windows_for_source(
         while end_index < len(rows) and rows[end_index].timestamp <= end_time + 1e-9:
             end_index += 1
         if end_index - start_index >= min_rows:
-            window_targets = target_by_row[start_index:end_index]
+            window_targets = [
+                target_by_row[original_index]
+                for original_index, _row in indexed_rows[start_index:end_index]
+            ]
             target_counts = _target_counts(window_targets, targets)
             target, target_index = _window_target(
                 target_counts,
@@ -486,8 +495,9 @@ def _windows_for_source(
                     sample_id=f"window-{sample_number:06d}",
                     feature_path=str(feature_path),
                     label_path=str(label_path) if label_path is not None else None,
-                    start_row=start_index,
-                    end_row=end_index,
+                    hand_id=rows[start_index].hand_id,
+                    start_row=indexed_rows[start_index][0],
+                    end_row=indexed_rows[end_index - 1][0] + 1,
                     start_time=start_time,
                     end_time=rows[end_index - 1].timestamp,
                     row_count=end_index - start_index,
@@ -504,6 +514,15 @@ def _windows_for_source(
             next_index = start_index + 1
         start_index = next_index
     return windows
+
+
+def _feature_streams(rows: list[FrameFeatureRow]) -> list[list[tuple[int, FrameFeatureRow]]]:
+    """Split flat feature rows into independent hand/no-hand streams."""
+    streams: dict[str, list[tuple[int, FrameFeatureRow]]] = {}
+    for index, row in enumerate(rows):
+        stream_id = row.hand_id if row.tracking_present else "__no_hand__"
+        streams.setdefault(stream_id, []).append((index, row))
+    return [streams[key] for key in sorted(streams)]
 
 
 def _window_target(

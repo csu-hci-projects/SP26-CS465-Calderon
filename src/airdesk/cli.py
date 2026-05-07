@@ -744,7 +744,7 @@ def gesture_chart_record(
     max_num_hands: Annotated[
         int,
         typer.Option(help="Maximum number of hands for MediaPipe to track."),
-    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    ] = 2,
     min_detection_confidence: Annotated[
         float,
         typer.Option(help="Minimum palm detection confidence."),
@@ -768,7 +768,7 @@ def gesture_chart_record(
     max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
     show: Annotated[bool, typer.Option(help="Show an OpenCV prompt/landmark window.")] = True,
 ) -> None:
-    """Record a structured swipe chart with Guitar-Hero-style timing prompts."""
+    """Record a structured swipe chart with two-hand-capable timing prompts."""
     if countdown < 0:
         typer.echo("--countdown cannot be negative.", err=True)
         raise typer.Exit(code=1)
@@ -1308,7 +1308,7 @@ def gesture_watch_tcn(
     rows = []
     state = {"status": "warming up", "alert": "", "alert_until": 0.0}
     first_timestamp: float | None = None
-    next_prediction_time: float | None = None
+    next_prediction_time_by_hand: dict[str, float] = {}
 
     if hasattr(tracker, "preview_status_provider"):
         tracker.preview_status_provider = lambda: _live_tcn_preview_status(state)  # type: ignore[attr-defined]
@@ -1322,33 +1322,49 @@ def gesture_watch_tcn(
         tracker.start()
         for frame in tracker.frames():
             first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
-            row = stream.append(frame)
-            rows.append(row)
-            cutoff = row.timestamp - predictor.window_seconds
+            rows.extend(stream.append_rows(frame))
+            cutoff = frame.timestamp - predictor.window_seconds
             rows = [item for item in rows if item.timestamp >= cutoff]
-            if len(rows) < min_rows:
-                state["status"] = f"warming rows={len(rows)}/{min_rows}"
+            hand_streams = _live_feature_streams(rows)
+            if not hand_streams:
+                state["status"] = "warming rows=0"
                 continue
-            if next_prediction_time is not None and row.timestamp < next_prediction_time:
-                continue
-            prediction_started_at = monotonic()
-            prediction = predictor.predict_rows(rows)
-            prediction_ms = (monotonic() - prediction_started_at) * 1000
-            state["status"] = _format_live_tcn_status(prediction)
-            if profile_timing:
-                typer.echo(
-                    f"tcn_predict_ms={prediction_ms:.2f} rows={len(rows)} "
-                    f"target={prediction.target} confidence={prediction.confidence:.3f}"
+            state["status"] = f"TCN streams={len(hand_streams)} rows={len(rows)}"
+            for hand_id, hand_rows in hand_streams.items():
+                if len(hand_rows) < min_rows:
+                    continue
+                next_prediction_time = next_prediction_time_by_hand.get(hand_id)
+                if (
+                    next_prediction_time is not None
+                    and hand_rows[-1].timestamp < next_prediction_time
+                ):
+                    continue
+                prediction_started_at = monotonic()
+                prediction = predictor.predict_rows(hand_rows)
+                prediction_ms = (monotonic() - prediction_started_at) * 1000
+                state["status"] = _format_live_tcn_status(prediction)
+                if profile_timing:
+                    typer.echo(
+                        f"tcn_predict_ms={prediction_ms:.2f} hand={hand_id} "
+                        f"rows={len(hand_rows)} target={prediction.target} "
+                        f"confidence={prediction.confidence:.3f}"
+                    )
+                if (
+                    prediction.target != "background"
+                    and prediction.confidence >= confidence_threshold
+                ):
+                    state["alert"] = (
+                        f"{hand_id} {prediction.target} {prediction.confidence:.2f}"
+                    )
+                    state["alert_until"] = monotonic() + 1.25
+                next_prediction_time_by_hand[hand_id] = (
+                    hand_rows[-1].timestamp + predictor.stride_seconds
                 )
-            if prediction.target != "background" and prediction.confidence >= confidence_threshold:
-                state["alert"] = f"{prediction.target} {prediction.confidence:.2f}"
-                state["alert_until"] = monotonic() + 1.25
-            next_prediction_time = row.timestamp + predictor.stride_seconds
-            if prediction.confidence < confidence_threshold:
-                continue
-            if prediction.target == "background" and not include_background:
-                continue
-            typer.echo(_format_live_tcn_prediction(prediction, first_timestamp=first_timestamp))
+                if prediction.confidence < confidence_threshold:
+                    continue
+                if prediction.target == "background" and not include_background:
+                    continue
+                typer.echo(_format_live_tcn_prediction(prediction, first_timestamp=first_timestamp))
     except KeyboardInterrupt:
         typer.echo("interrupted")
     except RuntimeError as exc:
@@ -1469,12 +1485,11 @@ def gesture_watch_dtw(
         tracker.start()
         for frame in tracker.frames():
             first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
-            row = stream.append(frame)
-            rows.append(row)
-            cutoff = row.timestamp - dtw_model.max_window_seconds - watch_stride_seconds
+            rows.extend(stream.append_rows(frame))
+            cutoff = frame.timestamp - dtw_model.max_window_seconds - watch_stride_seconds
             rows = [item for item in rows if item.timestamp >= cutoff]
             state["status"] = f"DTW rows={len(rows)} hands={len(frame.hands)}"
-            if next_scan_time is not None and row.timestamp < next_scan_time:
+            if next_scan_time is not None and frame.timestamp < next_scan_time:
                 continue
             scan_started_at = monotonic()
             candidates = [
@@ -1506,7 +1521,7 @@ def gesture_watch_dtw(
                 state["alert"] = f"{best.name} {best.confidence:.2f}"
                 state["alert_until"] = monotonic() + 1.25
                 last_reported_timestamp = max(candidate.timestamp for candidate in fresh)
-            next_scan_time = row.timestamp + watch_stride_seconds
+            next_scan_time = frame.timestamp + watch_stride_seconds
     except KeyboardInterrupt:
         typer.echo("interrupted")
     except RuntimeError as exc:
@@ -3728,7 +3743,8 @@ def _format_feature_diagnostics_summary(report: FeatureDiagnosticsReport) -> str
 def _format_live_tcn_status(prediction: CausalTcnLivePrediction) -> str:
     probabilities = _compact_probabilities(prediction.probabilities)
     target = _short_tcn_target(prediction.target)
-    return f"TCN {target} {prediction.confidence:.2f} | {probabilities}"
+    hand = f"{prediction.hand_id} " if prediction.hand_id else ""
+    return f"TCN {hand}{target} {prediction.confidence:.2f} | {probabilities}"
 
 
 def _format_live_tcn_prediction(
@@ -3740,8 +3756,9 @@ def _format_live_tcn_prediction(
     if first_timestamp is not None:
         relative = prediction.end_time - first_timestamp
     probabilities = _compact_probabilities(prediction.probabilities)
+    hand = f" hand={prediction.hand_id}" if prediction.hand_id else ""
     return (
-        f"t={relative:7.3f}s target={prediction.target} "
+        f"t={relative:7.3f}s{hand} target={prediction.target} "
         f"confidence={prediction.confidence:.3f} {probabilities}"
     )
 
@@ -3760,10 +3777,22 @@ def _format_live_dtw_candidate(
         distance = f"{distance:.3f}"
     if isinstance(threshold, float):
         threshold = f"{threshold:.3f}"
+    hand = f" hand={candidate.hand_id}" if candidate.hand_id else ""
     return (
-        f"t={relative:7.3f}s target={candidate.name} "
+        f"t={relative:7.3f}s{hand} target={candidate.name} "
         f"confidence={candidate.confidence:.3f} distance={distance} threshold={threshold}"
     )
+
+
+def _live_feature_streams(rows: list[object]) -> dict[str, list[object]]:
+    streams: dict[str, list[object]] = {}
+    for row in rows:
+        hand_id = str(getattr(row, "hand_id", ""))
+        tracking_present = int(getattr(row, "tracking_present", 0))
+        if not hand_id or tracking_present != 1:
+            continue
+        streams.setdefault(hand_id, []).append(row)
+    return streams
 
 
 def _compact_probabilities(probabilities: dict[str, float]) -> str:

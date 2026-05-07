@@ -66,3 +66,54 @@ def test_event_decoder_accepts_candidate_score_frames() -> None:
 
     assert len(events) == 1
     assert events[0].name == "swipe_left"
+
+
+def test_event_decoder_decodes_hands_independently_then_merges_by_time() -> None:
+    decoder = EventDecoder(
+        EventDecoderConfig(
+            activation_threshold=0.6,
+            release_threshold=0.4,
+            min_peak_confidence=0.6,
+            recovery_seconds=0.0,
+            min_event_separation_seconds=0.1,
+        )
+    )
+
+    events = decoder.decode(
+        [
+            DecoderFrame(timestamp=1.0, hand_id="hand-0", scores={"stroke_left": 0.8}),
+            DecoderFrame(timestamp=1.02, hand_id="hand-1", scores={"stroke_right": 0.85}),
+            DecoderFrame(timestamp=1.1, hand_id="hand-0", scores={"background": 0.9}),
+            DecoderFrame(timestamp=1.12, hand_id="hand-1", scores={"background": 0.9}),
+        ]
+    )
+
+    assert [(event.name, event.hand_id) for event in events] == [
+        ("swipe_left", "hand-0"),
+        ("swipe_right", "hand-1"),
+    ]
+
+
+def test_event_decoder_suppresses_same_gesture_repeated_fire_across_hands() -> None:
+    decoder = EventDecoder(
+        EventDecoderConfig(
+            activation_threshold=0.6,
+            release_threshold=0.4,
+            min_peak_confidence=0.6,
+            recovery_seconds=0.0,
+            min_event_separation_seconds=0.5,
+        )
+    )
+
+    events = decoder.decode(
+        [
+            DecoderFrame(timestamp=1.0, hand_id="hand-0", scores={"stroke_left": 0.8}),
+            DecoderFrame(timestamp=1.1, hand_id="hand-0", scores={"background": 0.9}),
+            DecoderFrame(timestamp=1.2, hand_id="hand-1", scores={"stroke_left": 0.9}),
+            DecoderFrame(timestamp=1.3, hand_id="hand-1", scores={"background": 0.9}),
+        ]
+    )
+
+    assert len(events) == 1
+    assert events[0].name == "swipe_left"
+    assert events[0].hand_id == "hand-1"

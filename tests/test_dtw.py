@@ -96,6 +96,38 @@ def test_dtw_recognizer_matches_synthetic_swipe_and_rejects_stationary_negative(
     assert model.min_palm_dx["swipe_left"] > 0
 
 
+def test_dtw_recognizer_scores_two_hand_streams_without_mixing(tmp_path: Path) -> None:
+    calibration = _write_motion_recording(tmp_path / "calibration.jsonl", (0.7, 0.6, 0.45, 0.3))
+    calibration_labels = _label_recording(calibration, "swipe_left")
+    two_hand_recording = _write_two_hand_motion_recording(
+        tmp_path / "two-hands.jsonl",
+        primary_xs=(0.5, 0.5, 0.5, 0.5),
+        secondary_xs=(0.7, 0.6, 0.45, 0.3),
+    )
+    model = calibrate_dtw_model(
+        [
+            DtwCalibrationInput(
+                calibration,
+                calibration_labels,
+                tmp_path / "calibration.labels.json",
+            ),
+        ],
+        min_window_seconds=0.2,
+        max_window_seconds=0.5,
+        window_step_seconds=0.1,
+    )
+
+    candidates = DtwTemplateRecognizer(model).recognize_rows(
+        _feature_rows(two_hand_recording, None)
+    )
+
+    assert any(
+        candidate.name == "swipe_left" and candidate.hand_id == "hand-1"
+        for candidate in candidates
+    )
+    assert not any(candidate.hand_id == "hand-0" for candidate in candidates)
+
+
 def test_dtw_recognizer_supports_older_saved_feature_sets(tmp_path: Path) -> None:
     recording = _write_motion_recording(tmp_path / "left.jsonl", (0.7, 0.6, 0.45, 0.3))
     labels = _label_recording(recording, "swipe_left")
@@ -307,19 +339,52 @@ def _write_motion_recording(path: Path, xs: tuple[float, ...]) -> Path:
                     timestamp=timestamp,
                     source_id="dtw-test",
                     frame=frame,
-                    hands=(_hand_at(x),),
+                    hands=(_hand_at(x, hand_id="hand-0"),),
                 )
             )
             timestamp += 0.1
     return path
 
 
-def _hand_at(palm_x: float) -> NormalizedHand:
+def _write_two_hand_motion_recording(
+    path: Path,
+    *,
+    primary_xs: tuple[float, ...],
+    secondary_xs: tuple[float, ...],
+) -> Path:
+    with JsonlRecordingWriter(path) as writer:
+        timestamp = 1.0
+        for sequence, (primary_x, secondary_x) in enumerate(
+            zip(primary_xs, secondary_xs, strict=True)
+        ):
+            frame = FrameMetadata(
+                timestamp=timestamp,
+                source_id="dtw-test",
+                width=640,
+                height=480,
+                sequence=sequence,
+            )
+            writer.write_tracking_frame(
+                TrackingFrame(
+                    timestamp=timestamp,
+                    source_id="dtw-test",
+                    frame=frame,
+                    hands=(
+                        _hand_at(primary_x, hand_id="hand-0"),
+                        _hand_at(secondary_x, hand_id="hand-1"),
+                    ),
+                )
+            )
+            timestamp += 0.1
+    return path
+
+
+def _hand_at(palm_x: float, *, hand_id: str) -> NormalizedHand:
     landmarks = [Landmark(palm_x, 0.5, 0.0) for _ in range(21)]
     landmarks[4] = Landmark(palm_x - 0.08, 0.5, 0.0)
     landmarks[8] = Landmark(palm_x + 0.06, 0.45, 0.0)
     return NormalizedHand(
-        hand_id="hand-0",
+        hand_id=hand_id,
         landmarks=HandLandmarks(tuple(landmarks), handedness="right", confidence=1.0),
         palm_center=(palm_x, 0.5, 0.0),
         bbox=(palm_x - 0.1, 0.4, palm_x + 0.1, 0.6),

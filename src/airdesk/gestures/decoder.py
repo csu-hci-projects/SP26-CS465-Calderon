@@ -37,6 +37,7 @@ class DecoderFrame:
     timestamp: float
     scores: dict[str, float]
     source_id: str = ""
+    hand_id: str | None = None
     window_start: float | None = None
     window_end: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -70,6 +71,13 @@ class EventDecoder:
     def decode(self, frames: list[DecoderFrame]) -> list[GestureCandidate]:
         """Return committed gesture events from timestamp-ordered score frames."""
         self._validate_config()
+        events: list[GestureCandidate] = []
+        for stream_frames in _decoder_streams(frames):
+            events.extend(self._decode_stream(stream_frames))
+        return _suppress_decoded_events(events, self.config)
+
+    def _decode_stream(self, frames: list[DecoderFrame]) -> list[GestureCandidate]:
+        """Decode one hand/source stream without mixing active peaks."""
         events: list[GestureCandidate] = []
         active: _ActivePeak | None = None
         last_commit_by_name: dict[str, float] = {}
@@ -143,10 +151,11 @@ class EventDecoder:
             name=active.name,
             confidence=active.peak_confidence,
             timestamp=active.peak_time,
-            hand_id=None,
+            hand_id=peak.hand_id,
             metadata={
                 "recognizer": "event_decoder",
                 "source_id": peak.source_id,
+                "hand_id": peak.hand_id,
                 "window_start": active.start_time,
                 "window_end": peak.window_end or active.peak_time,
                 "peak_time": active.peak_time,
@@ -191,6 +200,7 @@ def frames_from_candidates(candidates: list[GestureCandidate]) -> list[DecoderFr
                 timestamp=candidate.timestamp,
                 scores={candidate.name: candidate.confidence},
                 source_id=str(candidate.metadata.get("recognizer", "")),
+                hand_id=candidate.hand_id,
                 window_start=window_start,
                 window_end=window_end,
                 metadata={"candidate": candidate.to_dict()},
@@ -209,6 +219,35 @@ def _best_non_background(scores: dict[str, float]) -> tuple[str, float]:
             best_target = target
             best_score = score
     return best_target, best_score
+
+
+def _decoder_streams(frames: list[DecoderFrame]) -> list[list[DecoderFrame]]:
+    streams: dict[tuple[str, str], list[DecoderFrame]] = {}
+    for frame in frames:
+        key = (frame.source_id, frame.hand_id or "")
+        streams.setdefault(key, []).append(frame)
+    return [streams[key] for key in sorted(streams)]
+
+
+def _suppress_decoded_events(
+    events: list[GestureCandidate],
+    config: EventDecoderConfig,
+) -> list[GestureCandidate]:
+    """Merge decoded hand streams and suppress same-gesture repeated fires globally."""
+    selected: list[GestureCandidate] = []
+    separation = max(
+        config.min_event_separation_seconds,
+        config.cooldown_seconds,
+    )
+    for candidate in sorted(events, key=lambda item: item.confidence, reverse=True):
+        if any(
+            candidate.name == existing.name
+            and abs(candidate.timestamp - existing.timestamp) < separation
+            for existing in selected
+        ):
+            continue
+        selected.append(candidate)
+    return sorted(selected, key=lambda item: item.timestamp)
 
 
 def _float_or_none(value: object) -> float | None:
