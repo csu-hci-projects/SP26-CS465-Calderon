@@ -27,6 +27,7 @@ from airdesk.actions.hyprland import (
 )
 from airdesk.analysis import (
     analyze_recording,
+    diagnose_tcn_manifest_events,
     evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
     evaluate_rule_recognizer,
@@ -1234,6 +1235,77 @@ def gesture_evaluate_tcn(
     )
     if out is not None:
         typer.echo(f"wrote evaluation={out}")
+
+
+@gesture_app.command("diagnose-tcn-events")
+def gesture_diagnose_tcn_events(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN dataset manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN checkpoint path."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output detailed diagnostics JSON path.")],
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(help="Minimum softmax confidence for decoded probability frames."),
+    ] = 0.35,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
+    ] = 0.5,
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for event matching."),
+    ] = 0.5,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder activation threshold."),
+    ] = 0.35,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold."),
+    ] = 0.2,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak confidence."),
+    ] = 0.35,
+) -> None:
+    """Write per-event decoded TCN diagnostics for misses and false activations."""
+    decoder_config = EventDecoderConfig(
+        activation_threshold=activation_threshold,
+        release_threshold=release_threshold,
+        min_peak_confidence=min_peak_confidence,
+        min_event_separation_seconds=cooldown_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    try:
+        payload = diagnose_tcn_manifest_events(
+            manifest_path=manifest,
+            model_path=model,
+            confidence_threshold=confidence_threshold,
+            cooldown_seconds=cooldown_seconds,
+            match_tolerance_seconds=match_tolerance_seconds,
+            event_decoder_config=decoder_config,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    summary = payload["summary"]
+    typer.echo(
+        f"tcn_event_diagnostics recordings={summary['recordings']} "
+        f"intended={summary['intended_events']} matched={summary['matched_events']} "
+        f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']}"
+    )
+    typer.echo(f"wrote diagnostics={out}")
 
 
 @gesture_app.command("watch-tcn")

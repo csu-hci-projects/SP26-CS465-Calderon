@@ -103,6 +103,7 @@ Important live findings:
 - `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
 - Two-hand combo data remains the next blocker, but the broad collection pause has moved from "pipeline not implemented" to "weak labels and decoder need tightening." The old one-hand default was wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export used to consume only `frame.hands[0]`. AirDesk now exports per-hand feature rows, keeps independent per-hand motion history, scores DTW/TCN streams per hand, and decodes hand streams before merging events with cooldown suppression. The chart recorder defaults to `--max-num-hands 2`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted.
 - New two-hand shared TCN evidence: batches 003+004 are local under ignored `data/`. Use one shared TCN checkpoint independently on each `hand_id` stream, not separate tracker-slot models. Use `gesture build-tcn-dataset --feature-preset stream-invariant --target-mode phase --target-assignment motion-gated` for two-hand chart manifests so a stationary visible hand is not trained as the prompted stroke. The motion gate uses motion energy rather than raw dx sign because mirrored preview/raw camera direction conventions were brittle across the two-hand batches. Training on 003 and evaluating decoded events on 004 matched 27/48, missed 21, with 11 false activations and 4 repeated fires. This is useful progress but not live-control-ready.
+- `airdesk gesture diagnose-tcn-events` exists for decoded TCN failure reports. On the 003-to-004 split, most misses had nearest same-gesture candidates outside the 0.5 s tolerance window; increasing match tolerance to 3.0 s raised matches to 36/48 while leaving 9 false activations. Treat chart labels as prompt-time weak labels until active-hand/timestamp alignment improves.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection remains pending.
 
@@ -294,7 +295,7 @@ Recommended next chunk:
 1. Collect or refine recovery-aware chained labels; existing isolated labels have no recovery frames.
 2. Tune/inspect event decoder thresholds against probability traces, not just final summary counts.
 3. Add a small report command or notebook that compares DTW, TCN, and decoded outputs side by side.
-4. Improve active-hand weak-label assignment, class balance, and event-decoder thresholds before broad new combo collection.
+4. Improve active-hand weak-label assignment, timestamp alignment, class balance, and event-decoder thresholds before broad new combo collection.
 5. Decide the Sprint 5 pilot slice from event-level replay evidence; a narrower dry-run pilot may be the honest path.
 
 ## Useful Commands

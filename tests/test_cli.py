@@ -168,6 +168,19 @@ def test_evaluate_tcn_help_exposes_optional_evaluation_controls() -> None:
     assert "--cooldown-seconds" in result.stdout
 
 
+def test_diagnose_tcn_events_help_exposes_decoder_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "diagnose-tcn-events", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--activation-threshold" in result.stdout
+    assert "--min-peak-confidence" in result.stdout
+
+
 def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     result = CliRunner().invoke(app, ["gesture", "watch-tcn", "--help"], env={"COLUMNS": "200"})
 

@@ -245,6 +245,78 @@ def evaluate_tcn_manifest(
     return tuple(evaluations)
 
 
+def diagnose_tcn_manifest_events(
+    *,
+    manifest_path: Path,
+    model_path: Path,
+    event_decoder_config: EventDecoderConfig,
+    confidence_threshold: float = 0.5,
+    cooldown_seconds: float = 0.5,
+    match_tolerance_seconds: float = 0.5,
+) -> dict[str, object]:
+    """Return detailed decoded TCN event diagnostics for each labeled manifest source."""
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    predictions = predict_causal_tcn_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+        confidence_threshold=confidence_threshold,
+        cooldown_seconds=cooldown_seconds,
+        include_background=True,
+    )
+    predictions_by_source: dict[tuple[str, str], list[CausalTcnPrediction]] = {}
+    for prediction in predictions:
+        if prediction.label_path is None:
+            continue
+        predictions_by_source.setdefault(
+            (prediction.feature_path, prediction.label_path),
+            [],
+        ).append(prediction)
+
+    diagnostics: list[dict[str, object]] = []
+    evaluations: list[GestureEvaluation] = []
+    for source in manifest.sources:
+        if source.label_path is None:
+            continue
+        feature_path = source.feature_path
+        label_path = source.label_path
+        labels = load_label_file(Path(label_path))
+        source_predictions = predictions_by_source.get((feature_path, label_path), [])
+        candidates = _decode_tcn_predictions(source_predictions, event_decoder_config)
+        evaluation = evaluate_candidates(
+            recording_path=Path(feature_path),
+            label_path=Path(label_path),
+            labels=labels,
+            recognizer="tcn_event_decoder",
+            candidates=candidates,
+            match_tolerance_seconds=match_tolerance_seconds,
+        )
+        evaluations.append(evaluation)
+        diagnostics.append(
+            {
+                "recording": feature_path,
+                "labels": label_path,
+                "evaluation": evaluation.to_dict(),
+                "diagnostics": diagnose_candidate_events(
+                    labels=labels,
+                    candidates=candidates,
+                    match_tolerance_seconds=match_tolerance_seconds,
+                ),
+            }
+        )
+
+    return {
+        "recognizer": "tcn_event_decoder",
+        "manifest": str(manifest_path),
+        "model": str(model_path),
+        "confidence_threshold": confidence_threshold,
+        "cooldown_seconds": cooldown_seconds,
+        "match_tolerance_seconds": match_tolerance_seconds,
+        "event_decoder": event_decoder_config.to_dict(),
+        "summary": holdout_totals(tuple(evaluations)),
+        "sources": diagnostics,
+    }
+
+
 def _decode_tcn_predictions(
     predictions: list[CausalTcnPrediction],
     config: EventDecoderConfig,
@@ -336,6 +408,92 @@ def evaluate_candidates(
         latencies_seconds=tuple(latencies),
         per_gesture=per_gesture,
     )
+
+
+def diagnose_candidate_events(
+    *,
+    labels: GestureLabelFile,
+    candidates: list[GestureCandidate],
+    match_tolerance_seconds: float = 0.0,
+) -> dict[str, object]:
+    """Explain which intended events matched, missed, repeated, or fired falsely."""
+    intended = [event for event in labels.event_labels if event.label_type == "gesture"]
+    matched_candidate_ids: set[int] = set()
+    matches: list[dict[str, object]] = []
+    missed: list[dict[str, object]] = []
+    repeated: list[dict[str, object]] = []
+
+    for event_index, event in enumerate(intended):
+        event_candidates = [
+            (index, candidate)
+            for index, candidate in enumerate(candidates)
+            if candidate.name == event.gesture
+            and event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
+        ]
+        if not event_candidates:
+            missed.append(
+                {
+                    "event_index": event_index,
+                    "event": _event_label_to_diagnostic(event),
+                    "nearest_same_gesture_candidate": _nearest_candidate(
+                        event,
+                        candidates,
+                        name=event.gesture,
+                    ),
+                    "nearest_any_candidate": _nearest_candidate(event, candidates),
+                }
+            )
+            continue
+        first_index, first_candidate = event_candidates[0]
+        matched_candidate_ids.add(first_index)
+        matches.append(
+            {
+                "event_index": event_index,
+                "event": _event_label_to_diagnostic(event),
+                "candidate_index": first_index,
+                "candidate": _candidate_to_diagnostic(first_candidate),
+                "latency_seconds": first_candidate.timestamp - event.start_time,
+            }
+        )
+        for repeated_index, repeated_candidate in event_candidates[1:]:
+            matched_candidate_ids.add(repeated_index)
+            repeated.append(
+                {
+                    "event_index": event_index,
+                    "event": _event_label_to_diagnostic(event),
+                    "candidate_index": repeated_index,
+                    "candidate": _candidate_to_diagnostic(repeated_candidate),
+                    "latency_seconds": repeated_candidate.timestamp - event.start_time,
+                }
+            )
+
+    false_activations: list[dict[str, object]] = []
+    for index, candidate in enumerate(candidates):
+        if index in matched_candidate_ids:
+            continue
+        if _inside_any_event(candidate, intended, match_tolerance_seconds=match_tolerance_seconds):
+            continue
+        false_activations.append(
+            {
+                "candidate_index": index,
+                "candidate": _candidate_to_diagnostic(candidate),
+                "nearest_same_gesture_event": _nearest_event(
+                    candidate,
+                    intended,
+                    gesture=candidate.name,
+                ),
+                "nearest_any_event": _nearest_event(candidate, intended),
+            }
+        )
+
+    return {
+        "matches": matches,
+        "missed_events": missed,
+        "false_activations": false_activations,
+        "repeated_fires": repeated,
+        "candidate_count": len(candidates),
+        "intended_event_count": len(intended),
+    }
 
 
 def evaluate_dtw_holdout(
@@ -582,6 +740,77 @@ def _inside_any_event(
         event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
         for event in events
     )
+
+
+def _event_label_to_diagnostic(event: GestureEventLabel) -> dict[str, object]:
+    return {
+        "gesture": event.gesture,
+        "start_time": event.start_time,
+        "end_time": event.end_time,
+        "duration_seconds": event.end_time - event.start_time,
+    }
+
+
+def _candidate_to_diagnostic(candidate: GestureCandidate) -> dict[str, object]:
+    metadata = dict(candidate.metadata)
+    return {
+        "name": candidate.name,
+        "timestamp": candidate.timestamp,
+        "confidence": candidate.confidence,
+        "hand_id": candidate.hand_id,
+        "window_start": metadata.get("window_start"),
+        "window_end": metadata.get("window_end"),
+        "peak_time": metadata.get("peak_time"),
+        "raw_target": metadata.get("raw_target"),
+        "scores": metadata.get("scores"),
+        "metadata": metadata,
+    }
+
+
+def _nearest_candidate(
+    event: GestureEventLabel,
+    candidates: list[GestureCandidate],
+    *,
+    name: str | None = None,
+) -> dict[str, object] | None:
+    filtered = [candidate for candidate in candidates if name is None or candidate.name == name]
+    if not filtered:
+        return None
+    center = (event.start_time + event.end_time) / 2
+    nearest = min(filtered, key=lambda candidate: abs(candidate.timestamp - center))
+    return {
+        "candidate": _candidate_to_diagnostic(nearest),
+        "seconds_from_event_start": nearest.timestamp - event.start_time,
+        "seconds_from_event_end": nearest.timestamp - event.end_time,
+    }
+
+
+def _nearest_event(
+    candidate: GestureCandidate,
+    events: list[GestureEventLabel],
+    *,
+    gesture: str | None = None,
+) -> dict[str, object] | None:
+    filtered = [event for event in events if gesture is None or event.gesture == gesture]
+    if not filtered:
+        return None
+    nearest = min(
+        filtered,
+        key=lambda event: _distance_to_event_interval(candidate.timestamp, event),
+    )
+    return {
+        "event": _event_label_to_diagnostic(nearest),
+        "seconds_from_event_start": candidate.timestamp - nearest.start_time,
+        "seconds_from_event_end": candidate.timestamp - nearest.end_time,
+    }
+
+
+def _distance_to_event_interval(timestamp: float, event: GestureEventLabel) -> float:
+    if event.start_time <= timestamp <= event.end_time:
+        return 0.0
+    if timestamp < event.start_time:
+        return event.start_time - timestamp
+    return timestamp - event.end_time
 
 
 def _rule_recognizer() -> CompositeGestureRecognizer:

@@ -55,7 +55,7 @@ Next implementation chunk:
 
 1. Check git status and read the active docs listed above.
 2. Start from the 003+004 two-hand evidence already collected and avoid broad new data collection for a moment.
-3. Improve active-hand weak-label assignment and decoder thresholds for shared per-hand TCN.
+3. Improve active-hand weak-label assignment and timestamp alignment for shared per-hand TCN.
 4. Verify mirrored/user-facing direction conventions before using raw dx sign for any label or gate.
 5. If another data pass is needed, recollect targeted combo charts with explicit `--max-num-hands 2` using updated commands in `tracking-samples.md`.
 6. Export features immediately after each kept chart and verify both hands appear as separate `hand_id` streams.
@@ -76,5 +76,6 @@ Important evidence:
 - Shared per-hand TCN is now the recommended learned-model shape: one checkpoint run independently on each `hand_id` stream, followed by event decoding/merge/cooldown. Do not train separate `hand-0` and `hand-1` tracker-slot models yet.
 - Two-hand motion-gated TCN target assignment exists via `--target-assignment motion-gated`. It gates on active-hand motion energy, not raw direction sign, because mirrored preview/raw camera direction conventions were brittle across 003+004.
 - 003-to-004 shared per-hand TCN decoded holdout matched 27/48, missed 21, produced 11 false activations and 4 repeated fires. Improved, but not live-control-ready.
+- `airdesk gesture diagnose-tcn-events` exists for decoded TCN failure reports. On the same split, increasing match tolerance from 0.5 s to 3.0 s raised matches from 27/48 to 36/48, so many misses are late/early relative to chart prompt labels rather than completely absent predictions.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Current UI for chart collection is a stable HUD with a progress bar and fixed upcoming cards.

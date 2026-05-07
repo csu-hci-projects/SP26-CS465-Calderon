@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from airdesk.analysis import evaluate_tcn_manifest
+from airdesk.analysis import diagnose_candidate_events, evaluate_tcn_manifest
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
     GestureEventLabel,
@@ -30,6 +30,7 @@ from airdesk.ml import (
     save_tcn_dataset_manifest,
     train_causal_tcn,
 )
+from airdesk.state.types import GestureCandidate
 
 
 def test_load_feature_rows_csv_round_trips_export_shape(tmp_path: Path) -> None:
@@ -165,6 +166,63 @@ def test_build_tcn_manifest_motion_gates_stationary_second_hand(tmp_path: Path) 
     targets_by_hand = {window.hand_id: window.target for window in manifest.windows}
     assert targets_by_hand == {"hand-0": "swipe_left", "hand-1": "background"}
     assert manifest.target_assignment == "motion-gated"
+
+
+def test_diagnose_candidate_events_lists_matches_misses_false_and_repeats() -> None:
+    labels = GestureLabelFile(
+        schema_version=1,
+        created_at=1.0,
+        session=SessionMetadata(
+            recording_path="recording.jsonl",
+            start_timestamp=1.0,
+            end_timestamp=3.0,
+        ),
+        event_labels=(
+            GestureEventLabel(
+                label_id="event-001",
+                label_type="gesture",
+                gesture="swipe_left",
+                start_time=1.0,
+                end_time=1.2,
+            ),
+            GestureEventLabel(
+                label_id="event-002",
+                label_type="gesture",
+                gesture="swipe_right",
+                start_time=2.0,
+                end_time=2.2,
+            ),
+        ),
+    )
+    candidates = [
+        GestureCandidate(
+            name="swipe_left",
+            confidence=0.8,
+            timestamp=1.1,
+            hand_id="hand-0",
+            metadata={"window_start": 0.8, "window_end": 1.1},
+        ),
+        GestureCandidate(name="swipe_left", confidence=0.7, timestamp=1.15),
+        GestureCandidate(name="swipe_right", confidence=0.9, timestamp=3.0),
+    ]
+
+    diagnostics = diagnose_candidate_events(
+        labels=labels,
+        candidates=candidates,
+        match_tolerance_seconds=0.1,
+    )
+
+    assert len(diagnostics["matches"]) == 1
+    assert len(diagnostics["repeated_fires"]) == 1
+    assert len(diagnostics["missed_events"]) == 1
+    assert len(diagnostics["false_activations"]) == 1
+    missed = diagnostics["missed_events"][0]
+    assert missed["event"]["gesture"] == "swipe_right"
+    assert missed["nearest_same_gesture_candidate"]["seconds_from_event_end"] == pytest.approx(0.8)
+    false_activation = diagnostics["false_activations"][0]
+    assert false_activation["candidate"]["name"] == "swipe_right"
+    nearest = false_activation["nearest_same_gesture_event"]
+    assert nearest["seconds_from_event_end"] == pytest.approx(0.8)
 
 
 def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path: Path) -> None:

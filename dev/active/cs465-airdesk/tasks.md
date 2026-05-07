@@ -122,7 +122,9 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Run replay checks on the two-hand feature/DTW/TCN/event-decoder path before collecting new combo data
 - [x] Add motion-gated TCN target assignment so stationary visible hands are not trained as prompted strokes
 - [x] Train/evaluate shared per-hand TCN on 003-to-004 two-hand chart split and document non-live-ready evidence
-- [ ] Tighten active-hand weak labels and decoder thresholds using 003+004 before collecting more broad combo data
+- [x] Add decoded TCN event diagnostics for misses, false activations, repeated fires, hand ids, and nearest-event timing
+- [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data
+- [ ] Recheck decoder thresholds after label/timing diagnostics, not before
 - [ ] Recollect targeted combo/chained swipe charts after the weak-label/decoder pass
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
