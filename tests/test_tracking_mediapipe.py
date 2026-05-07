@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from airdesk.tracking.mediapipe import (
     _base_options_delegate,
     _fit_interval_inside,
-    _fit_non_overlapping_intervals,
+    _place_timeline_cards,
     bbox_pixels,
     hand_label,
     normalized_hands_from_mediapipe_results,
@@ -93,13 +93,24 @@ def test_fit_interval_inside_preserves_width_near_edges() -> None:
     assert _fit_interval_inside(center=120, width=260, minimum=20, maximum=220) == (20, 220)
 
 
-def test_fit_non_overlapping_intervals_shifts_or_drops_colliding_cards() -> None:
-    assert _fit_non_overlapping_intervals(
+def test_place_timeline_cards_uses_rows_without_shifting_time_positions() -> None:
+    assert _place_timeline_cards(
         cards=[(80, 100), (120, 100), (170, 100)],
         minimum=20,
         maximum=260,
         gap=10,
-    ) == [(30, 130), (140, 240), None]
+        rows=2,
+    ) == [(30, 130, 0), (70, 170, 1), None]
+
+
+def test_place_timeline_cards_skips_edge_cards_instead_of_clamping() -> None:
+    assert _place_timeline_cards(
+        cards=[(30, 100), (110, 100), (250, 100)],
+        minimum=20,
+        maximum=260,
+        gap=10,
+        rows=2,
+    ) == [None, (60, 160, 0), None]
 
 
 def test_hand_label_includes_handedness_and_confidence() -> None:

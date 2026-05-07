@@ -394,18 +394,19 @@ class MediaPipeHandTrackerBackend:
                     "past": end <= elapsed,
                 }
             )
-        intervals = _fit_non_overlapping_intervals(
+        placements = _place_timeline_cards(
             cards=[(int(card["center"]), int(card["width"])) for card in cards],
             minimum=panel_x + 18,
             maximum=panel_x + panel_w - 18,
             gap=10,
+            rows=2,
         )
-        for card, interval in zip(cards, intervals, strict=True):
-            if interval is None:
+        for card, placement in zip(cards, placements, strict=True):
+            if placement is None:
                 continue
-            x0, x1 = interval
-            y0 = lane_y - 24
-            y1 = lane_y + 24
+            x0, x1, row = placement
+            y0 = lane_y - 52 + row * 54
+            y1 = y0 + 48
             kind = str(card["kind"])
             color = _chart_segment_color(kind)
             if bool(card["past"]):
@@ -744,31 +745,33 @@ def _fit_interval_inside(
     return x0, x1
 
 
-def _fit_non_overlapping_intervals(
+def _place_timeline_cards(
     *,
     cards: list[tuple[int, int]],
     minimum: int,
     maximum: int,
     gap: int,
-) -> list[tuple[int, int] | None]:
-    placed: list[tuple[int, int] | None] = []
-    previous_end = minimum - gap
+    rows: int,
+) -> list[tuple[int, int, int] | None]:
+    placed: list[tuple[int, int, int] | None] = []
+    row_ends = [minimum - gap for _ in range(max(1, rows))]
     for center, width in cards:
-        x0, x1 = _fit_interval_inside(
-            center=center,
-            width=width,
-            minimum=minimum,
-            maximum=maximum,
-        )
-        if x0 < previous_end + gap:
-            fitted_width = x1 - x0
-            x0 = previous_end + gap
-            x1 = x0 + fitted_width
-        if x1 > maximum:
+        fitted_width = min(width, max(1, maximum - minimum))
+        x0 = center - fitted_width // 2
+        x1 = x0 + fitted_width
+        if x0 < minimum or x1 > maximum:
             placed.append(None)
             continue
-        placed.append((x0, x1))
-        previous_end = x1
+        selected_row: int | None = None
+        for row_index, row_end in enumerate(row_ends):
+            if x0 >= row_end + gap:
+                selected_row = row_index
+                break
+        if selected_row is None:
+            placed.append(None)
+            continue
+        placed.append((x0, x1, selected_row))
+        row_ends[selected_row] = x1
     return placed
 
 
