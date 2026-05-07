@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from airdesk.tracking.mediapipe import (
     _base_options_delegate,
+    _fit_interval_inside,
     bbox_pixels,
     hand_label,
     normalized_hands_from_mediapipe_results,
@@ -83,6 +84,12 @@ def test_preview_coordinate_helpers_clamp_to_image_bounds() -> None:
         512,
         384,
     )
+
+
+def test_fit_interval_inside_preserves_width_near_edges() -> None:
+    assert _fit_interval_inside(center=50, width=120, minimum=20, maximum=220) == (20, 140)
+    assert _fit_interval_inside(center=210, width=120, minimum=20, maximum=220) == (100, 220)
+    assert _fit_interval_inside(center=120, width=260, minimum=20, maximum=220) == (20, 220)
 
 
 def test_hand_label_includes_handedness_and_confidence() -> None:

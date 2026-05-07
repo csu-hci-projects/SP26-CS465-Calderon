@@ -378,12 +378,18 @@ class MediaPipeHandTrackerBackend:
             x_center = focus_x + int((center_time - elapsed) * pixels_per_second)
             label_text = str(item.get("text", ""))
             text_width = self._text_width(label_text, scale=0.58, thickness=2)
+            min_card_w = max(120, text_width + 30)
+            max_card_w = max(min_card_w, int(panel_w * 0.48))
             card_w = min(
-                max(170, int(panel_w * 0.42)),
-                max(86, int((end - start) * pixels_per_second), text_width + 26),
+                max_card_w,
+                max(min_card_w, int((end - start) * pixels_per_second)),
             )
-            x0 = max(panel_x + 18, x_center - card_w // 2)
-            x1 = min(panel_x + panel_w - 18, x_center + card_w // 2)
+            x0, x1 = _fit_interval_inside(
+                center=x_center,
+                width=card_w,
+                minimum=panel_x + 18,
+                maximum=panel_x + panel_w - 18,
+            )
             y0 = lane_y - 24
             y1 = lane_y + 24
             kind = str(item.get("kind", "prompt"))
@@ -702,6 +708,26 @@ def _chart_segment_color(kind: str) -> tuple[int, int, int]:
     if kind == "rest":
         return (95, 100, 112)
     return (90, 120, 210)
+
+
+def _fit_interval_inside(
+    *,
+    center: int,
+    width: int,
+    minimum: int,
+    maximum: int,
+) -> tuple[int, int]:
+    available = max(1, maximum - minimum)
+    fitted_width = min(width, available)
+    x0 = center - fitted_width // 2
+    x1 = x0 + fitted_width
+    if x0 < minimum:
+        x0 = minimum
+        x1 = x0 + fitted_width
+    if x1 > maximum:
+        x1 = maximum
+        x0 = x1 - fitted_width
+    return x0, x1
 
 
 def bbox_pixels(
