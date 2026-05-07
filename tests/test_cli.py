@@ -124,6 +124,15 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert "--confidence-threshold" in result.stdout
 
 
+def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "watch-dtw", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--model" in result.stdout
+    assert "--hand-model-path" in result.stdout
+    assert "--watch-stride-seconds" in result.stdout
+
+
 def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:
     result = CliRunner().invoke(app, ["gesture", "holdout-tcn", "--help"], env={"COLUMNS": "200"})
 

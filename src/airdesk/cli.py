@@ -1108,6 +1108,148 @@ def gesture_watch_tcn(
         tracker.stop()
 
 
+@gesture_app.command("watch-dtw")
+def gesture_watch_dtw(
+    model: Annotated[
+        Path,
+        typer.Option("--model", exists=True, readable=True, help="DTW model JSON path."),
+    ],
+    backend: Annotated[str, typer.Option(help="Tracking backend to watch.")] = "mediapipe",
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+    fourcc: Annotated[
+        str | None,
+        typer.Option(help="Requested camera FOURCC, e.g. MJPG."),
+    ] = "MJPG",
+    hand_model_path: Annotated[
+        Path,
+        typer.Option("--hand-model-path", help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --hand-model-path if missing."),
+    ] = True,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV live preview.")] = True,
+    mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(help="Minimum DTW confidence before printing a candidate."),
+    ] = 0.0,
+    watch_stride_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds between DTW scans over the rolling buffer."),
+    ] = 0.08,
+) -> None:
+    """Watch live/replay DTW candidate spotting without triggering desktop actions."""
+    if not 0 <= confidence_threshold <= 1:
+        typer.echo("confidence-threshold must be in [0, 1]", err=True)
+        raise typer.Exit(code=1)
+    if watch_stride_seconds <= 0:
+        typer.echo("watch-stride-seconds must be positive", err=True)
+        raise typer.Exit(code=1)
+    try:
+        dtw_model = DtwGestureModel.load(model)
+    except (OSError, ValueError, KeyError) as exc:
+        typer.echo(f"Failed to load DTW model: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    tracker = _make_tracker(
+        backend=backend,
+        device=device,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=hand_model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+        preview_mirror=mirror,
+    )
+    recognizer = DtwTemplateRecognizer(dtw_model)
+    stream = FeatureRowStream()
+    rows = []
+    state = {"status": "warming up", "alert": "", "alert_until": 0.0}
+    first_timestamp: float | None = None
+    next_scan_time: float | None = None
+    last_reported_timestamp: float | None = None
+
+    if hasattr(tracker, "preview_status_provider"):
+        tracker.preview_status_provider = lambda: _live_dtw_preview_status(state)  # type: ignore[attr-defined]
+
+    typer.echo(
+        "watching dtw "
+        f"model={model} backend={backend} "
+        f"window={dtw_model.min_window_seconds:.2f}-{dtw_model.max_window_seconds:.2f}s "
+        f"step={dtw_model.window_step_seconds:.2f}s"
+    )
+    try:
+        tracker.start()
+        for frame in tracker.frames():
+            first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
+            row = stream.append(frame)
+            rows.append(row)
+            cutoff = row.timestamp - dtw_model.max_window_seconds - watch_stride_seconds
+            rows = [item for item in rows if item.timestamp >= cutoff]
+            state["status"] = f"DTW rows={len(rows)} hands={len(frame.hands)}"
+            if next_scan_time is not None and row.timestamp < next_scan_time:
+                continue
+            candidates = [
+                candidate
+                for candidate in recognizer.recognize_rows(rows)
+                if candidate.confidence >= confidence_threshold
+            ]
+            fresh = [
+                candidate
+                for candidate in candidates
+                if last_reported_timestamp is None
+                or candidate.timestamp > last_reported_timestamp + 1e-6
+            ]
+            if fresh:
+                for candidate in fresh:
+                    typer.echo(
+                        _format_live_dtw_candidate(
+                            candidate,
+                            first_timestamp=first_timestamp,
+                        )
+                    )
+                best = max(fresh, key=lambda item: item.confidence)
+                state["alert"] = f"{best.name} {best.confidence:.2f}"
+                state["alert_until"] = monotonic() + 1.25
+                last_reported_timestamp = max(candidate.timestamp for candidate in fresh)
+            next_scan_time = row.timestamp + watch_stride_seconds
+    except KeyboardInterrupt:
+        typer.echo("interrupted")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        tracker.stop()
+
+
 @gesture_app.command("holdout-tcn")
 def gesture_holdout_tcn(
     features_dir: Annotated[
@@ -2801,6 +2943,26 @@ def _format_live_tcn_prediction(
     )
 
 
+def _format_live_dtw_candidate(
+    candidate: GestureCandidate,
+    *,
+    first_timestamp: float | None,
+) -> str:
+    relative = candidate.timestamp
+    if first_timestamp is not None:
+        relative = candidate.timestamp - first_timestamp
+    distance = candidate.metadata.get("distance", "unknown")
+    threshold = candidate.metadata.get("threshold", "unknown")
+    if isinstance(distance, float):
+        distance = f"{distance:.3f}"
+    if isinstance(threshold, float):
+        threshold = f"{threshold:.3f}"
+    return (
+        f"t={relative:7.3f}s target={candidate.name} "
+        f"confidence={candidate.confidence:.3f} distance={distance} threshold={threshold}"
+    )
+
+
 def _compact_probabilities(probabilities: dict[str, float]) -> str:
     return " ".join(
         f"{_short_tcn_target(target)}={probability:.2f}"
@@ -2817,6 +2979,15 @@ def _short_tcn_target(target: str) -> str:
 
 
 def _live_tcn_preview_status(state: dict[str, object]) -> str:
+    status = str(state["status"])
+    alert_until = float(state.get("alert_until", 0.0))
+    alert = str(state.get("alert", ""))
+    if alert and monotonic() <= alert_until:
+        return f"{status} | GESTURE {alert}"
+    return status
+
+
+def _live_dtw_preview_status(state: dict[str, object]) -> str:
     status = str(state["status"])
     alert_until = float(state.get("alert_until", 0.0))
     alert = str(state.get("alert", ""))

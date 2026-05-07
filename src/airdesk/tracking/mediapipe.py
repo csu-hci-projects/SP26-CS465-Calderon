@@ -241,7 +241,7 @@ class MediaPipeHandTrackerBackend:
         alert = status.split(marker, maxsplit=1)[1].split("|", maxsplit=1)[0].strip()
         if not alert:
             return
-        label = f"TCN: {alert}"
+        label = f"Gesture: {alert}"
         width = image.shape[1]
         y_center = max(92, image.shape[0] // 6)
         self._cv2.rectangle(
