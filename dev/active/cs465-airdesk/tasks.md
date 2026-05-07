@@ -119,8 +119,11 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Export per-hand feature rows with independent motion history instead of only `frame.hands[0]`
 - [x] Update DTW/TCN evaluation to score per-hand streams and merge decoded events across hands
 - [x] Add tests for two-hand feature rows, per-hand motion history, per-hand DTW candidates, and merged event ordering
-- [ ] Run replay checks on the two-hand feature/DTW/TCN/event-decoder path before collecting new combo data
-- [ ] Recollect combo/chained swipe charts after two-hand pipeline support lands
+- [x] Run replay checks on the two-hand feature/DTW/TCN/event-decoder path before collecting new combo data
+- [x] Add motion-gated TCN target assignment so stationary visible hands are not trained as prompted strokes
+- [x] Train/evaluate shared per-hand TCN on 003-to-004 two-hand chart split and document non-live-ready evidence
+- [ ] Tighten active-hand weak labels and decoder thresholds using 003+004 before collecting more broad combo data
+- [ ] Recollect targeted combo/chained swipe charts after the weak-label/decoder pass
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
@@ -253,7 +256,8 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Add template/DTW fallback for dynamic gestures
 - [ ] Train simple static gesture classifier from recorded landmarks
 - [ ] Train and harden the causal TCN recognizer for temporal gestures
-- [ ] Train/evaluate a continuous spotting variant of the TCN with position-invariant features and phase/event labels
+- [x] Train/evaluate a continuous spotting variant of the TCN with position-invariant features and phase/event labels
+- [ ] Improve continuous spotting TCN target quality with active-hand assignment and class-balance handling
 - [ ] Evaluate alternate temporal classifiers only if the TCN path disappoints
 - [ ] Investigate graph/transformer memory only after event decoding and dataset labels are in place
 - [ ] Add per-user model/profile concept

@@ -111,6 +111,62 @@ def test_build_tcn_manifest_keeps_two_hand_windows_separate(tmp_path: Path) -> N
         assert len(matrix) == 3
 
 
+def test_build_tcn_manifest_motion_gates_stationary_second_hand(tmp_path: Path) -> None:
+    features = tmp_path / "two-hand.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-0", palm_x=0.5),
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-1", palm_x=0.7),
+            _row(
+                timestamp=1.1,
+                frame_index=1,
+                event="swipe_left",
+                hand_id="hand-0",
+                palm_x=0.6,
+                palm_window_dx_per_hand_scale=0.6,
+            ),
+            _row(
+                timestamp=1.1,
+                frame_index=1,
+                event="swipe_left",
+                hand_id="hand-1",
+                palm_x=0.7,
+                palm_window_dx_per_hand_scale=0.0,
+            ),
+            _row(
+                timestamp=1.2,
+                frame_index=2,
+                event="swipe_left",
+                hand_id="hand-0",
+                palm_x=0.7,
+                palm_window_dx_per_hand_scale=0.8,
+            ),
+            _row(
+                timestamp=1.2,
+                frame_index=2,
+                event="swipe_left",
+                hand_id="hand-1",
+                palm_x=0.7,
+                palm_window_dx_per_hand_scale=0.0,
+            ),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        target_assignment="motion-gated",
+    )
+
+    targets_by_hand = {window.hand_id: window.target for window in manifest.windows}
+    assert targets_by_hand == {"hand-0": "swipe_left", "hand-1": "background"}
+    assert manifest.target_assignment == "motion-gated"
+
+
 def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path: Path) -> None:
     features_dir = tmp_path / "features"
     labels_dir = tmp_path / "labels"
@@ -563,6 +619,7 @@ def _row(
     phase: str = "",
     palm_x: float = 0.5,
     hand_id: str = "hand-0",
+    palm_window_dx_per_hand_scale: float | None = None,
 ) -> FrameFeatureRow:
     return FrameFeatureRow(
         frame_index=frame_index,
@@ -581,7 +638,11 @@ def _row(
         palm_ax=0.0,
         palm_ay=0.0,
         palm_window_dx=0.1 * frame_index,
-        palm_window_dx_per_hand_scale=0.5 * frame_index,
+        palm_window_dx_per_hand_scale=(
+            0.5 * frame_index
+            if palm_window_dx_per_hand_scale is None
+            else palm_window_dx_per_hand_scale
+        ),
         palm_window_peak_abs_vx=1.0 if frame_index else 0.0,
         palm_window_direction_consistency=1.0 if frame_index else 0.0,
         index_rel_x=0.0,

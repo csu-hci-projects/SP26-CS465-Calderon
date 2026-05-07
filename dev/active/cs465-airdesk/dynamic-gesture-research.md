@@ -54,6 +54,10 @@ The first serious AirDesk dynamic recognizer should be a **gesture phrase recogn
 
 May 2026 two-hand update: combo and alternating-hand gestures should not require one hand to leave frame before the other hand becomes active. AirDesk's next data/model pass needs two-hand tracking and per-hand stream processing. `--max-num-hands 2` alone is not enough: feature export, DTW/TCN scoring, event decoding, and labels must treat each visible hand as its own temporal stream, then merge decoded events across hands. The one-hand structured combo takes from `sprint4-gpu-swipes-002-structured` were deleted and should not be used for combo training.
 
+May 2026 shared-model update: Caden's intuition was right that the model should watch each hand separately, but the current best bet is a shared per-hand TCN checkpoint, not separate tracker-slot models. Run the same TCN over `hand-0`, `hand-1`, etc. independently, decode events per hand, then merge/cool down globally. This preserves data efficiency and avoids treating MediaPipe tracker slots as stable physical left/right hands. The first 003-to-004 replay check matched 27/48 decoded events with 11 false activations and 4 repeated fires, so it is useful evidence for the architecture but not live-control readiness.
+
+Weak label note: chart labels are prompt-timing labels, not hand-specific truth. For two-hand TCN manifests, use motion-gated target assignment so a resting visible hand is not labeled as the active stroke. The gate should use recent motion energy rather than raw left/right dx sign because mirrored preview and raw camera coordinate conventions can flip or blur the sign evidence across sessions.
+
 The model plan is:
 
 1. Use **rule + feature gates** for immediate safety and debugging.

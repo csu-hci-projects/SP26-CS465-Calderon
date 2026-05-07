@@ -71,6 +71,9 @@ TCN_FEATURE_PRESETS = {
     "stream-invariant": TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
 }
 TCN_TARGET_MODES = ("event", "phase")
+TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
+DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE = 0.35
+DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY = 0.45
 
 _INT_FIELDS = {
     "frame_index",
@@ -194,6 +197,9 @@ class TcnDatasetManifest:
     windows: tuple[TcnWindowSample, ...]
     feature_preset: str = "legacy"
     target_mode: str = "event"
+    target_assignment: str = "label"
+    motion_gate_min_dx_per_hand_scale: float = DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE
+    motion_gate_min_direction_consistency: float = DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -206,6 +212,11 @@ class TcnDatasetManifest:
             "min_gesture_fraction": self.min_gesture_fraction,
             "feature_preset": self.feature_preset,
             "target_mode": self.target_mode,
+            "target_assignment": self.target_assignment,
+            "motion_gate_min_dx_per_hand_scale": self.motion_gate_min_dx_per_hand_scale,
+            "motion_gate_min_direction_consistency": (
+                self.motion_gate_min_direction_consistency
+            ),
             "sources": [source.to_dict() for source in self.sources],
             "windows": [window.to_dict() for window in self.windows],
             "summary": summarize_tcn_manifest(self),
@@ -225,6 +236,19 @@ class TcnDatasetManifest:
             windows=tuple(TcnWindowSample.from_dict(item) for item in data.get("windows", [])),
             feature_preset=str(data.get("feature_preset", "legacy")),
             target_mode=str(data.get("target_mode", "event")),
+            target_assignment=str(data.get("target_assignment", "label")),
+            motion_gate_min_dx_per_hand_scale=float(
+                data.get(
+                    "motion_gate_min_dx_per_hand_scale",
+                    DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE,
+                )
+            ),
+            motion_gate_min_direction_consistency=float(
+                data.get(
+                    "motion_gate_min_direction_consistency",
+                    DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY,
+                )
+            ),
         )
 
 
@@ -253,6 +277,9 @@ def build_tcn_dataset_manifest(
     feature_columns: tuple[str, ...] | None = None,
     feature_preset: str = "legacy",
     target_mode: str = "event",
+    target_assignment: str = "label",
+    motion_gate_min_dx_per_hand_scale: float = DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE,
+    motion_gate_min_direction_consistency: float = DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY,
 ) -> TcnDatasetManifest:
     """Build deterministic sliding-window metadata over exported feature CSVs."""
     resolved_feature_columns = feature_columns or feature_columns_for_preset(feature_preset)
@@ -265,6 +292,9 @@ def build_tcn_dataset_manifest(
         targets=resolved_targets,
         feature_preset=feature_preset,
         target_mode=target_mode,
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
     )
     sources: list[TcnFeatureSource] = []
     windows: list[TcnWindowSample] = []
@@ -272,7 +302,15 @@ def build_tcn_dataset_manifest(
         rows = load_feature_rows_csv(feature_path)
         label_path, labels = _matching_labels(feature_path, labels_dir)
         target_by_row = [
-            _target_for_row(row, labels, resolved_targets, target_mode=target_mode)
+            _target_for_row(
+                row,
+                labels,
+                resolved_targets,
+                target_mode=target_mode,
+                target_assignment=target_assignment,
+                motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+                motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+            )
             for row in rows
         ]
         sources.append(
@@ -314,6 +352,9 @@ def build_tcn_dataset_manifest(
         windows=tuple(windows),
         feature_preset=feature_preset,
         target_mode=target_mode,
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
     )
 
 
@@ -335,6 +376,11 @@ def targets_for_mode(target_mode: str) -> tuple[str, ...]:
         return TCN_PHASE_TARGETS
     options = ", ".join(TCN_TARGET_MODES)
     raise ValueError(f"unsupported target_mode={target_mode}; use one of: {options}")
+
+
+def target_assignments() -> tuple[str, ...]:
+    """Return supported weak-label assignment strategies for TCN manifests."""
+    return TCN_TARGET_ASSIGNMENTS
 
 
 def save_tcn_dataset_manifest(manifest: TcnDatasetManifest, path: Path) -> None:
@@ -412,6 +458,9 @@ def _target_for_row(
     targets: tuple[str, ...],
     *,
     target_mode: str,
+    target_assignment: str,
+    motion_gate_min_dx_per_hand_scale: float,
+    motion_gate_min_direction_consistency: float,
 ) -> str:
     if target_mode == "phase":
         phase = (
@@ -420,14 +469,68 @@ def _target_for_row(
             else _phase_at(labels, row.timestamp)
         )
         if phase in {"stroke_left", "stroke_right"} and phase in targets:
-            return phase
+            return _apply_target_assignment(
+                row,
+                phase,
+                target_assignment=target_assignment,
+                motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+                motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+            )
         if phase in {"recovery", "reset", "release", "cooldown"} and "recovery" in targets:
             return "recovery"
         return "background"
     event = row.event or _event_at(labels, row.timestamp)
     if event in targets and event != "background":
-        return event
+        return _apply_target_assignment(
+            row,
+            event,
+            target_assignment=target_assignment,
+            motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+        )
     return "background"
+
+
+def _apply_target_assignment(
+    row: FrameFeatureRow,
+    target: str,
+    *,
+    target_assignment: str,
+    motion_gate_min_dx_per_hand_scale: float,
+    motion_gate_min_direction_consistency: float,
+) -> str:
+    if target_assignment == "label":
+        return target
+    if target_assignment == "motion-gated":
+        if _row_motion_matches_target(
+            row,
+            target,
+            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            min_direction_consistency=motion_gate_min_direction_consistency,
+        ):
+            return target
+        return "background"
+    options = ", ".join(TCN_TARGET_ASSIGNMENTS)
+    raise ValueError(f"unsupported target_assignment={target_assignment}; use one of: {options}")
+
+
+def _row_motion_matches_target(
+    row: FrameFeatureRow,
+    target: str,
+    *,
+    min_dx_per_hand_scale: float,
+    min_direction_consistency: float,
+) -> bool:
+    if row.tracking_present != 1:
+        return False
+    if row.hand_scale <= 0:
+        return False
+    if row.palm_window_direction_consistency < min_direction_consistency:
+        return False
+    dx = abs(row.palm_window_dx_per_hand_scale)
+    if target in {"swipe_left", "stroke_left", "swipe_right", "stroke_right"}:
+        return dx >= min_dx_per_hand_scale
+    return True
 
 
 def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:
@@ -561,9 +664,16 @@ def _validate_manifest_config(
     targets: tuple[str, ...],
     feature_preset: str,
     target_mode: str,
+    target_assignment: str,
+    motion_gate_min_dx_per_hand_scale: float,
+    motion_gate_min_direction_consistency: float,
 ) -> None:
     feature_columns_for_preset(feature_preset)
     targets_for_mode(target_mode)
+    if target_assignment not in TCN_TARGET_ASSIGNMENTS:
+        options = ", ".join(TCN_TARGET_ASSIGNMENTS)
+        message = f"unsupported target_assignment={target_assignment}; use one of: {options}"
+        raise ValueError(message)
     if "background" not in targets:
         raise ValueError("TCN targets must include background")
     if window_seconds <= 0:
@@ -574,3 +684,7 @@ def _validate_manifest_config(
         raise ValueError("min_rows must be positive")
     if not 0 < min_gesture_fraction <= 1:
         raise ValueError("min_gesture_fraction must be in (0, 1]")
+    if motion_gate_min_dx_per_hand_scale < 0:
+        raise ValueError("motion_gate_min_dx_per_hand_scale must be non-negative")
+    if not 0 <= motion_gate_min_direction_consistency <= 1:
+        raise ValueError("motion_gate_min_direction_consistency must be in [0, 1]")

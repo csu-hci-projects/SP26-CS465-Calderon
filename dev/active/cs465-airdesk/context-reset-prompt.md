@@ -101,7 +101,8 @@ Important live findings:
 - `/dev/video0` does not appear to support 60 FPS; requesting `640x480 @ 60 FPS MJPG` falls back to 30 FPS.
 - On Caden's Hyprland/Arch/T550 setup, use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` when testing MediaPipe GPU tracking on the T550. Plain `--hand-delegate gpu` may still use Intel/Mesa EGL. Confirm the MediaPipe startup log contains `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
-- Two-hand combo data is the next blocker. The old one-hand default is wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export used to consume only `frame.hands[0]`. AirDesk now exports per-hand feature rows, keeps independent per-hand motion history, scores DTW/TCN streams per hand, and decodes hand streams before merging events with cooldown suppression. The chart recorder defaults to `--max-num-hands 2`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted. Do not collect more combo data until this two-hand path has passed replay checks.
+- Two-hand combo data remains the next blocker, but the broad collection pause has moved from "pipeline not implemented" to "weak labels and decoder need tightening." The old one-hand default was wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export used to consume only `frame.hands[0]`. AirDesk now exports per-hand feature rows, keeps independent per-hand motion history, scores DTW/TCN streams per hand, and decodes hand streams before merging events with cooldown suppression. The chart recorder defaults to `--max-num-hands 2`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted.
+- New two-hand shared TCN evidence: batches 003+004 are local under ignored `data/`. Use one shared TCN checkpoint independently on each `hand_id` stream, not separate tracker-slot models. Use `gesture build-tcn-dataset --feature-preset stream-invariant --target-mode phase --target-assignment motion-gated` for two-hand chart manifests so a stationary visible hand is not trained as the prompted stroke. The motion gate uses motion energy rather than raw dx sign because mirrored preview/raw camera direction conventions were brittle across the two-hand batches. Training on 003 and evaluating decoded events on 004 matched 27/48, missed 21, with 11 false activations and 4 repeated fires. This is useful progress but not live-control-ready.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection remains pending.
 
@@ -293,7 +294,8 @@ Recommended next chunk:
 1. Collect or refine recovery-aware chained labels; existing isolated labels have no recovery frames.
 2. Tune/inspect event decoder thresholds against probability traces, not just final summary counts.
 3. Add a small report command or notebook that compares DTW, TCN, and decoded outputs side by side.
-4. Decide the Sprint 5 pilot slice from event-level replay evidence; a narrower dry-run pilot may be the honest path.
+4. Improve active-hand weak-label assignment, class balance, and event-decoder thresholds before broad new combo collection.
+5. Decide the Sprint 5 pilot slice from event-level replay evidence; a narrower dry-run pilot may be the honest path.
 
 ## Useful Commands
 

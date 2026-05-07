@@ -1037,6 +1037,25 @@ def gesture_build_tcn_dataset(
         str,
         typer.Option(help="Target mode: event or phase."),
     ] = "event",
+    target_assignment: Annotated[
+        str,
+        typer.Option(help="Target assignment: label or motion-gated."),
+    ] = "label",
+    motion_gate_min_dx_per_hand_scale: Annotated[
+        float,
+        typer.Option(
+            help=(
+                "For motion-gated targets, minimum absolute trailing palm dx normalized by "
+                "hand scale."
+            ),
+        ),
+    ] = 0.35,
+    motion_gate_min_direction_consistency: Annotated[
+        float,
+        typer.Option(
+            help="For motion-gated targets, minimum same-direction motion consistency.",
+        ),
+    ] = 0.45,
 ) -> None:
     """Build a dependency-free manifest for background/left/right TCN windows."""
     feature_paths = sorted(features_dir.glob(pattern))
@@ -1053,6 +1072,9 @@ def gesture_build_tcn_dataset(
             min_gesture_fraction=min_gesture_fraction,
             feature_preset=feature_preset,
             target_mode=target_mode,
+            target_assignment=target_assignment,
+            motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -1065,7 +1087,8 @@ def gesture_build_tcn_dataset(
     typer.echo(
         f"wrote tcn_manifest={out} sources={summary['source_count']} "
         f"windows={summary['window_count']} preset={manifest.feature_preset} "
-        f"target_mode={manifest.target_mode} {window_counts}"
+        f"target_mode={manifest.target_mode} target_assignment={manifest.target_assignment} "
+        f"{window_counts}"
     )
 
 
@@ -1567,6 +1590,25 @@ def gesture_holdout_tcn(
         typer.Option(help="Feature preset: legacy or stream-invariant."),
     ] = "legacy",
     target_mode: Annotated[str, typer.Option(help="Target mode: event or phase.")] = "event",
+    target_assignment: Annotated[
+        str,
+        typer.Option(help="Target assignment: label or motion-gated."),
+    ] = "label",
+    motion_gate_min_dx_per_hand_scale: Annotated[
+        float,
+        typer.Option(
+            help=(
+                "For motion-gated targets, minimum absolute trailing palm dx normalized by "
+                "hand scale."
+            ),
+        ),
+    ] = 0.35,
+    motion_gate_min_direction_consistency: Annotated[
+        float,
+        typer.Option(
+            help="For motion-gated targets, minimum same-direction motion consistency.",
+        ),
+    ] = 0.45,
     epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
     learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
     batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
@@ -1624,6 +1666,9 @@ def gesture_holdout_tcn(
         min_gesture_fraction=min_gesture_fraction,
         feature_preset=feature_preset,
         target_mode=target_mode,
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
     )
     test_manifest = build_tcn_dataset_manifest(
         test_features,
@@ -1634,6 +1679,9 @@ def gesture_holdout_tcn(
         min_gesture_fraction=min_gesture_fraction,
         feature_preset=feature_preset,
         target_mode=target_mode,
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
     )
     save_tcn_dataset_manifest(train_manifest, train_manifest_path)
     save_tcn_dataset_manifest(test_manifest, test_manifest_path)

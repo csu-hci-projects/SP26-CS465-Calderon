@@ -241,6 +241,23 @@ uv run airdesk gesture spot-dtw --recording data/recordings/sprint4-gpu-swipes-0
 uv run airdesk gesture decode-candidates --candidates data/evaluations/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy-dtw-candidates.json --out data/evaluations/sprint4-gpu-swipes-003-two-hand/chart-a-right-heavy-dtw-decoded.json
 ```
 
+Two-hand shared TCN replay command shape:
+
+```bash
+uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-manifest.json --feature-preset stream-invariant --target-mode phase --target-assignment motion-gated --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
+uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-manifest.json --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated.pt --epochs 25 --batch-size 32 --hidden-channels 32 --levels 3 --validation-fraction 0.2 --seed 7
+uv run airdesk gesture evaluate-tcn --manifest data/models/gestures/tcn-sprint4-004-test-motion-gated-manifest.json --model data/models/gestures/tcn-sprint4-003-train-motion-gated.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-003-train-004-test-motion-gated-decoded.json --confidence-threshold 0.35 --cooldown-seconds 0.5 --event-decoder --release-threshold 0.2 --min-peak-confidence 0.35
+```
+
+Use `--target-assignment motion-gated` for two-hand chart manifests. It keeps the shared TCN architecture that Caden suggested - one checkpoint applied independently to each hand stream - while reducing weak-label contamination from a resting visible hand. The gate intentionally uses motion energy, not raw left/right dx sign, because the mirrored preview and raw camera coordinate convention can make sign checks brittle across batches.
+
+Latest two-hand shared TCN evidence from 003-to-004 holdout:
+
+- train manifest from `sprint4-gpu-swipes-003-two-hand`: 1,967 windows, with 60 `stroke_left`, 84 `stroke_right`, 91 `recovery`, and 1,732 `background`;
+- test manifest from `sprint4-gpu-swipes-004-two-hand-extra`: 2,114 windows, with 79 `stroke_left`, 86 `stroke_right`, 138 `recovery`, and 1,811 `background`;
+- decoded TCN events on 004 after training on 003: 27/48 matched, 21 missed, 40 candidates, 11 false activations, 4 repeated fires, and about 0.85 s mean latency;
+- interpretation: shared per-hand TCN is the right model shape, but the current weak labels/decoder are not yet reliable enough for live desktop actions or broad collection. Pause and target the next data/debug pass at false activations, repeated fires, and mirrored direction consistency.
+
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:
 
 ```bash
