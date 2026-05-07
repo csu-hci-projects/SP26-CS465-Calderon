@@ -21,19 +21,23 @@ Therefore the core problem is **gesture spotting plus intent detection**, not si
 
 Do not make Sprint 3's answer "train an LSTM" or "compare every model family."
 
-If we have to bet, AirDesk should bet on:
+Original Sprint 3 bet:
 
 > **Intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous landmark features.**
+
+May 2026 update after Sprint 4 evidence and a deeper continuous-gesture research pass:
+
+> AirDesk should now treat the causal TCN window classifier as a scaffold, not the destination. The next recognizer direction is **continuous gesture spotting**: position-invariant skeleton features, stream/phase labels, event decoding, and a small hybrid model that can later grow from TCN to graph/transformer memory if the data supports it.
 
 Recommended architecture:
 
 ```text
 tracking
-  -> normalized landmark features
+  -> wrist/palm-centered, hand-scale-normalized landmark + motion features
   -> smoothing / quality gates
-  -> intent gate / gesture phrase state machine
-  -> candidate proposal
-  -> recognizer or ranker
+  -> gesture energy / candidate proposal
+  -> causal stream model or template ranker
+  -> event decoder with hysteresis, peak detection, recovery, cooldown
   -> policy / profile / safety checks
   -> action
 ```
@@ -52,9 +56,91 @@ The model plan is:
 
 1. Use **rule + feature gates** for immediate safety and debugging.
 2. Use **DTW/template matching** as a low-data fallback and calibration tool.
-3. Train one primary learned model: a **small causal TCN**.
-4. Defer **LSTM/GRU** unless the TCN path fails or a later comparison is explicitly worth the time.
-5. Defer **ST-GCN / graph transformer** until AirDesk has a larger labeled skeleton dataset.
+3. Train one primary learned model as a **small causal stream model**, starting with TCN because it is easier to debug on small data.
+4. Train toward **frame/phase/event spotting**, not only whole-window `background/swipe_left/swipe_right` classification.
+5. Defer **LSTM/GRU** unless the TCN/spotting path fails or a later comparison is explicitly worth the time.
+6. Defer **ST-GCN / graph transformer** until AirDesk has enough labeled skeleton streams, but keep it as the likely next family if TCN capacity becomes the blocker.
+
+## May 2026 Research Update: Continuous Spotting
+
+Caden's live TCN preview exposed the same failure mode seen in prior LSTM work: fixed rolling windows can miss the beginning or end of a gesture, struggle with fast consecutive gestures, and confuse the recovery/reset motion with the next command. The literature frames this as the core continuous-recognition problem, not a bug in one model family.
+
+Useful terms for future search and paper wording:
+
+- continuous hand gesture recognition
+- online gesture recognition
+- gesture spotting
+- temporal action segmentation
+- online action detection
+- early gesture detection
+- non-gesture / garbage / threshold model
+- CTC for unsegmented gesture streams
+- skeleton-based online gesture recognition
+
+Key research takeaways:
+
+- **Continuous recognition is not isolated clip classification.** Benchmarks for continuous gestures evaluate segmentation quality, latency, and false detections, not just trimmed-clip accuracy.
+- **Gesture phases matter.** Dynamic gestures often include preparation, nucleus/stroke, and retraction/recovery. The nucleus is the most discriminative part; reset/recovery can be misleading.
+- **Event decoding is a separate layer.** Even strong models usually need thresholds, finite-state machines, non-maximum suppression, confidence peaks, or candidate filtering to become reliable interaction events.
+- **Background is not just another class.** Older HMM work used non-gesture, garbage, or threshold models; newer systems still need explicit false-positive control.
+- **Sliding windows remain common but are fragile.** Newer work tries to compensate with memory across windows, CTC-style alignment, or joint detection/classification rather than assuming each fixed window contains one complete gesture.
+- **Skeleton/landmark input is the right AirDesk level.** SHREC-style work and newer online hand-gesture papers treat hand skeletons as the main representation for real-time interaction. AirDesk should keep MediaPipe as backend zero, not the project identity.
+
+Relevant source anchors:
+
+- Continuous hand gesture recognition survey: https://www.sciencedirect.com/science/article/pii/S1077314225001584
+- NVIDIA online dynamic gesture detection with CTC and gesture phases: https://www.cv-foundation.org/openaccess/content_cvpr_2016/app/S18-21.pdf
+- SHREC 2021 skeleton-based online hand gesture benchmark: https://www.maghoumi.com/wp-content/uploads/2021/12/SHREC2021-Skeleton-based-hand-gesture-recognition-in-the-wild.pdf
+- Controlled CTC for early gesture detection in untrimmed streams: https://www.sciencedirect.com/science/article/pii/S0031320324004849
+- HMM-DNN forward spotting and non-gesture thresholding: https://www.mdpi.com/2227-9709/10/1/1
+- Continual Graph Transformer for online hand gestures: https://arxiv.org/abs/2502.14939
+- HMATr / OMG-Bench for rapid continuous micro-gesture recognition: https://arxiv.org/abs/2512.16727
+
+### What A Transformer Would Mean For AirDesk
+
+A transformer should not be a raw-webcam model for AirDesk. If tried, it should consume normalized hand skeleton streams:
+
+```text
+MediaPipe / tracker landmarks
+  -> wrist/palm-centered joints
+  -> hand-scale normalization
+  -> velocities, acceleration, displacement, direction consistency
+  -> causal transformer or graph-transformer temporal encoder
+  -> per-frame phase probabilities and/or event queries
+  -> event decoder
+```
+
+A plain transformer over fixed windows would still have the same boundary problem as the current TCN. The interesting variants are:
+
+- **causal transformer** over recent normalized feature tokens,
+- **graph + transformer** where graph layers model the hand skeleton and attention models time,
+- **memory-augmented transformer** where previous-window features are cached so a gesture is not lost at the window boundary,
+- **query/event transformer** where learnable queries propose gesture instances and classes.
+
+This is promising later, but it is not the clean next step. AirDesk's current bottleneck is representation, labels, and event decoding, not model capacity.
+
+### Hybrid Recognizer Direction
+
+The near-term recognizer should combine the useful parts of DTW, TCN, and gesture-spotting literature:
+
+```text
+streamed normalized features
+  -> motion-energy / quality gate proposes candidate activity
+  -> small causal TCN labels phase probabilities
+  -> optional DTW/template ranker scores candidate trajectories
+  -> event decoder fires one command at the confidence peak
+  -> cooldown/recovery prevents repeated fires
+```
+
+This gives AirDesk a path to better consecutive swipes without pretending there is a magic windowless recognizer:
+
+- activity gates reduce background false positives,
+- phase labels distinguish stroke from reset,
+- normalized features reduce camera-position/distance dependence,
+- event decoding handles repeated fires,
+- DTW remains useful for low-data personalization,
+- TCN remains useful for learned stream state,
+- graph/transformer memory remains a later upgrade if data grows.
 
 ## Why LSTM Alone Is Not Enough
 
@@ -239,6 +325,7 @@ Best for:
 
 - larger datasets,
 - long-range dependencies,
+- cross-window memory,
 - multimodal context,
 - attention over many joints/features.
 
@@ -247,11 +334,13 @@ Weaknesses:
 - data hungry,
 - easier to overbuild,
 - may add latency/complexity,
-- not automatically better for tiny personal datasets.
+- not automatically better for tiny personal datasets,
+- still needs spotting, background rejection, and event decoding.
 
 AirDesk role:
 
-- later research comparison, not Sprint 3 implementation.
+- later research comparison or upgrade path, not the next implementation by itself.
+- The interesting version is a causal or memory-augmented skeleton transformer, not a fixed-window classifier.
 
 ### ST-GCN / Graph Models
 
@@ -272,6 +361,7 @@ AirDesk role:
 
 - serious future ML path after logging/labeling.
 - more promising than plain LSTM for mature skeleton-based recognition.
+- likely the right spatial front-end if AirDesk later builds a transformer-style recognizer.
 
 ### HMM / Probabilistic Spotting
 
@@ -292,23 +382,42 @@ AirDesk role:
 
 - conceptually important.
 - a hybrid "encoder + HMM/threshold" approach is attractive for continuous command gestures.
+- Use the idea even if the implementation is not HMM: non-gesture competition, adaptive thresholds, and forward spotting map directly onto AirDesk's event decoder.
 
 ## Feature Strategy
 
 Avoid recognizing dynamic gestures from raw wrist translation alone. That encourages big arm motion.
 
-For conductor-like gestures, AirDesk should compute features in a hand-centered coordinate system:
+For conductor-like gestures, AirDesk should compute features in a hand-centered coordinate system and avoid making absolute frame position the gesture identity. Camera placement, distance, and user posture should change as little as possible about the recognized command.
 
 - palm center from wrist/index MCP/pinky MCP,
+- wrist/palm-centered landmark coordinates,
+- hand-scale-normalized landmark coordinates and displacements,
 - palm velocity and acceleration,
 - index tip relative to palm,
 - thumb-index pinch distance and derivative,
 - palm normal / roll estimate,
 - hand bounding-box size as distance proxy,
 - finger curl/open features,
+- signed horizontal/vertical displacement over short causal windows,
+- peak velocity,
+- direction consistency,
 - short trajectory shape,
 - confidence and tracking continuity,
 - tracking loss flags.
+
+Absolute `palm_x`, `palm_y`, and `palm_z` can remain useful diagnostics, but learned models should have a preset that excludes them or downweights them. The model should learn "the hand moved left relative to itself and its recent path," not "Caden's hand started on the right side of this webcam frame."
+
+## Updated Next Implementation Direction
+
+Do this before wiring any learned swipe recognizer to desktop actions:
+
+1. Add a position-invariant TCN feature preset that excludes absolute palm position and emphasizes normalized motion.
+2. Add stream/phase labeling support for `background`, `stroke_left`, `stroke_right`, and `recovery/reset`.
+3. Add an event decoder over model probabilities: hysteresis, peak confidence, minimum separation, recovery, and repeated-fire suppression.
+4. Add a collection/labeling helper for ordered continuous streams where Caden can provide a sequence like `R L R R L L` without exact timestamps.
+5. Compare DTW, current TCN, and the hybrid event decoder on isolated holdout plus chained sessions.
+6. Only then decide whether a small graph/transformer model is justified.
 
 Potential gesture phrase examples:
 

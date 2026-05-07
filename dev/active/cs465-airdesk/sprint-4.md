@@ -22,7 +22,7 @@ The evaluation should be evidence-based and use continuous sessions with backgro
 
 ## Sprint Theme
 
-> Build the dataset, labeling, feature pipeline, and first causal TCN recognizer.
+> Build the dataset, labeling, feature pipeline, and first continuous gesture-spotting recognizer.
 
 ## Product / Research Stance
 
@@ -63,12 +63,13 @@ Sprint 4 should build one primary learned recognizer behind the AirDesk interfac
    - good for "conducting" gestures with variable speed
    - supports per-user calibration
 
-3. **Causal TCN**
-   - primary learned-model bet
+3. **Causal TCN / stream model**
+   - first learned-model scaffold
    - good for framewise phase/state prediction
    - likely easier to train/evaluate than Transformer for small data
+   - should evolve away from whole-window classification toward stream/event labels
 
-LSTM/GRU should be deferred unless the causal TCN path disappoints or a later comparison becomes worth the time. ST-GCN and graph transformers should remain research notes unless the dataset grows enough to justify them.
+LSTM/GRU should be deferred unless the causal TCN/spotting path disappoints or a later comparison becomes worth the time. ST-GCN and graph transformers should remain research notes unless the dataset grows enough to justify them. A transformer is only interesting after AirDesk has position-invariant features, phase/event labels, and event decoding; a fixed-window transformer would inherit the same boundary failures as the current TCN.
 
 ### Labeling Strategy
 
@@ -108,6 +109,8 @@ Use normalized landmark-derived features so models stay backend-independent:
 - finger extension/fold features,
 - confidence and tracking continuity,
 - tracking loss flags.
+
+The next feature preset should reduce dependence on absolute `palm_x`, `palm_y`, and `palm_z`. Keep them for diagnostics, but train a position-invariant recognizer variant from wrist/palm-centered landmarks, hand-scale-normalized motion, velocity, acceleration, displacement, and direction consistency.
 
 Keep feature extraction deterministic and tested.
 
@@ -202,8 +205,19 @@ Acceptance criteria:
 - Models consume exported AirDesk features, not raw video.
 - Training is reproducible from ignored local data.
 - Model inference can run over replay streams.
+- A follow-up stream-label target is documented or implemented so the model can distinguish stroke from reset/recovery.
 - LSTM/GRU is explicitly deferred unless the TCN path fails.
 - If ML implementation is too large for Sprint 4, document the exact blocker and still complete labels/features/evaluation.
+
+### 5.5. Event Decoder / Hybrid Spotter
+
+Acceptance criteria:
+
+- Convert recognizer probability streams or candidate scores into gesture events.
+- Include hysteresis, confidence peak/commit logic, minimum event separation, recovery/cooldown, and repeated-fire suppression.
+- Support dry-run/replay evaluation before any live desktop action wiring.
+- Compare event-decoded TCN/hybrid output against DTW candidates on isolated holdout and chained sessions.
+- Document whether a motion-energy/DTW candidate gate improves false activations or only hides weak model behavior.
 
 ### 6. Evaluation Harness
 

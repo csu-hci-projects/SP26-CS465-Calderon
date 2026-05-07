@@ -149,6 +149,40 @@ uv run airdesk run --backend replay --recording data/recordings/swipe-left-posit
 
 Record negative streams where hands enter/leave the frame, reach for the keyboard or mouse, and rest near the desk without intending a command. These are more important for false-activation evidence than clean isolated clips.
 
+## Continuous Spotting Samples
+
+The next recognizer direction is continuous gesture spotting rather than fixed-window classification. Future recordings should make the failure modes visible:
+
+- fast chained swipes without a full hand reset,
+- slow swipes with long preparation/recovery,
+- same direction repeated twice, such as `R R` or `L L`,
+- alternating directions, such as `R L R L`,
+- starts from left, center, and right side of the preview,
+- near, normal, and farther hand distance from the camera,
+- normal desk motion between gestures,
+- aborted half-swipes and hand repositions.
+
+Use ordered-sequence notes when exact timestamps are too much to track. For example:
+
+```text
+0-10s active: R then L
+10-20s rest/background
+20-30s active: R then R
+30-40s rest/background
+40-50s active: L then L
+```
+
+This is not as precise as frame labels, but it is useful for weak sequence scoring and later CTC-style alignment. Keep the direction meaning user-facing: `R` means palm motion toward the right side of the preview/screen and `L` means palm motion toward the left side, regardless of raw camera coordinate sign.
+
+Position/distance should not become the gesture identity. When collecting model data, deliberately vary setup after a few takes:
+
+- hand starts left/center/right in frame,
+- camera sees the hand close/far,
+- elbow/arm posture changes,
+- lighting and background remain normal rather than lab-perfect.
+
+Do not wire any recognizer into live desktop actions based on these recordings alone. Use them to evaluate false activations, missed gestures, repeated fires, and latency in replay.
+
 ## Notes Template
 
 For each sample, write:

@@ -54,7 +54,8 @@ Prototype idea:
 - rule-based gesture recognizers first
 - intent-gated phrase recognizers for dynamic commands
 - template/DTW fallback for calibration and safety
-- causal TCN as the first learned temporal recognizer after collecting phase-labeled real data
+- causal TCN as the first learned temporal recognizer scaffold after collecting phase-labeled real data
+- continuous gesture spotting as the current recognition target: invariant features, phase/event labels, event decoding, and explicit non-gesture handling
 - clutch gesture: open palm held for ~300 ms enters listening mode
 - modes: command, cursor, text/virtual-keyboard, media, window-manager, presentation, accessibility
 - profiles: window manager, media/kitchen, presentation, cursor, virtual keyboard, hybrid keyboard+hands, accessibility, study safe, experimental
@@ -153,7 +154,7 @@ Current Sprint 3 direction:
 - make live command mode observable, logged, and pilot-safe
 - start by recording/analyzing the recommended deliberate samples and documenting observed FPS, false positives, false negatives, and jitter
 - add runtime `--events-out` JSONL logs with session start/end metadata and gesture/mode/action events
-- dynamic gesture research conclusion: AirDesk's primary learned-model bet is intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous data; rule/DTW is scaffolding/fallback; LSTM/GRU is deferred unless TCN disappoints
+- dynamic gesture research conclusion: AirDesk's current target is continuous gesture spotting. The small causal TCN remains the first learned scaffold, but the fixed-window classifier is not the destination. Use position-invariant features, phase/event labels, event decoding, and explicit non-gesture/background handling. Rule/DTW remains scaffolding/fallback; LSTM/GRU is deferred unless the TCN/spotting path disappoints.
 - add a stateful phrase recognizer foundation for temporal gestures
 - implement or explicitly defer flick/swipe-left/right and point-left/right based on replayable sample behavior
 - show command-mode state in live `run --show` preview
@@ -189,7 +190,7 @@ Current Sprint 4 dataset/evidence:
 - Rerun evidence: DTW with the new features can match 4/4 held-out swipes with 0 false activations using `--negative-distance-margin 0.75`, but that conservative model under-detected the structured chained stream. The looser `1.3` gated DTW window-feature variant scored 9/10 in order with 1 extra-or-wrong-order detection on the structured chained stream. TCN still matched only 2/4 held-out swipes and missed both held-out left swipes.
 - Fresh timestamp-aware continuous evidence: Caden recorded `data/recordings/sprint4-chained-003/chained-structured-swipes-001.jsonl` with 10 seconds active / 10 seconds rest and intended sequence `R L R R L L R R L L`. Coarse half-window labels were created. Old gated DTW matched 7/10 event windows and scored 8/10 in order with 0 extra sequence detections. The looser window-feature gated DTW matched 8/10 event windows and scored 10/10 in order, but produced 3 extra-or-wrong-order sequence detections and 2 repeated fires. Conservative `0.75` DTW matched 1/10, and TCN matched 3/10.
 - `airdesk gesture watch-tcn` exists as a live/replay classifier preview. It shows the latest TCN target/probabilities in the webcam preview and prints non-background predictions by default. It does not trigger desktop actions.
-- Next best task: decide the Sprint 5 recognizer stance. DTW/template remains the best current candidate, but it needs extra-detection filtering or a narrower pilot task before guarded use. TCN should stay offline for now. Do not wire DTW or TCN swipes into live desktop actions yet.
+- Latest research pivot: after live TCN testing, fixed rolling-window classification is confirmed as a core weakness for fast chained gestures. Next best task is to add a position-invariant feature preset, stream/phase labels (`background`, `stroke_left`, `stroke_right`, `recovery/reset`), and an event decoder with hysteresis/peak/cooldown/repeated-fire suppression. DTW/template remains the best current baseline, but needs event filtering or a narrower pilot before guarded use. TCN should stay offline/preview for now. Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Current Sprint 5 direction:
 

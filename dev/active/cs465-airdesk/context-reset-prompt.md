@@ -106,9 +106,13 @@ Important live findings:
 
 Do not jump straight to "train an LSTM," and do not spend the next sprint comparing every model family.
 
-The current research conclusion is:
+The original Sprint 3 research conclusion was:
 
 > AirDesk's best current bet is intent-gated gesture phrases plus a small causal TCN trained on phase-labeled continuous landmark features.
+
+The May 2026 update refines that:
+
+> The current TCN window classifier is a scaffold, not the destination. AirDesk should move toward continuous gesture spotting: position-invariant skeleton features, phase/event labels, event decoding, and a small hybrid recognizer that can later grow toward graph/transformer memory.
 
 Why:
 
@@ -116,9 +120,10 @@ Why:
 - isolated clip accuracy is misleading,
 - rolling buffers create boundary, chaining, and false activation issues,
 - rule/DTW recognizers are useful as safety/debug scaffolding, low-data fallback, and calibration tools,
-- causal TCN is the preferred first learned model once continuous phase-labeled logs exist,
+- causal TCN is still the preferred first learned scaffold because it is easier to debug than a transformer on small data,
+- the useful target is stream/phase/event prediction, not fixed-window classification,
 - LSTM/GRU is deferred unless the causal TCN path fails or a later comparison is worth the time,
-- ST-GCN/Transformer are later options after dataset growth.
+- ST-GCN/Transformer are later options after dataset growth and event decoding.
 
 The target feel is "conducting a choir for your computer": subtle, low-fatigue, intentional wrist/finger phrases, not dragging the whole arm across the screen.
 
@@ -258,18 +263,27 @@ Structured chained-session evidence:
 
 ## Current Next Task
 
-Decide the Sprint 5 recognizer stance: DTW/template remains the best current candidate, but it needs extra-detection filtering or a narrower pilot task before guarded use. TCN should stay offline for now. Do not wire DTW or TCN swipes into live desktop actions yet.
+Continue the recognizer pivot:
+
+1. Add a position-invariant feature preset for TCN/stream models that excludes or downweights absolute palm position.
+2. Add phase/event targets for `background`, `stroke_left`, `stroke_right`, and `recovery/reset`.
+3. Add a replayable event decoder over probabilities/candidates with hysteresis, peak confidence, cooldown, and repeated-fire suppression.
+4. Add or improve helpers for ordered chained sessions where Caden can provide a sequence like `R L R R L L` without exact timestamps.
+5. Compare current DTW, current TCN, and the hybrid event decoder on isolated holdout plus chained sessions.
+
+Do not wire DTW or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
 1. Read the existing feature, label, DTW, and evaluation modules before editing.
-2. Document the Sprint 5 recognizer decision and explicitly defer LSTM/GRU unless the TCN path fails in a way worth comparing.
-3. Consider a small cooldown/sequence-filtering tweak for DTW extra detections, then rerun `sprint4-chained-003`.
-4. Keep TCN offline unless it improves on held-out continuous streams.
-5. Scope the pilot around dry-run evidence and low-risk commands only.
-6. Document results and limitations in README/tasks/tracking-samples.
-7. Run `uv run ruff check .` and `uv run pytest`.
-8. Commit and push.
+2. Add a position-invariant feature preset for TCN/stream models.
+3. Add stream/phase targets that distinguish stroke from recovery/reset.
+4. Add a probability/candidate event decoder with hysteresis, peak confidence, cooldown, and repeated-fire suppression.
+5. Rerun isolated holdout and chained-session evaluation against DTW, current TCN, and the new event-decoded path.
+6. Keep live desktop actions disabled until event-level replay evidence improves.
+7. Document results and limitations in README/tasks/tracking-samples.
+8. Run `uv run ruff check .` and `uv run pytest`.
+9. Commit and push.
 
 ## Useful Commands
 

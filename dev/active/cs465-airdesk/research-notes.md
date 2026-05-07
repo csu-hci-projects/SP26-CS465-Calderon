@@ -124,7 +124,7 @@ References:
 
 See also:
 
-- `dynamic-gesture-research.md` for the Sprint 3 research spike and the decision to bet on intent-gated gesture phrases plus a causal TCN, with rule/DTW as scaffolding/fallback.
+- `dynamic-gesture-research.md` for the Sprint 3 research spike and the May 2026 update. The current direction is no longer "make the window TCN good enough"; it is continuous gesture spotting with position-invariant features, phase/event labels, event decoding, and a small hybrid recognizer that can grow toward graph/transformer memory later.
 
 ### Main Insight
 
@@ -141,9 +141,11 @@ The first hard problem is not just classification. It is gesture spotting:
 1. Rule-based recognizers for interpretable primitives.
 2. Intent-gated phrase recognizers for dynamic commands.
 3. Template/DTW fallback for personalized wrist flicks and conductor-like motions.
-4. A small causal TCN trained on phase-labeled continuous logs.
-5. LSTM/GRU only if TCN disappoints or a later comparison is worth the time.
-6. ST-GCN / graph transformer models after the system has enough labeled skeleton data.
+4. A small causal TCN trained toward stream/phase labels rather than only whole-window labels.
+5. Event decoding over model probabilities: confidence rise/peak/fall, hysteresis, recovery, cooldown, and repeated-fire suppression.
+6. Weak sequence labeling / CTC-style alignment once Caden can provide ordered streams but not exact timestamps.
+7. LSTM/GRU only if the TCN/spotting path disappoints or a later comparison is worth the time.
+8. ST-GCN / graph transformer models after the system has enough labeled skeleton data.
 
 ### Why Causal TCN, Not LSTM First
 
@@ -155,6 +157,29 @@ A learned temporal model may become useful, but using a classifier without an in
 - may classify clean clips while failing in continuous real-time use
 
 The stronger path is to build recording, replay, labeling, phase-aware gesture phrases, and rule/DTW fallback first. Then train one primary learned model: a causal TCN over normalized AirDesk features. LSTM/GRU should stay deferred unless the TCN path fails.
+
+### May 2026 Continuous-Spotting Update
+
+Caden's live TCN test exposed the core failure mode: consecutive fast swipes require a reset, right/left performance is asymmetric, and fixed windows can capture only part of a gesture. This matches the gesture-spotting literature. The next research/implementation target should be a hybrid continuous recognizer:
+
+```text
+normalized landmark stream
+  -> motion/activity proposal
+  -> causal phase model
+  -> optional DTW/template score
+  -> event decoder
+  -> dry-run action log
+```
+
+Representation should be position and distance tolerant. Absolute `palm_x`, `palm_y`, and `palm_z` are useful for diagnostics, but the learned gesture identity should rely on wrist/palm-centered landmarks, hand-scale-normalized displacement, velocities, acceleration, direction consistency, confidence, and tracking continuity.
+
+Important research anchors now in `dynamic-gesture-research.md`:
+
+- continuous hand gesture recognition needs segmentation, latency, and false-detection metrics;
+- dynamic gestures have preparation, stroke/nucleus, and retraction/recovery phases;
+- non-gesture/background handling should be explicit, not an afterthought;
+- CTC-style training may help when Caden knows the gesture order but cannot provide exact timestamps;
+- transformers are interesting mainly for cross-window memory and skeleton relations, not as a replacement for event decoding.
 
 ## Hyprland / Wayland Research
 

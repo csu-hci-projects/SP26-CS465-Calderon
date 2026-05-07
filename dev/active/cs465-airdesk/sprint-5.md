@@ -13,6 +13,8 @@ By Sprint 5, AirDesk should have:
 - a chosen dynamic gesture recognizer or a documented fallback,
 - and enough replay/evaluation data to decide which gestures are safe for a pilot.
 
+Current caveat after the live TCN preview: AirDesk does not yet have a reliable learned swipe recognizer for fast chained gestures. Sprint 5 should either narrow the pilot to recognizers with replay evidence, or treat recognizer failure as a documented design finding while the implementation continues toward continuous gesture spotting.
+
 Sprint 5 should answer:
 
 > Can AirDesk support a narrow, measurable desktop-control task set well enough to produce useful CS465 evidence?
@@ -83,6 +85,8 @@ Sprint 5 should support three modes:
 
 Dry-run remains the default.
 
+Do not promote DTW or TCN swipes to live desktop actions only because they work in preview. Require event-level replay evidence on chained continuous sessions, including false activations and repeated-fire counts.
+
 ### Study Metrics
 
 Objective metrics:
@@ -117,6 +121,12 @@ The paper should emphasize:
 - contribution: interaction design and infrastructure, not novel hand tracking.
 
 Do not claim broad accessibility benefit unless studied.
+
+Recognizer wording should be careful:
+
+- The current learned model is a diagnostic preview, not validated live control.
+- The evidence suggests the main technical obstacle is continuous gesture spotting and event decoding under chained motion.
+- The proposed next step is a hybrid stream recognizer with position-invariant features, phase/event labels, and explicit non-gesture handling.
 
 ## Target CLI Shape
 

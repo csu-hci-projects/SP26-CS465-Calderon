@@ -211,7 +211,22 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Decide the Sprint 5 recognizer stance: DTW/template remains the best current candidate, but it needs extra-detection filtering or a narrower pilot task before guarded use. TCN should stay offline for now. Do not wire DTW or TCN swipes into live desktop actions yet.
+> Shift the learned-recognizer direction from whole-window classification toward continuous gesture spotting. DTW/template remains the best current baseline, but it needs event decoding/filtering before guarded use. The current TCN should stay preview/offline while AirDesk adds position-invariant feature presets, stream/phase labels, and probability-to-event decoding. Do not wire DTW or TCN swipes into live desktop actions yet.
+
+## Current Research Direction Update
+
+Caden's live `watch-tcn` test showed that `swipe_left` works better than `swipe_right`, fast consecutive swipes are weak, and the model often needs the hand to reset before another gesture. This is consistent with the continuous-gesture literature: the hard problem is spotting gesture events inside an untrimmed stream, not classifying a clean fixed window.
+
+Updated stance:
+
+- treat the current TCN as a scaffold, not the destination;
+- make learned features less dependent on absolute frame position and distance from camera;
+- train toward phase/event stream labels such as `background`, `stroke_left`, `stroke_right`, and `recovery`;
+- add an event decoder with hysteresis, confidence peaks, cooldown, and repeated-fire suppression;
+- use DTW/template and motion-energy gates as low-data personalization and candidate-filtering tools;
+- consider graph/transformer memory only after labels and event decoding are in place.
+
+See `dynamic-gesture-research.md` for the deeper research notes and source anchors.
 
 ## Current Roadmap
 
@@ -227,18 +242,19 @@ Build the live command loop:
 - pause/kill switch,
 - guarded opt-in Hyprland execution only if dry-run behavior supports it.
 
-### Sprint 4: Gesture Dataset, Labeling, and Causal TCN Recognition
+### Sprint 4: Gesture Dataset, Labeling, and Continuous Gesture Spotting
 
 Turn recordings into evidence:
 
 - label schema and CLI,
 - feature extraction,
 - DTW/template baseline and holdout evaluation,
-- train and evaluate one small causal TCN over AirDesk features,
+- train and evaluate one small causal stream model over AirDesk features,
 - rule/DTW fallback for safety, calibration, and debugging,
 - LSTM/GRU deferred unless the TCN path fails,
 - continuous-stream evaluation metrics,
-- Sprint 5 recognizer decision for the pilot.
+- Sprint 5 recognizer decision for the pilot,
+- position-invariant features, phase labels, and event decoding before live actions.
 
 ### Sprint 5: Study Tooling, Pilot, and Paper Evidence
 

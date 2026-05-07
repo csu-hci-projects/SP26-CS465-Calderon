@@ -1,6 +1,6 @@
 # AirDesk Tasks
 
-Current next sprint: make the Sprint 5 recognizer decision and scope the pilot around the current DTW evidence.
+Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
 ## Phase 0: Project Setup
 
@@ -104,9 +104,14 @@ Current next sprint: make the Sprint 5 recognizer decision and scope the pilot a
 - [x] Add causal trailing-window displacement/velocity/direction features to feature export
 - [x] Rerun DTW/TCN holdouts with the new feature representation
 - [x] Validate the best DTW window-feature variant on fresh or timestamp-labeled continuous streams
-- [ ] Explicitly defer LSTM/GRU unless the causal TCN path fails
-- [ ] Document Sprint 5 recognizer decision
-- [ ] Update dynamic gesture protocol and research notes
+- [x] Explicitly defer LSTM/GRU unless the causal TCN/spotting path fails
+- [x] Document the May 2026 research pivot from window classification to continuous gesture spotting
+- [ ] Add a position-invariant TCN/stream-model feature preset
+- [ ] Add stream/phase labels for stroke vs recovery/reset
+- [ ] Add probability/candidate event decoder with hysteresis, confidence peaks, cooldown, and repeated-fire suppression
+- [ ] Add ordered-sequence labeling helper for chained streams when exact timestamps are unavailable
+- [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
+- [x] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke
 
 ## Sprint 5: Study Tooling, Pilot, and Paper Evidence
@@ -236,7 +241,9 @@ Current next sprint: make the Sprint 5 recognizer decision and scope the pilot a
 - [x] Add template/DTW fallback for dynamic gestures
 - [ ] Train simple static gesture classifier from recorded landmarks
 - [ ] Train and harden the causal TCN recognizer for temporal gestures
+- [ ] Train/evaluate a continuous spotting variant of the TCN with position-invariant features and phase/event labels
 - [ ] Evaluate alternate temporal classifiers only if the TCN path disappoints
+- [ ] Investigate graph/transformer memory only after event decoding and dataset labels are in place
 - [ ] Add per-user model/profile concept
 - [ ] Investigate public dataset usefulness, including HaGRID/HaGRIDv2
 
