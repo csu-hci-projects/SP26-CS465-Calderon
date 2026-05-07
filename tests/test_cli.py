@@ -145,6 +145,7 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert "--hand-model-path" in result.stdout
     assert "--hand-delegate" in result.stdout
     assert "--confidence-threshold" in result.stdout
+    assert "--profile-timing" in result.stdout
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
@@ -155,6 +156,7 @@ def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
     assert "--hand-model-path" in result.stdout
     assert "--hand-delegate" in result.stdout
     assert "--watch-stride-seconds" in result.stdout
+    assert "--profile-timing" in result.stdout
 
 
 def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:

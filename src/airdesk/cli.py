@@ -1041,6 +1041,10 @@ def gesture_watch_tcn(
         bool,
         typer.Option(help="Print background predictions as well as gestures."),
     ] = False,
+    profile_timing: Annotated[
+        bool,
+        typer.Option(help="Print per-prediction TCN timing diagnostics."),
+    ] = False,
 ) -> None:
     """Watch live/replay TCN classification without triggering desktop actions."""
     if not 0 <= confidence_threshold <= 1:
@@ -1094,8 +1098,15 @@ def gesture_watch_tcn(
                 continue
             if next_prediction_time is not None and row.timestamp < next_prediction_time:
                 continue
+            prediction_started_at = monotonic()
             prediction = predictor.predict_rows(rows)
+            prediction_ms = (monotonic() - prediction_started_at) * 1000
             state["status"] = _format_live_tcn_status(prediction)
+            if profile_timing:
+                typer.echo(
+                    f"tcn_predict_ms={prediction_ms:.2f} rows={len(rows)} "
+                    f"target={prediction.target} confidence={prediction.confidence:.3f}"
+                )
             if prediction.target != "background" and prediction.confidence >= confidence_threshold:
                 state["alert"] = f"{prediction.target} {prediction.confidence:.2f}"
                 state["alert_until"] = monotonic() + 1.25
@@ -1171,6 +1182,10 @@ def gesture_watch_dtw(
         float,
         typer.Option(help="Minimum seconds between DTW scans over the rolling buffer."),
     ] = 0.08,
+    profile_timing: Annotated[
+        bool,
+        typer.Option(help="Print per-scan DTW timing diagnostics."),
+    ] = False,
 ) -> None:
     """Watch live/replay DTW candidate spotting without triggering desktop actions."""
     if not 0 <= confidence_threshold <= 1:
@@ -1228,11 +1243,18 @@ def gesture_watch_dtw(
             state["status"] = f"DTW rows={len(rows)} hands={len(frame.hands)}"
             if next_scan_time is not None and row.timestamp < next_scan_time:
                 continue
+            scan_started_at = monotonic()
             candidates = [
                 candidate
                 for candidate in recognizer.recognize_rows(rows)
                 if candidate.confidence >= confidence_threshold
             ]
+            scan_ms = (monotonic() - scan_started_at) * 1000
+            if profile_timing:
+                typer.echo(
+                    f"dtw_scan_ms={scan_ms:.2f} rows={len(rows)} "
+                    f"candidates={len(candidates)} hands={len(frame.hands)}"
+                )
             fresh = [
                 candidate
                 for candidate in candidates

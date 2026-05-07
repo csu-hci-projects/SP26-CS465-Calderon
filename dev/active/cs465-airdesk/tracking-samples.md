@@ -108,7 +108,14 @@ A successful T550 MediaPipe run prints a startup line like:
 GL version: 3.2 (OpenGL ES 3.2 NVIDIA ...), renderer: NVIDIA T550 Laptop GPU/PCIe/SSE2
 ```
 
-If it prints `Mesa Intel(R) Iris(R) Xe Graphics`, MediaPipe is using the integrated GPU path. If it fails with `eglGetDisplay`, check that `/usr/share/glvnd/egl_vendor.d/10_nvidia.json` exists and that the launcher is being used from the repo root. The launcher sets `__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json`, and `EGL_PLATFORM=wayland` before Python starts; setting these inside the Python backend was not reliable because GLVND/EGL selection can happen before backend initialization. It also sets `QT_QPA_PLATFORM=xcb` so OpenCV's Qt preview can use Xwayland instead of looking for the missing Qt Wayland plugin in the `cv2` wheel.
+If it prints `Mesa Intel(R) Iris(R) Xe Graphics`, MediaPipe is using the integrated GPU path. If it fails with `eglGetDisplay`, check that `/usr/share/glvnd/egl_vendor.d/10_nvidia.json` exists and that the launcher is being used from the repo root. The launcher sets `__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json`, and `EGL_PLATFORM=wayland` before Python starts; setting these inside the Python backend was not reliable because GLVND/EGL selection can happen before backend initialization. It also sets `QT_QPA_PLATFORM=xcb` so OpenCV's Qt preview can use Xwayland instead of looking for the missing Qt Wayland plugin in the `cv2` wheel, and `QT_QPA_FONTDIR=/usr/share/fonts/TTF` to point Qt at system fonts.
+
+Use timing diagnostics when the live recognizer feels laggy:
+
+```bash
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show --profile-timing
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-swipes-001-holdout-window-features.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show --profile-timing
+```
 
 Short smoke evidence from 2026-05-06 on `/dev/video0` at `640x480 @ 30 FPS MJPG`:
 
