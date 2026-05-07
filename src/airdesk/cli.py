@@ -7,7 +7,7 @@ import json
 import platform
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from statistics import fmean
 from time import monotonic
@@ -108,6 +108,16 @@ class CollectionTakeResult:
 
     frames: int
     decision: str
+
+
+@dataclass(frozen=True)
+class RecordPromptSegment:
+    """One preview prompt segment for a structured recording."""
+
+    start: float
+    end: float
+    text: str
+
 
 app = typer.Typer(no_args_is_help=True, help="AirDesk spatial input prototype CLI.")
 camera_app = typer.Typer(help="Camera discovery and probing commands.")
@@ -1747,6 +1757,17 @@ def record(
         float | None,
         typer.Option(help="Stop after this many seconds based on frame timestamps."),
     ] = None,
+    countdown: Annotated[
+        float,
+        typer.Option(help="Preview countdown seconds before recording frames."),
+    ] = 0.0,
+    segment: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--segment",
+            help="Preview prompt segment as start:end:text, e.g. 0:10:R R. Repeatable.",
+        ),
+    ] = None,
     model_path: Annotated[
         Path,
         typer.Option(help="MediaPipe Hand Landmarker .task model path."),
@@ -1779,6 +1800,14 @@ def record(
     show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = False,
 ) -> None:
     """Record normalized tracking frames and runtime events as JSONL."""
+    if countdown < 0:
+        typer.echo("--countdown cannot be negative.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        prompt_segments = _parse_record_prompt_segments(segment or [])
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     tracker = _make_tracker(
         backend=backend,
         device=device,
@@ -1793,9 +1822,13 @@ def record(
         min_tracking_confidence=min_tracking_confidence,
         delegate=hand_delegate,
     )
+    status = {"text": f"ready: {label or out.stem}"}
+    if isinstance(tracker, MediaPipeHandTrackerBackend):
+        tracker.preview_status_provider = lambda: status["text"]
     frame_count = 0
     interrupted = False
-    first_frame_timestamp: float | None = None
+    countdown_started_at: float | None = None
+    recording_started_at: float | None = None
     try:
         tracker.start()
         with JsonlRecordingWriter(out) as writer:
@@ -1808,8 +1841,10 @@ def record(
                         "device": device,
                         "max_frames": max_frames,
                         "duration": duration,
+                        "countdown": countdown,
                         "label": label,
                         "model_path": str(model_path),
+                        "prompt_segments": [asdict(item) for item in prompt_segments],
                         "mediapipe": {
                             "max_num_hands": max_num_hands,
                             "min_detection_confidence": min_detection_confidence,
@@ -1828,10 +1863,34 @@ def record(
             )
             try:
                 for frame in tracker.frames():
-                    if first_frame_timestamp is None:
-                        first_frame_timestamp = frame.timestamp
-                    if duration is not None and frame.timestamp - first_frame_timestamp >= duration:
+                    if recording_started_at is None:
+                        if countdown_started_at is None:
+                            countdown_started_at = frame.timestamp
+                        countdown_elapsed = frame.timestamp - countdown_started_at
+                        if countdown_elapsed < countdown:
+                            remaining = countdown - countdown_elapsed
+                            status["text"] = (
+                                f"countdown {remaining:.1f}s | {label or out.stem}"
+                            )
+                            continue
+                        recording_started_at = frame.timestamp
+                        writer.write_event(
+                            EventLogEntry(
+                                event_type="recording_frames_started",
+                                timestamp=utc_timestamp(),
+                                payload={"label": label, "countdown": countdown},
+                            )
+                        )
+                    recorded_elapsed = frame.timestamp - recording_started_at
+                    if duration is not None and recorded_elapsed >= duration:
+                        status["text"] = f"done frames={frame_count} | q/esc quits"
                         break
+                    status["text"] = _record_preview_status(
+                        label=label or out.stem,
+                        elapsed=recorded_elapsed,
+                        duration=duration,
+                        segments=prompt_segments,
+                    )
                     writer.write_tracking_frame(frame)
                     frame_count += 1
             except KeyboardInterrupt:
@@ -1851,6 +1910,7 @@ def record(
                         "frames": frame_count,
                         "interrupted": interrupted,
                         "duration": duration,
+                        "countdown": countdown,
                         "label": label,
                     },
                 )
@@ -2454,6 +2514,52 @@ def _attach_runtime_preview_controls(
         return False
 
     tracker.preview_key_handler = handle_key
+
+
+def _parse_record_prompt_segments(values: list[str]) -> tuple[RecordPromptSegment, ...]:
+    segments: list[RecordPromptSegment] = []
+    for value in values:
+        pieces = value.split(":", maxsplit=2)
+        if len(pieces) != 3:
+            raise ValueError(f"segment must use start:end:text format, got {value!r}")
+        start_text, end_text, text = pieces
+        try:
+            start = float(start_text)
+            end = float(end_text)
+        except ValueError as exc:
+            raise ValueError(f"segment start/end must be numeric, got {value!r}") from exc
+        if start < 0 or end <= start:
+            raise ValueError(f"segment end must be greater than start, got {value!r}")
+        label = text.strip()
+        if not label:
+            raise ValueError(f"segment text cannot be empty, got {value!r}")
+        segments.append(RecordPromptSegment(start=start, end=end, text=label))
+    return tuple(sorted(segments, key=lambda item: (item.start, item.end)))
+
+
+def _record_preview_status(
+    *,
+    label: str,
+    elapsed: float,
+    duration: float | None,
+    segments: tuple[RecordPromptSegment, ...],
+) -> str:
+    segment = _record_prompt_segment_at(elapsed, segments)
+    total = f"{elapsed:.1f}s" if duration is None else f"{elapsed:.1f}/{duration:.1f}s"
+    if segment is None:
+        return f"recording {total} | {label}"
+    remaining = max(0.0, segment.end - elapsed)
+    return f"recording {total} | {segment.text} | {remaining:.1f}s left"
+
+
+def _record_prompt_segment_at(
+    elapsed: float,
+    segments: tuple[RecordPromptSegment, ...],
+) -> RecordPromptSegment | None:
+    for segment in segments:
+        if segment.start <= elapsed < segment.end:
+            return segment
+    return None
 
 
 def _record_collection_take(

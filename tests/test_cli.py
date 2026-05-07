@@ -6,7 +6,13 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from airdesk.cli import _format_tracker_timing, _handle_collection_preview_key, app
+from airdesk.cli import (
+    _format_tracker_timing,
+    _handle_collection_preview_key,
+    _parse_record_prompt_segments,
+    _record_preview_status,
+    app,
+)
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import GestureEventLabel, GestureLabelFile, SessionMetadata, save_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
@@ -61,6 +67,15 @@ def test_collect_help_exposes_hand_delegate() -> None:
     result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0
+    assert "--hand-delegate" in result.stdout
+
+
+def test_record_help_exposes_countdown_segments_and_hand_delegate() -> None:
+    result = CliRunner().invoke(app, ["record", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--countdown" in result.stdout
+    assert "--segment" in result.stdout
     assert "--hand-delegate" in result.stdout
 
 
@@ -789,6 +804,24 @@ def test_collection_preview_keys_drive_start_and_review_decisions() -> None:
 
     assert _handle_collection_preview_key(ord("r"), state) is True
     assert state == {"phase": "done", "decision": "redo"}
+
+
+def test_record_prompt_segments_format_status() -> None:
+    segments = _parse_record_prompt_segments(["10:20:rest", "0:10:R R"])
+
+    assert [segment.text for segment in segments] == ["R R", "rest"]
+    assert _record_preview_status(
+        label="structured",
+        elapsed=4.5,
+        duration=22.0,
+        segments=segments,
+    ) == "recording 4.5/22.0s | R R | 5.5s left"
+    assert _record_preview_status(
+        label="structured",
+        elapsed=21.0,
+        duration=22.0,
+        segments=segments,
+    ) == "recording 21.0/22.0s | structured"
 
 
 def test_run_writes_events_out_for_replay_backend(tmp_path: Path) -> None:
