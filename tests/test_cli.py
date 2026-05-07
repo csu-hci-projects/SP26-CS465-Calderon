@@ -54,6 +54,7 @@ def test_benchmark_help_exposes_mediapipe_tuning_options() -> None:
     assert "--min-detection-confidence" in result.stdout
     assert "--min-presence-confidence" in result.stdout
     assert "--min-tracking-confidence" in result.stdout
+    assert "--hand-delegate" in result.stdout
 
 
 def test_benchmark_replay_reports_frame_counts() -> None:

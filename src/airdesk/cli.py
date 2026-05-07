@@ -1503,6 +1503,10 @@ def track(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -1525,6 +1529,7 @@ def track(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     recognizer = StaticHandPoseRecognizer()
     try:
@@ -1579,6 +1584,10 @@ def tune(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -1603,6 +1612,7 @@ def tune(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     recognizer = StaticHandPoseRecognizer(
         extended_threshold=extended_threshold,
@@ -1996,6 +2006,10 @@ def benchmark(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -2015,15 +2029,26 @@ def benchmark(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     timestamps: list[float] = []
     hand_frames = 0
+    hand_confidences: list[float] = []
+    current_missing_streak = 0
+    longest_missing_streak = 0
     try:
         tracker.start()
         for frame in tracker.frames():
             timestamps.append(frame.timestamp)
             if frame.hands:
                 hand_frames += 1
+                current_missing_streak = 0
+                hand_confidences.extend(
+                    hand.confidence for hand in frame.hands if hand.confidence is not None
+                )
+            else:
+                current_missing_streak += 1
+                longest_missing_streak = max(longest_missing_streak, current_missing_streak)
     except KeyboardInterrupt:
         typer.echo("interrupted")
     except RuntimeError as exc:
@@ -2034,9 +2059,15 @@ def benchmark(
 
     average_fps = _average_fps_from_timestamps(timestamps)
     fps_text = f"{average_fps:.2f}" if average_fps is not None else "unknown"
+    hand_ratio = hand_frames / len(timestamps) if timestamps else 0.0
+    mean_confidence = f"{fmean(hand_confidences):.3f}" if hand_confidences else "unknown"
     typer.echo(
         f"frames={len(timestamps)} hand_frames={hand_frames} average_fps={fps_text} "
+        f"hand_present_ratio={hand_ratio:.3f} "
+        f"longest_no_hand_streak={longest_missing_streak} "
+        f"mean_hand_confidence={mean_confidence} "
         f"model_path={model_path} max_num_hands={max_num_hands} "
+        f"delegate={hand_delegate} "
         f"min_detection={min_detection_confidence:.2f} "
         f"min_presence={min_presence_confidence:.2f} "
         f"min_tracking={min_tracking_confidence:.2f}"
