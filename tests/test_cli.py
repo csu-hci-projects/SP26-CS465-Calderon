@@ -57,6 +57,13 @@ def test_benchmark_help_exposes_mediapipe_tuning_options() -> None:
     assert "--hand-delegate" in result.stdout
 
 
+def test_collect_help_exposes_hand_delegate() -> None:
+    result = CliRunner().invoke(app, ["collect", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--hand-delegate" in result.stdout
+
+
 def test_benchmark_replay_reports_frame_counts() -> None:
     result = CliRunner().invoke(
         app,

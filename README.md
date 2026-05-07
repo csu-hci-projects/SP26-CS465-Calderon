@@ -80,6 +80,7 @@ uv run airdesk replay tests/fixtures/replay-one-frame.jsonl
 uv run airdesk run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --profile configs/profiles/study-safe.toml --dry-run --events-out data/logs/replay-dry-run.jsonl
 uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --profile configs/profiles/window-manager.toml --dry-run --show --events-out data/logs/live-window-manager-dry-run.jsonl
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --reps 5 --duration 6 --countdown 3 --show
+scripts/airdesk-nvidia-mediapipe-wayland collect --out-dir data/recordings/sprint4-gpu-swipes-001 --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --hand-delegate gpu --show
 uv run airdesk collection-summary data/recordings/sprint4-smoke
 uv run airdesk label init data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --out data/labels/swipe-left-positive-001.labels.json
 uv run airdesk label suggest data/recordings/sprint4-smoke/swipe-left-positive-001.jsonl --gesture swipe_left --out data/labels/swipe-left-positive-001.labels.json --apply

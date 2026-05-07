@@ -158,6 +158,7 @@ Collect continuous positive and negative streams before training or trusting a l
 
 ```bash
 uv run airdesk collect --out-dir data/recordings/sprint4-smoke --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --show
+scripts/airdesk-nvidia-mediapipe-wayland collect --out-dir data/recordings/sprint4-gpu-swipes-001 --label swipe-left-positive --label swipe-right-positive --label normal-desk-motion-negative --reps 5 --duration 6 --countdown 3 --hand-delegate gpu --show
 ```
 
 The collect command shows the webcam preview before recording so you can position your hand in frame. In the preview window:

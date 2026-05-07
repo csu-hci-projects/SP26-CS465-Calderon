@@ -1692,6 +1692,10 @@ def view(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -1713,6 +1717,7 @@ def view(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     typer.echo("Opening AirDesk live view. Press q or esc in the preview window to quit.")
     try:
@@ -1762,6 +1767,10 @@ def record(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -1782,6 +1791,7 @@ def record(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     frame_count = 0
     interrupted = False
@@ -1805,6 +1815,7 @@ def record(
                             "min_detection_confidence": min_detection_confidence,
                             "min_presence_confidence": min_presence_confidence,
                             "min_tracking_confidence": min_tracking_confidence,
+                            "delegate": hand_delegate,
                         },
                         "camera_settings": CameraSettings(
                             width=width,
@@ -1896,6 +1907,10 @@ def collect(
         float,
         typer.Option(help="Minimum tracking confidence / box IoU threshold."),
     ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    hand_delegate: Annotated[
+        str,
+        typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+    ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
     auto_download_model: Annotated[
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
@@ -1956,6 +1971,7 @@ def collect(
                 min_detection_confidence=min_detection_confidence,
                 min_presence_confidence=min_presence_confidence,
                 min_tracking_confidence=min_tracking_confidence,
+                hand_delegate=hand_delegate,
                 show=show,
                 preview_driven=preview_driven,
             )
@@ -2459,6 +2475,7 @@ def _record_collection_take(
     min_detection_confidence: float,
     min_presence_confidence: float,
     min_tracking_confidence: float,
+    hand_delegate: str,
     show: bool,
     preview_driven: bool,
 ) -> CollectionTakeResult:
@@ -2479,6 +2496,7 @@ def _record_collection_take(
         min_detection_confidence=min_detection_confidence,
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
+        delegate=hand_delegate,
     )
     _attach_collection_preview_controls(
         tracker,
@@ -2510,6 +2528,7 @@ def _record_collection_take(
                             "min_detection_confidence": min_detection_confidence,
                             "min_presence_confidence": min_presence_confidence,
                             "min_tracking_confidence": min_tracking_confidence,
+                            "delegate": hand_delegate,
                         },
                         "camera_settings": CameraSettings(
                             width=width,
