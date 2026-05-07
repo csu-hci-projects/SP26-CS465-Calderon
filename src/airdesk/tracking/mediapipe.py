@@ -353,72 +353,81 @@ class MediaPipeHandTrackerBackend:
             color=(215, 220, 230),
             thickness=2,
         )
-        if phase != "recording":
-            return
-
-        lane_y = panel_y + panel_h - 74
-        focus_x = panel_x + int(panel_w * 0.28)
-        self._cv2.line(
-            image,
-            (focus_x, lane_y - 42),
-            (focus_x, lane_y + 42),
-            (245, 245, 245),
-            2,
+        chart_elapsed = elapsed if phase == "recording" else 0.0
+        self._draw_chart_progress(
+            image=image,
+            elapsed=chart_elapsed,
+            segments=segments,
+            x=panel_x + 26,
+            y=panel_y + 108,
+            width=panel_w - 52,
+            color=accent,
         )
-        self._cv2.circle(image, (focus_x, lane_y), 7, (245, 245, 245), -1)
-        pixels_per_second = max(40, int(panel_w * 0.085))
-        cards: list[dict[str, Any]] = []
-        for item in segments:
+        self._draw_chart_queue(
+            image=image,
+            elapsed=chart_elapsed,
+            segments=segments,
+            x=panel_x + 26,
+            y=panel_y + 142,
+            width=panel_w - 52,
+        )
+
+    def _draw_chart_progress(
+        self,
+        *,
+        image: Any,
+        elapsed: float,
+        segments: list[Any],
+        x: int,
+        y: int,
+        width: int,
+        color: tuple[int, int, int],
+    ) -> None:
+        assert self._cv2 is not None
+        segment = _chart_segment_at(elapsed, segments)
+        progress = _chart_segment_progress(elapsed, segment)
+        height = 14
+        self._cv2.rectangle(image, (x, y), (x + width, y + height), (55, 58, 66), -1)
+        fill_width = max(4, int(width * progress)) if segment is not None else 0
+        if fill_width > 0:
+            self._cv2.rectangle(image, (x, y), (x + fill_width, y + height), color, -1)
+        self._cv2.rectangle(image, (x, y), (x + width, y + height), (210, 215, 225), 1)
+
+    def _draw_chart_queue(
+        self,
+        *,
+        image: Any,
+        elapsed: float,
+        segments: list[Any],
+        x: int,
+        y: int,
+        width: int,
+    ) -> None:
+        upcoming = _chart_visible_queue(elapsed, segments, limit=3)
+        if not upcoming:
+            return
+        gap = 12
+        card_count = 3
+        card_width = max(80, (width - gap * (card_count - 1)) // card_count)
+        card_height = 52
+        for index, item in enumerate(upcoming):
             if not isinstance(item, dict):
                 continue
-            start = float(item.get("start", 0.0))
-            end = float(item.get("end", start))
-            if end < elapsed - 1.2 or start > elapsed + 10.0:
-                continue
-            center_time = (start + end) / 2.0
-            x_center = focus_x + int((center_time - elapsed) * pixels_per_second)
-            label_text = str(item.get("text", ""))
-            text_width = self._text_width(label_text, scale=0.58, thickness=2)
-            min_card_w = max(120, text_width + 30)
-            max_card_w = max(min_card_w, int(panel_w * 0.48))
-            card_w = min(
-                max_card_w,
-                max(min_card_w, int((end - start) * pixels_per_second)),
-            )
-            cards.append(
-                {
-                    "center": x_center,
-                    "width": card_w,
-                    "text": label_text,
-                    "kind": str(item.get("kind", "prompt")),
-                    "past": end <= elapsed,
-                }
-            )
-        placements = _place_timeline_cards(
-            cards=[(int(card["center"]), int(card["width"])) for card in cards],
-            minimum=panel_x + 18,
-            maximum=panel_x + panel_w - 18,
-            gap=10,
-            rows=2,
-        )
-        for card, placement in zip(cards, placements, strict=True):
-            if placement is None:
-                continue
-            x0, x1, row = placement
-            y0 = lane_y - 52 + row * 54
-            y1 = y0 + 48
-            kind = str(card["kind"])
+            x0 = x + index * (card_width + gap)
+            x1 = x0 + card_width
+            y0 = y
+            y1 = y + card_height
+            kind = str(item.get("kind", "prompt"))
+            text = str(item.get("text", ""))
             color = _chart_segment_color(kind)
-            if bool(card["past"]):
-                color = tuple(int(channel * 0.45) for channel in color)
             self._cv2.rectangle(image, (x0, y0), (x1, y1), color, -1)
             self._cv2.rectangle(image, (x0, y0), (x1, y1), (250, 250, 250), 1)
             self._put_text_fit(
                 image=image,
-                text=str(card["text"]),
-                x=x0 + 8,
-                y=y0 + 31,
-                max_width=max(20, x1 - x0 - 16),
+                text=text,
+                x=x0 + 10,
+                y=y0 + 33,
+                max_width=max(20, card_width - 20),
                 scale=0.58,
                 color=(255, 255, 255),
                 thickness=2,
@@ -745,34 +754,45 @@ def _fit_interval_inside(
     return x0, x1
 
 
-def _place_timeline_cards(
+def _chart_segment_at(elapsed: float, segments: list[Any]) -> dict[str, Any] | None:
+    for item in segments:
+        if not isinstance(item, dict):
+            continue
+        start = float(item.get("start", 0.0))
+        end = float(item.get("end", start))
+        if start <= elapsed < end:
+            return item
+    return None
+
+
+def _chart_segment_progress(elapsed: float, segment: dict[str, Any] | None) -> float:
+    if segment is None:
+        return 0.0
+    start = float(segment.get("start", 0.0))
+    end = float(segment.get("end", start))
+    if end <= start:
+        return 1.0
+    return min(1.0, max(0.0, (elapsed - start) / (end - start)))
+
+
+def _chart_visible_queue(
+    elapsed: float,
+    segments: list[Any],
     *,
-    cards: list[tuple[int, int]],
-    minimum: int,
-    maximum: int,
-    gap: int,
-    rows: int,
-) -> list[tuple[int, int, int] | None]:
-    placed: list[tuple[int, int, int] | None] = []
-    row_ends = [minimum - gap for _ in range(max(1, rows))]
-    for center, width in cards:
-        fitted_width = min(width, max(1, maximum - minimum))
-        x0 = center - fitted_width // 2
-        x1 = x0 + fitted_width
-        if x0 < minimum or x1 > maximum:
-            placed.append(None)
+    limit: int,
+) -> list[dict[str, Any]]:
+    current = _chart_segment_at(elapsed, segments)
+    start_after = float(current.get("end", elapsed)) if current is not None else elapsed
+    upcoming: list[dict[str, Any]] = []
+    for item in segments:
+        if not isinstance(item, dict):
             continue
-        selected_row: int | None = None
-        for row_index, row_end in enumerate(row_ends):
-            if x0 >= row_end + gap:
-                selected_row = row_index
-                break
-        if selected_row is None:
-            placed.append(None)
-            continue
-        placed.append((x0, x1, selected_row))
-        row_ends[selected_row] = x1
-    return placed
+        start = float(item.get("start", 0.0))
+        if start >= start_after - 1e-6:
+            upcoming.append(item)
+        if len(upcoming) >= limit:
+            break
+    return upcoming
 
 
 def bbox_pixels(

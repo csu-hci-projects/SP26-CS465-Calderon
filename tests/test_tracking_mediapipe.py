@@ -4,8 +4,10 @@ from dataclasses import dataclass
 
 from airdesk.tracking.mediapipe import (
     _base_options_delegate,
+    _chart_segment_at,
+    _chart_segment_progress,
+    _chart_visible_queue,
     _fit_interval_inside,
-    _place_timeline_cards,
     bbox_pixels,
     hand_label,
     normalized_hands_from_mediapipe_results,
@@ -93,24 +95,18 @@ def test_fit_interval_inside_preserves_width_near_edges() -> None:
     assert _fit_interval_inside(center=120, width=260, minimum=20, maximum=220) == (20, 220)
 
 
-def test_place_timeline_cards_uses_rows_without_shifting_time_positions() -> None:
-    assert _place_timeline_cards(
-        cards=[(80, 100), (120, 100), (170, 100)],
-        minimum=20,
-        maximum=260,
-        gap=10,
-        rows=2,
-    ) == [(30, 130, 0), (70, 170, 1), None]
+def test_chart_queue_uses_fixed_upcoming_segments_after_current() -> None:
+    segments = [
+        {"start": 0.0, "end": 3.0, "text": "get ready", "kind": "lead_in"},
+        {"start": 3.0, "end": 4.0, "text": "R R ready", "kind": "cue"},
+        {"start": 4.0, "end": 5.5, "text": "SWIPE R R", "kind": "stroke"},
+        {"start": 5.5, "end": 6.2, "text": "reset", "kind": "recovery"},
+    ]
 
-
-def test_place_timeline_cards_skips_edge_cards_instead_of_clamping() -> None:
-    assert _place_timeline_cards(
-        cards=[(30, 100), (110, 100), (250, 100)],
-        minimum=20,
-        maximum=260,
-        gap=10,
-        rows=2,
-    ) == [None, (60, 160, 0), None]
+    assert _chart_segment_at(4.25, segments) == segments[2]
+    assert round(_chart_segment_progress(4.25, segments[2]), 3) == 0.167
+    assert _chart_visible_queue(0.5, segments, limit=3) == segments[1:4]
+    assert _chart_visible_queue(4.25, segments, limit=3) == segments[3:4]
 
 
 def test_hand_label_includes_handedness_and_confidence() -> None:
