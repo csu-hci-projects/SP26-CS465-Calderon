@@ -103,6 +103,13 @@ Important evidence:
   Windows remain causal compute context, not semantic gesture labels.
 - The next slice should run old replay data through this surface as regression
   coverage before collecting the new V2 data.
+- A first behavior-preserving CLI cleanup pass has started. The public entrypoint
+  remains `airdesk.cli:app`, but offline TCN commands moved to
+  `src/airdesk/cli_tcn.py`, label/feature commands moved to
+  `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands moved
+  to `src/airdesk/cli_system.py`, and shared helper functions moved to
+  `src/airdesk/cli_support.py`. `src/airdesk/cli.py` still owns live
+  tracking/runtime/preview commands.
 
 Next-session assignment:
 
@@ -112,7 +119,7 @@ Next-session assignment:
    - `src/airdesk/gestures/`
    - `src/airdesk/ml/`
    - `src/airdesk/analysis/`
-   - `src/airdesk/cli.py`
+   - `src/airdesk/cli.py` and the extracted `src/airdesk/cli_*.py` modules
 3. Inspect existing TCN manifest/model/evaluation code enough to design the
    smallest TCN v2 slice.
 4. Review the TCN v2 data/model/evaluation surface:

@@ -150,6 +150,8 @@ Current context-reset task: evaluate the new deterministic motion-event baseline
 - [ ] Recheck decoder thresholds after label/timing diagnostics, not before
 - [ ] Recollect targeted combo/chained swipe charts after the weak-label/decoder pass
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
+- [x] Split offline TCN, label/features, and small system CLI commands out of `cli.py`
+- [ ] Continue no-behavior-change CLI refactor for live tracking/runtime/preview commands
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke

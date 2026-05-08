@@ -248,6 +248,18 @@ Current TCN v2 implementation state:
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
 
+Current CLI cleanup state:
+
+- The public entrypoint remains `airdesk.cli:app`.
+- Offline TCN/model/evaluation commands now live in `src/airdesk/cli_tcn.py`.
+- Label and feature-export commands now live in `src/airdesk/cli_labeling.py`.
+- Camera, Hyprland dry-run, and profile validation commands now live in
+  `src/airdesk/cli_system.py`.
+- Small shared CLI helpers live in `src/airdesk/cli_support.py`.
+- `src/airdesk/cli.py` still owns live tracking/runtime/preview command paths
+  and shared live-preview formatting helpers. Continue refactoring those in
+  small behavior-preserving chunks rather than doing a package rename.
+
 ## Current Research Direction Update
 
 Caden's live `watch-tcn` test showed that `swipe_left` works better than `swipe_right`, fast consecutive swipes are weak, and the model often needs the hand to reset before another gesture. This is consistent with the continuous-gesture literature: the hard problem is spotting gesture events inside an untrimmed stream, not classifying a clean fixed window.
