@@ -255,6 +255,16 @@ uv run airdesk gesture refine-chart-labels --features-dir data/features/sprint4-
 
 Use `--target-assignment motion-gated` for two-hand chart manifests. It keeps the shared TCN architecture that Caden suggested - one checkpoint applied independently to each hand stream - while reducing weak-label contamination from a resting visible hand. The gate intentionally uses motion energy, not raw left/right dx sign, because the mirrored preview and raw camera coordinate convention can make sign checks brittle across batches.
 
+TCN v2 replay command shape:
+
+```bash
+uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --feature-preset stream-invariant --target-mode v2-evidence --target-assignment motion-gated --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
+uv run airdesk gesture train-tcn-v2 --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --out data/models/gestures/tcn-v2-003-004-two-hand.pt --epochs 25 --batch-size 32 --hidden-channels 32 --levels 3 --validation-fraction 0.2 --seed 7
+uv run airdesk gesture evaluate-tcn-v2 --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --model data/models/gestures/tcn-v2-003-004-two-hand.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-v2-regression-summary.json --activation-threshold 0.35 --release-threshold 0.2 --min-peak-confidence 0.35 --cooldown-seconds 0.5
+```
+
+This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps stroke evidence back through the replay event decoder. Use it on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
+
 Live two-hand TCN diagnostic preview:
 
 ```bash

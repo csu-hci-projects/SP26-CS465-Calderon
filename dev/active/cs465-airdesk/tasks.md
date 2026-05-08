@@ -139,7 +139,8 @@ Current context-reset task: evaluate the new deterministic motion-event baseline
 - [x] Evaluate motion-event baseline on existing replay data before any live diagnostic preview
 - [x] Inspect motion-baseline false activations and weak-left misses before live preview
 - [x] Add label-aware motion diagnostic rows for accepted/rejected replay evidence
-- [ ] Start TCN v2 manifest/target/model surface with boundary/intent heads rather than window argmax only
+- [x] Start TCN v2 manifest/target/model surface with boundary/intent heads rather than window argmax only
+- [x] Add replay-only `train-tcn-v2` / `evaluate-tcn-v2` surfaces for decoder-facing evidence heads
 - [ ] Use old motion/DTW/TCN replay data as a V2 regression suite for known failures
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented
 - [ ] Add the next replay-only negative-motion/intent rejection check only if V2 needs it as an explicit proposal gate

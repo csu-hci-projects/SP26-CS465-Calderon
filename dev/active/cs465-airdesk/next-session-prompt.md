@@ -72,8 +72,8 @@ uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels 
 ```
 
 That baseline did its job: it exposed lower-level failure modes. Do not keep
-polishing it forever. The next implementation slice should start TCN v2 while
-keeping the old replay data as a regression suite.
+polishing it forever. The first TCN v2 surface now exists; use old replay data
+as a regression suite before collecting the targeted V2 slice.
 
 Important evidence:
 
@@ -95,8 +95,14 @@ Important evidence:
 - Motion-peak auto-refinement worsened held-out TCN performance and should be used only for diagnostics/manual review.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Keep live desktop actions disabled.
-- TCN v2 is not implemented yet. The next slice should implement its
-  manifest/target/model/evaluation surface before collecting the new V2 data.
+- TCN v2 is now implemented as an initial replay/evaluation surface:
+  `build-tcn-dataset --target-mode v2-evidence`, `train-tcn-v2`, and
+  `evaluate-tcn-v2`.
+- The v2 targets are framewise decoder-facing evidence heads:
+  `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`.
+  Windows remain causal compute context, not semantic gesture labels.
+- The next slice should run old replay data through this surface as regression
+  coverage before collecting the new V2 data.
 
 Next-session assignment:
 
@@ -109,28 +115,24 @@ Next-session assignment:
    - `src/airdesk/cli.py`
 3. Inspect existing TCN manifest/model/evaluation code enough to design the
    smallest TCN v2 slice.
-4. Implement the TCN v2 data/model/evaluation surface:
-   causal per-hand stream context, one shared model applied independently to
-   each `hand_id`, and decoder-facing evidence outputs instead of one argmax
+4. Review the TCN v2 data/model/evaluation surface:
+   causal per-hand context windows, one shared model shape applied independently
+   to each `hand_id`, and decoder-facing evidence outputs instead of one argmax
    gesture label per semantic window.
-5. Add target support for boundary/intent evidence, likely:
-   `background` / `intentional_motion`, `stroke_left` / `stroke_right`,
-   `start`, and `end`. Recovery/reset may be decoder context, but not a
-   user-facing command target.
-6. Use old replay data as a regression suite, not final proof:
+5. Use old replay data as a regression suite, not final proof:
    `sprint4-swipes-001`, `sprint4-chained-003`, and motion diagnostic JSON for
    sign convention, weak-left/tracking-drop behavior, negative-motion false
    activations, and repeated fires.
-7. After the TCN v2 target shape exists, plan or collect a small targeted
+6. After the TCN v2 regression check, plan or collect a small targeted
    continuous V2 training/testing slice: repeated same-direction swipes,
    alternating swipes, weak/tiny lefts, natural desk-motion negatives, hand
    enters/leaves frame, near/far starts, and two visible hands with one resting.
-8. Keep broad combo collection paused until that targeted V2 slice has
+7. Keep broad combo collection paused until that targeted V2 slice has
    event-level replay evidence.
-9. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
-10. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
-11. Run `uv run ruff check .` and `uv run pytest`.
-12. Commit and push.
+8. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
+9. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
+10. Run `uv run ruff check .` and `uv run pytest`.
+11. Commit and push.
 
 Do not:
 

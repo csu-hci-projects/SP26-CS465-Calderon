@@ -368,6 +368,14 @@ Next implementation slice:
 - compare against the deterministic motion baseline and DTW, not just window accuracy;
 - keep it preview/replay only until event-level evidence is strong.
 
+Status update: the first TCN v2 surface now exists. `build-tcn-dataset
+--target-mode v2-evidence` writes hand-scoped causal context windows with
+per-frame evidence heads: `intentional_motion`, `stroke_left`, `stroke_right`,
+`start`, and `end`. `train-tcn-v2` trains the optional sequence-evidence model,
+and `evaluate-tcn-v2` routes stroke evidence through the existing replay event
+decoder while keeping intent/boundary evidence in metadata. This is still a
+surface and regression harness, not proof of V2 quality.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -390,8 +398,9 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Start the smallest TCN v2 manifest/target/model slice.
-5. Keep live desktop actions disabled.
+4. Use the TCN v2 surface on old replay data as regression coverage.
+5. Plan or collect the targeted continuous V2 slice above.
+6. Keep live desktop actions disabled.
 
 If the next agent finds the plan too broad, it should narrow TCN v2 to the
 manifest/target/evaluation surface first rather than jumping straight to live

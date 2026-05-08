@@ -7,8 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from airdesk.analysis import diagnose_candidate_events, evaluate_tcn_manifest
+from airdesk.analysis import (
+    diagnose_candidate_events,
+    evaluate_tcn_manifest,
+    evaluate_tcn_v2_manifest,
+)
 from airdesk.features import FrameFeatureRow
+from airdesk.gestures.decoder import EventDecoderConfig
 from airdesk.labels import (
     GestureEventLabel,
     GestureLabelFile,
@@ -18,18 +23,23 @@ from airdesk.labels import (
 )
 from airdesk.ml import (
     TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
+    TCN_V2_EVIDENCE_TARGETS,
     CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
     build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
+    feature_window_frame_targets,
     feature_window_matrix,
     load_feature_rows_csv,
     load_tcn_dataset_manifest,
     predict_causal_tcn_manifest,
+    predict_causal_tcn_v2_manifest,
     prepare_tcn_training_arrays,
+    prepare_tcn_v2_training_arrays,
     refine_motion_aligned_label_file,
     save_tcn_dataset_manifest,
     train_causal_tcn,
+    train_causal_tcn_v2,
 )
 from airdesk.state.types import GestureCandidate
 
@@ -355,7 +365,7 @@ def test_build_tcn_manifest_can_assign_labels_from_matching_label_file(tmp_path:
     manifest = build_tcn_dataset_manifest(
         [features],
         labels_dir=labels_dir,
-        window_seconds=0.3,
+        window_seconds=0.2,
         stride_seconds=0.2,
         min_rows=2,
         min_gesture_fraction=0.5,
@@ -413,7 +423,7 @@ def test_build_tcn_manifest_supports_stream_invariant_phase_targets(tmp_path: Pa
     manifest = build_tcn_dataset_manifest(
         [features],
         labels_dir=labels_dir,
-        window_seconds=0.3,
+        window_seconds=0.2,
         stride_seconds=0.2,
         min_rows=2,
         min_gesture_fraction=0.5,
@@ -458,6 +468,154 @@ def test_build_tcn_manifest_phase_stroke_targets_treat_recovery_as_background(
     assert manifest.targets == ("background", "stroke_left", "stroke_right")
     assert manifest.target_mode == "phase-stroke"
     assert [window.target for window in manifest.windows] == ["stroke_left", "background"]
+
+
+def test_build_tcn_manifest_v2_evidence_targets_framewise_heads(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "continuous.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="background"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_left"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="stroke_left"),
+            _row(timestamp=1.3, frame_index=3, event="", phase="recovery"),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="swipe_left",
+                    start_time=1.1,
+                    end_time=1.2,
+                ),
+            ),
+            phase_labels=(
+                GesturePhaseLabel(
+                    label_id="phase-001",
+                    phase="stroke_left",
+                    start_time=1.1,
+                    end_time=1.2,
+                    gesture="swipe_left",
+                ),
+                GesturePhaseLabel(
+                    label_id="phase-002",
+                    phase="recovery",
+                    start_time=1.3,
+                    end_time=1.3,
+                    gesture="swipe_left",
+                ),
+            ),
+        ),
+        labels_dir / "continuous.labels.json",
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+    )
+
+    assert manifest.target_mode == "v2-evidence"
+    assert manifest.evidence_targets == TCN_V2_EVIDENCE_TARGETS
+    assert manifest.targets == (
+        "background",
+        "intentional_motion",
+        "stroke_left",
+        "stroke_right",
+        "start",
+        "end",
+    )
+    assert manifest.windows[0].target == "stroke_left"
+    frame_targets = feature_window_frame_targets(
+        manifest.windows[0],
+        evidence_targets=manifest.evidence_targets,
+    )
+    assert frame_targets[0] == [0.0, 0.0, 0.0, 0.0, 0.0]
+    assert frame_targets[1] == [1.0, 1.0, 0.0, 1.0, 0.0]
+    assert frame_targets[2] == [1.0, 1.0, 0.0, 0.0, 1.0]
+    arrays = prepare_tcn_v2_training_arrays(manifest)
+    assert arrays.lengths == (3,)
+    assert arrays.frame_targets[0][1][1] == 1.0
+
+
+def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path) -> None:
+    features = tmp_path / "two-hand.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-0"),
+            _row(timestamp=1.0, frame_index=0, event="", hand_id="hand-1"),
+            _row(
+                timestamp=1.1,
+                frame_index=1,
+                event="swipe_right",
+                hand_id="hand-0",
+                palm_window_dx_per_hand_scale=0.7,
+            ),
+            _row(
+                timestamp=1.1,
+                frame_index=1,
+                event="swipe_right",
+                hand_id="hand-1",
+                palm_window_dx_per_hand_scale=0.0,
+            ),
+            _row(
+                timestamp=1.2,
+                frame_index=2,
+                event="swipe_right",
+                hand_id="hand-0",
+                palm_window_dx_per_hand_scale=0.8,
+            ),
+            _row(
+                timestamp=1.2,
+                frame_index=2,
+                event="swipe_right",
+                hand_id="hand-1",
+                palm_window_dx_per_hand_scale=0.0,
+            ),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        target_mode="v2-evidence",
+        target_assignment="motion-gated",
+    )
+
+    windows_by_hand = {window.hand_id: window for window in manifest.windows}
+    moving_targets = feature_window_frame_targets(
+        windows_by_hand["hand-0"],
+        evidence_targets=manifest.evidence_targets,
+    )
+    resting_targets = feature_window_frame_targets(
+        windows_by_hand["hand-1"],
+        evidence_targets=manifest.evidence_targets,
+    )
+    assert moving_targets[-1][2] == 1.0
+    assert all(frame == [0.0, 0.0, 0.0, 0.0, 0.0] for frame in resting_targets)
 
 
 def test_save_tcn_dataset_manifest_writes_summary(tmp_path: Path) -> None:
@@ -729,6 +887,97 @@ def test_tcn_prediction_and_evaluation_smoke_when_torch_is_installed(tmp_path: P
     assert len(predictions) == len(manifest.windows)
     assert len(evaluations) == 1
     assert evaluations[0].recognizer == "tcn"
+    assert evaluations[0].intended_events == 1
+
+
+def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed(
+    tmp_path: Path,
+) -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("optional PyTorch dependency is not installed")
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "continuous.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="background"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_right"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="stroke_right"),
+            _row(timestamp=1.3, frame_index=3, event="", phase="background"),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="swipe_right",
+                    start_time=1.1,
+                    end_time=1.2,
+                ),
+            ),
+            phase_labels=(
+                GesturePhaseLabel(
+                    label_id="phase-001",
+                    phase="stroke_right",
+                    start_time=1.1,
+                    end_time=1.2,
+                    gesture="swipe_right",
+                ),
+            ),
+        ),
+        labels_dir / "continuous.labels.json",
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.1,
+        min_rows=2,
+        min_gesture_fraction=0.25,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    model_path = tmp_path / "model.pt"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+
+    result = train_causal_tcn_v2(
+        manifest_path=manifest_path,
+        out_path=model_path,
+        config=CausalTcnTrainingConfig(epochs=1, batch_size=2, validation_fraction=0.0, seed=1),
+    )
+    predictions = predict_causal_tcn_v2_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+    )
+    evaluations = evaluate_tcn_v2_manifest(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        event_decoder_config=EventDecoderConfig(
+            activation_threshold=0.0,
+            release_threshold=0.0,
+            min_peak_confidence=0.0,
+            cooldown_seconds=0.0,
+            min_event_separation_seconds=0.0,
+        ),
+    )
+
+    assert result.targets == TCN_V2_EVIDENCE_TARGETS
+    assert len(predictions) == len(manifest.windows)
+    assert set(predictions[0].evidence) == set(TCN_V2_EVIDENCE_TARGETS)
+    assert evaluations[0].recognizer == "tcn_v2_event_decoder"
     assert evaluations[0].intended_events == 1
 
 

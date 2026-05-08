@@ -14,6 +14,14 @@ from airdesk.labels import GestureLabelFile, load_label_file
 TCN_EVENT_TARGETS = ("background", "swipe_left", "swipe_right")
 TCN_PHASE_TARGETS = ("background", "stroke_left", "stroke_right", "recovery")
 TCN_PHASE_STROKE_TARGETS = ("background", "stroke_left", "stroke_right")
+TCN_V2_EVIDENCE_TARGETS = (
+    "intentional_motion",
+    "stroke_left",
+    "stroke_right",
+    "start",
+    "end",
+)
+TCN_V2_WINDOW_TARGETS = ("background",) + TCN_V2_EVIDENCE_TARGETS
 TCN_TARGETS = TCN_EVENT_TARGETS
 TCN_LEGACY_FEATURE_COLUMNS = (
     "dt",
@@ -71,7 +79,7 @@ TCN_FEATURE_PRESETS = {
     "legacy": TCN_LEGACY_FEATURE_COLUMNS,
     "stream-invariant": TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
 }
-TCN_TARGET_MODES = ("event", "phase", "phase-stroke")
+TCN_TARGET_MODES = ("event", "phase", "phase-stroke", "v2-evidence")
 TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
 DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE = 0.35
 DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY = 0.45
@@ -158,6 +166,7 @@ class TcnWindowSample:
     target_index: int
     target_frame_counts: dict[str, int]
     hand_id: str = ""
+    frame_targets: tuple[dict[str, float], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -180,6 +189,10 @@ class TcnWindowSample:
                 str(target): int(count)
                 for target, count in data.get("target_frame_counts", {}).items()
             },
+            frame_targets=tuple(
+                {str(target): float(value) for target, value in frame.items()}
+                for frame in data.get("frame_targets", ())
+            ),
         )
 
 
@@ -201,6 +214,7 @@ class TcnDatasetManifest:
     target_assignment: str = "label"
     motion_gate_min_dx_per_hand_scale: float = DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE
     motion_gate_min_direction_consistency: float = DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY
+    evidence_targets: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -214,6 +228,7 @@ class TcnDatasetManifest:
             "feature_preset": self.feature_preset,
             "target_mode": self.target_mode,
             "target_assignment": self.target_assignment,
+            "evidence_targets": list(self.evidence_targets),
             "motion_gate_min_dx_per_hand_scale": self.motion_gate_min_dx_per_hand_scale,
             "motion_gate_min_direction_consistency": (
                 self.motion_gate_min_direction_consistency
@@ -238,6 +253,7 @@ class TcnDatasetManifest:
             feature_preset=str(data.get("feature_preset", "legacy")),
             target_mode=str(data.get("target_mode", "event")),
             target_assignment=str(data.get("target_assignment", "label")),
+            evidence_targets=tuple(str(target) for target in data.get("evidence_targets", ())),
             motion_gate_min_dx_per_hand_scale=float(
                 data.get(
                     "motion_gate_min_dx_per_hand_scale",
@@ -285,6 +301,7 @@ def build_tcn_dataset_manifest(
     """Build deterministic sliding-window metadata over exported feature CSVs."""
     resolved_feature_columns = feature_columns or feature_columns_for_preset(feature_preset)
     resolved_targets = targets_for_mode(target_mode) if targets == TCN_TARGETS else targets
+    evidence_targets = TCN_V2_EVIDENCE_TARGETS if target_mode == "v2-evidence" else ()
     _validate_manifest_config(
         window_seconds=window_seconds,
         stride_seconds=stride_seconds,
@@ -302,18 +319,35 @@ def build_tcn_dataset_manifest(
     for feature_path in sorted(feature_paths):
         rows = load_feature_rows_csv(feature_path)
         label_path, labels = _matching_labels(feature_path, labels_dir)
-        target_by_row = [
-            _target_for_row(
-                row,
+        evidence_by_row = (
+            _v2_evidence_targets_for_rows(
+                rows,
                 labels,
-                resolved_targets,
-                target_mode=target_mode,
                 target_assignment=target_assignment,
                 motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
                 motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
             )
-            for row in rows
-        ]
+            if target_mode == "v2-evidence"
+            else None
+        )
+        target_by_row = (
+            [_v2_window_target_from_evidence(evidence) for evidence in evidence_by_row]
+            if evidence_by_row is not None
+            else [
+                _target_for_row(
+                    row,
+                    labels,
+                    resolved_targets,
+                    target_mode=target_mode,
+                    target_assignment=target_assignment,
+                    motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+                    motion_gate_min_direction_consistency=(
+                        motion_gate_min_direction_consistency
+                    ),
+                )
+                for row in rows
+            ]
+        )
         sources.append(
             TcnFeatureSource(
                 feature_path=str(feature_path),
@@ -337,6 +371,7 @@ def build_tcn_dataset_manifest(
                     min_rows=min_rows,
                     min_gesture_fraction=min_gesture_fraction,
                     targets=resolved_targets,
+                    evidence_by_row=evidence_by_row,
                     sample_offset=len(windows),
                 )
             )
@@ -356,6 +391,7 @@ def build_tcn_dataset_manifest(
         target_assignment=target_assignment,
         motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
         motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+        evidence_targets=evidence_targets,
     )
 
 
@@ -377,6 +413,8 @@ def targets_for_mode(target_mode: str) -> tuple[str, ...]:
         return TCN_PHASE_TARGETS
     if target_mode == "phase-stroke":
         return TCN_PHASE_STROKE_TARGETS
+    if target_mode == "v2-evidence":
+        return TCN_V2_WINDOW_TARGETS
     options = ", ".join(TCN_TARGET_MODES)
     raise ValueError(f"unsupported target_mode={target_mode}; use one of: {options}")
 
@@ -404,6 +442,20 @@ def feature_window_matrix(
     if window.hand_id:
         rows = [row for row in rows if row.hand_id == window.hand_id]
     return [[_numeric_feature_value(row, column) for column in feature_columns] for row in rows]
+
+
+def feature_window_frame_targets(
+    window: TcnWindowSample,
+    *,
+    evidence_targets: tuple[str, ...],
+) -> list[list[float]]:
+    """Return multi-label evidence targets aligned to one manifest window."""
+    if not window.frame_targets:
+        raise ValueError("TCN v2 window is missing frame evidence targets")
+    return [
+        [float(frame.get(target, 0.0)) for target in evidence_targets]
+        for frame in window.frame_targets
+    ]
 
 
 def summarize_tcn_manifest(manifest: TcnDatasetManifest) -> dict[str, Any]:
@@ -483,6 +535,25 @@ def _target_for_row(
             return "recovery"
         return "background"
     event = row.event or _event_at(labels, row.timestamp)
+    if target_mode == "v2-evidence":
+        evidence = _v2_evidence_for_row(
+            row,
+            labels,
+            target_assignment=target_assignment,
+            motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+        )
+        if evidence["stroke_left"]:
+            return "stroke_left"
+        if evidence["stroke_right"]:
+            return "stroke_right"
+        if evidence["start"]:
+            return "start"
+        if evidence["end"]:
+            return "end"
+        if evidence["intentional_motion"]:
+            return "intentional_motion"
+        return "background"
     if event in targets and event != "background":
         return _apply_target_assignment(
             row,
@@ -545,6 +616,101 @@ def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:
     return ""
 
 
+def _v2_evidence_targets_for_rows(
+    rows: list[FrameFeatureRow],
+    labels: GestureLabelFile | None,
+    *,
+    target_assignment: str,
+    motion_gate_min_dx_per_hand_scale: float,
+    motion_gate_min_direction_consistency: float,
+) -> list[dict[str, float]]:
+    evidence = [
+        _v2_evidence_for_row(
+            row,
+            labels,
+            target_assignment=target_assignment,
+            motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+        )
+        for row in rows
+    ]
+    if labels is None or not rows:
+        return evidence
+    for event in labels.event_labels:
+        if event.label_type != "gesture":
+            continue
+        candidate_indices = [
+            index
+            for index, frame_evidence in enumerate(evidence)
+            if frame_evidence["intentional_motion"] > 0
+        ]
+        if not candidate_indices:
+            continue
+        start_index = min(
+            candidate_indices,
+            key=lambda index: abs(rows[index].timestamp - event.start_time),
+        )
+        end_index = min(
+            candidate_indices,
+            key=lambda index: abs(rows[index].timestamp - event.end_time),
+        )
+        evidence[start_index]["start"] = 1.0
+        evidence[end_index]["end"] = 1.0
+    return evidence
+
+
+def _v2_evidence_for_row(
+    row: FrameFeatureRow,
+    labels: GestureLabelFile | None,
+    *,
+    target_assignment: str,
+    motion_gate_min_dx_per_hand_scale: float,
+    motion_gate_min_direction_consistency: float,
+) -> dict[str, float]:
+    phase = (
+        row.phase
+        if row.phase and row.phase != "background"
+        else _phase_at(labels, row.timestamp)
+    )
+    event = row.event or _event_at(labels, row.timestamp)
+    stroke_left = phase == "stroke_left" or event == "swipe_left"
+    stroke_right = phase == "stroke_right" or event == "swipe_right"
+    if target_assignment == "motion-gated":
+        if stroke_left and not _row_motion_matches_target(
+            row,
+            "stroke_left",
+            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            min_direction_consistency=motion_gate_min_direction_consistency,
+        ):
+            stroke_left = False
+        if stroke_right and not _row_motion_matches_target(
+            row,
+            "stroke_right",
+            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+            min_direction_consistency=motion_gate_min_direction_consistency,
+        ):
+            stroke_right = False
+    intentional_motion = bool(
+        stroke_left
+        or stroke_right
+        or phase in {"recovery", "reset", "release", "cooldown"}
+    )
+    return {
+        "intentional_motion": 1.0 if intentional_motion else 0.0,
+        "stroke_left": 1.0 if stroke_left else 0.0,
+        "stroke_right": 1.0 if stroke_right else 0.0,
+        "start": 0.0,
+        "end": 0.0,
+    }
+
+
+def _v2_window_target_from_evidence(evidence: dict[str, float]) -> str:
+    for target in ("stroke_left", "stroke_right", "start", "end", "intentional_motion"):
+        if evidence.get(target, 0.0) > 0:
+            return target
+    return "background"
+
+
 def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:
     if labels is None:
         return ""
@@ -568,6 +734,7 @@ def _windows_for_source(
     min_rows: int,
     min_gesture_fraction: float,
     targets: tuple[str, ...],
+    evidence_by_row: list[dict[str, float]] | None,
     sample_offset: int,
 ) -> list[TcnWindowSample]:
     rows = [row for _index, row in indexed_rows]
@@ -589,6 +756,14 @@ def _windows_for_source(
                 for original_index, _row in indexed_rows[start_index:end_index]
             ]
             target_counts = _target_counts(window_targets, targets)
+            frame_targets = (
+                tuple(
+                    evidence_by_row[original_index]
+                    for original_index, _row in indexed_rows[start_index:end_index]
+                )
+                if evidence_by_row is not None
+                else ()
+            )
             target, target_index = _window_target(
                 target_counts,
                 row_count=end_index - start_index,
@@ -610,6 +785,7 @@ def _windows_for_source(
                     target=target,
                     target_index=target_index,
                     target_frame_counts=target_counts,
+                    frame_targets=frame_targets,
                 )
             )
         next_start_time = start_time + stride_seconds

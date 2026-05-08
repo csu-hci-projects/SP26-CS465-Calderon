@@ -104,7 +104,7 @@ Important live findings:
 - On Caden's Hyprland/Arch/T550 setup, use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` when testing MediaPipe GPU tracking on the T550. Plain `--hand-delegate gpu` may still use Intel/Mesa EGL. Confirm the MediaPipe startup log contains `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
 - Two-hand combo data remains the next blocker, but the broad collection pause has moved from "pipeline not implemented" to "weak labels and decoder need tightening." The old one-hand default was wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export used to consume only `frame.hands[0]`. AirDesk now exports per-hand feature rows, keeps independent per-hand motion history, scores DTW/TCN streams per hand, and decodes hand streams before merging events with cooldown suppression. The chart recorder defaults to `--max-num-hands 2`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted.
-- Recognition V2 pivot: Caden added `deep-research-report.md`; the plan review is complete and the first deterministic per-hand motion-event baseline is implemented at `src/airdesk/gestures/motion.py`. Use `airdesk gesture spot-motion` for replay JSON candidates/diagnostics and `airdesk gesture evaluate-motion` for label evaluation. First bounded replay evidence says this is diagnostic only: `sprint4-swipes-001` default raw-positive-dx mapping matched 0/16 with 12 false activations; flipped mapping matched 5/16 with 12 false activations; stricter flipped dx 1.0 matched 3/16 with 5 false activations; `sprint4-chained-003` default matched 4/10 with 3 repeated fires and 0 false activations. Label-aware motion diagnostics showed background lateral motion can pass motion-only gates, weak-left examples can fall below the displacement gate after tracking dropout/reset, and raw camera sign must stay explicit. Current decision: do not keep polishing the motion baseline forever. Start TCN v2 using old replay data as a regression suite, then collect targeted continuous V2 training/testing data.
+- Recognition V2 pivot: Caden added `deep-research-report.md`; the plan review is complete and the first deterministic per-hand motion-event baseline is implemented at `src/airdesk/gestures/motion.py`. Use `airdesk gesture spot-motion` for replay JSON candidates/diagnostics and `airdesk gesture evaluate-motion` for label evaluation. First bounded replay evidence says this is diagnostic only: `sprint4-swipes-001` default raw-positive-dx mapping matched 0/16 with 12 false activations; flipped mapping matched 5/16 with 12 false activations; stricter flipped dx 1.0 matched 3/16 with 5 false activations; `sprint4-chained-003` default matched 4/10 with 3 repeated fires and 0 false activations. Label-aware motion diagnostics showed background lateral motion can pass motion-only gates, weak-left examples can fall below the displacement gate after tracking dropout/reset, and raw camera sign must stay explicit. Current decision: do not keep polishing the motion baseline forever. The first TCN v2 surface now exists through `build-tcn-dataset --target-mode v2-evidence`, `train-tcn-v2`, and `evaluate-tcn-v2`; use old replay data as a regression suite, then collect targeted continuous V2 training/testing data.
 - New two-hand shared TCN evidence: batches 003+004 are local under ignored `data/`. Use one shared TCN checkpoint independently on each `hand_id` stream, not separate tracker-slot models. Motion-gated two-hand manifests keep weak prompt-time labels from training a stationary visible hand as active. Recovery-inclusive TCN collapsed into `recovery`; `phase-stroke` removed that class but still failed live. Caden saw live `dx > 0.50` while stroke probabilities stayed flat, so stop rescuing the current TCN with threshold sweeps.
 - `airdesk gesture diagnose-tcn-events` exists for decoded TCN failure reports. On the 003-to-004 split, most misses had nearest same-gesture candidates outside the 0.5 s tolerance window; increasing match tolerance to 3.0 s raised matches to 36/48 while leaving 9 false activations. Treat chart labels as prompt-time weak labels until active-hand/timestamp alignment improves.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
@@ -300,16 +300,14 @@ Do not wire DTW, motion, or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
-1. Implement the smallest TCN v2 data/model/evaluation surface:
-   causal per-hand stream context, shared model over `hand_id` streams, and
-   decoder-facing outputs rather than one argmax label per semantic window.
-2. Add boundary/intent targets such as `background` / `intentional_motion`,
-   `stroke_left` / `stroke_right`, `start`, and `end`.
-3. Use old replay data (`sprint4-swipes-001`, `sprint4-chained-003`, and the
+1. Use the TCN v2 data/model/evaluation surface on old replay data:
+   causal per-hand context windows, shared model shape over `hand_id` streams,
+   and decoder-facing outputs rather than one argmax label per semantic window.
+2. Use old replay data (`sprint4-swipes-001`, `sprint4-chained-003`, and the
    motion diagnostic files) as a regression suite for sign convention,
    weak-left/tracking-drop, negative-motion false activations, and repeated
    fires.
-4. After the target shape exists, collect a targeted continuous V2 training/test
+3. After the regression check, collect a targeted continuous V2 training/test
    slice: repeated same-direction swipes, alternating swipes, weak/tiny lefts,
    natural desk-motion negatives, hand enters/leaves frame, near/far starts, and
    two visible hands with one resting.

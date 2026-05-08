@@ -33,6 +33,7 @@ from airdesk.analysis import (
     evaluate_motion_recognizer,
     evaluate_rule_recognizer,
     evaluate_tcn_manifest,
+    evaluate_tcn_v2_manifest,
     format_analysis,
     format_evaluation,
     format_holdout_evaluation,
@@ -80,6 +81,7 @@ from airdesk.ml import (
     save_feature_diagnostics_report,
     save_tcn_dataset_manifest,
     train_causal_tcn,
+    train_causal_tcn_v2,
 )
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
@@ -1304,7 +1306,7 @@ def gesture_build_tcn_dataset(
     ] = "legacy",
     target_mode: Annotated[
         str,
-        typer.Option(help="Target mode: event, phase, or phase-stroke."),
+        typer.Option(help="Target mode: event, phase, phase-stroke, or v2-evidence."),
     ] = "event",
     target_assignment: Annotated[
         str,
@@ -1326,7 +1328,7 @@ def gesture_build_tcn_dataset(
         ),
     ] = 0.45,
 ) -> None:
-    """Build a dependency-free manifest for background/left/right TCN windows."""
+    """Build a dependency-free manifest for TCN context windows."""
     feature_paths = sorted(features_dir.glob(pattern))
     if not feature_paths:
         typer.echo(f"No feature CSV files matched {features_dir}/{pattern}", err=True)
@@ -1407,6 +1409,56 @@ def gesture_train_tcn(
         f"wrote tcn_model={out} samples={result.samples} train={result.train_samples} "
         f"validation={result.validation_samples} final_loss={result.final_train_loss:.4f} "
         f"train_accuracy={result.train_accuracy:.3f} validation_accuracy={validation}"
+    )
+
+
+@gesture_app.command("train-tcn-v2")
+def gesture_train_tcn_v2(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 evidence manifest JSON path."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output Torch checkpoint path.")],
+    epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
+    learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
+    batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
+    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 24,
+    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 2,
+    kernel_size: Annotated[int, typer.Option(help="Causal convolution kernel size.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.0,
+    validation_fraction: Annotated[
+        float,
+        typer.Option(help="Deterministic validation split fraction."),
+    ] = 0.2,
+    seed: Annotated[int, typer.Option(help="Deterministic training seed.")] = 7,
+) -> None:
+    """Train a TCN v2 sequence model for decoder-facing evidence heads."""
+    config = CausalTcnTrainingConfig(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        hidden_channels=hidden_channels,
+        levels=levels,
+        kernel_size=kernel_size,
+        dropout=dropout,
+        validation_fraction=validation_fraction,
+        seed=seed,
+    )
+    try:
+        result = train_causal_tcn_v2(manifest_path=manifest, out_path=out, config=config)
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    validation = (
+        f"{result.validation_accuracy:.3f}"
+        if result.validation_accuracy is not None
+        else "none"
+    )
+    typer.echo(
+        f"wrote tcn_v2_model={out} samples={result.samples} train={result.train_samples} "
+        f"validation={result.validation_samples} final_loss={result.final_train_loss:.4f} "
+        f"train_frame_accuracy={result.train_accuracy:.3f} "
+        f"validation_frame_accuracy={validation} heads={','.join(result.targets)}"
     )
 
 
@@ -1496,6 +1548,84 @@ def gesture_evaluate_tcn(
     typer.echo(
         f"recognizer={'tcn_event_decoder' if event_decoder else 'tcn'} "
         f"recordings={summary['recordings']} "
+        f"intended={summary['intended_events']} matched={summary['matched_events']} "
+        f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']} mean_latency={formatted_latency}"
+    )
+    if out is not None:
+        typer.echo(f"wrote evaluation={out}")
+
+
+@gesture_app.command("evaluate-tcn-v2")
+def gesture_evaluate_tcn_v2(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 evidence manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 checkpoint path."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON summary output path.")] = None,
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for event matching."),
+    ] = 0.5,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder activation threshold over stroke evidence."),
+    ] = 0.55,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold over stroke evidence."),
+    ] = 0.35,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak stroke confidence."),
+    ] = 0.60,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
+    ] = 0.5,
+) -> None:
+    """Evaluate TCN v2 evidence heads through the replay event decoder."""
+    decoder_config = EventDecoderConfig(
+        activation_threshold=activation_threshold,
+        release_threshold=release_threshold,
+        min_peak_confidence=min_peak_confidence,
+        min_event_separation_seconds=cooldown_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    try:
+        evaluations = evaluate_tcn_v2_manifest(
+            manifest_path=manifest,
+            model_path=model,
+            match_tolerance_seconds=match_tolerance_seconds,
+            event_decoder_config=decoder_config,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    summary = holdout_totals(evaluations)
+    payload = {
+        "recognizer": "tcn_v2_event_decoder",
+        "manifest": str(manifest),
+        "model": str(model),
+        "match_tolerance_seconds": match_tolerance_seconds,
+        "event_decoder": decoder_config.to_dict(),
+        "summary": summary,
+        "evaluations": [evaluation.to_dict() for evaluation in evaluations],
+    }
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    latency = summary["mean_latency_seconds"]
+    formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
+    typer.echo(
+        f"recognizer=tcn_v2_event_decoder recordings={summary['recordings']} "
         f"intended={summary['intended_events']} matched={summary['matched_events']} "
         f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
         f"false_activations={summary['false_activations']} "

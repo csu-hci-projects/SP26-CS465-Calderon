@@ -228,13 +228,25 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Start TCN v2 rather than continuing to polish the motion baseline indefinitely.
-> Use the old replay data as a regression suite for known failures, then collect a
-> targeted new continuous slice for V2 training/testing. The next implementation
-> should define the V2 manifest/target/model/evaluation surface: causal per-hand
-> stream context, frame/event evidence outputs, boundary/intent targets, and
-> decoder-facing events. Keep broad combo collection and live desktop actions
-> paused.
+> TCN v2 surface has started. Use the new v2 manifest/model/evaluation commands
+> to run old replay data as a regression suite for known failures, then collect a
+> targeted new continuous slice for V2 training/testing. Keep broad combo
+> collection and live desktop actions paused.
+
+Current TCN v2 implementation state:
+
+- `airdesk gesture build-tcn-dataset --target-mode v2-evidence` keeps windows as
+  causal per-hand compute context but stores per-frame evidence targets rather
+  than one semantic argmax label for the whole window.
+- The v2 evidence heads are `intentional_motion`, `stroke_left`, `stroke_right`,
+  `start`, and `end`. Recovery/reset is not a user-facing command target.
+- `airdesk gesture train-tcn-v2` trains an optional PyTorch sequence-evidence
+  model with one shared checkpoint shape over hand-scoped streams.
+- `airdesk gesture evaluate-tcn-v2` maps stroke evidence through the existing
+  replay event decoder and preserves intent/start/end evidence in candidate
+  metadata. It is replay/evaluation tooling only.
+- Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
+  window-classifier scaffold and diagnostic live preview.
 
 ## Current Research Direction Update
 
