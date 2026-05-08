@@ -132,10 +132,12 @@ Current context-reset task: review and refine `recognition-v2-plan.md` before im
 - [x] Stabilize live TCN HUD so both hand streams are shown together and static fist/pinch overlays are hidden
 - [x] Train/evaluate more sensitive `phase-stroke` TCN with 0.20 motion gate and document higher false-activation tradeoff
 - [x] Create Recognition V2 architecture plan after deep research report and live TCN misses
-- [ ] Review/refine Recognition V2 plan before implementation
-- [ ] Refactor recognition boundaries around per-hand streams, evidence, event decoder, and command queue
+- [x] Review/refine Recognition V2 plan before implementation
+- [ ] Add a narrow deterministic motion-evidence module at the existing gesture boundary
+- [ ] Add replay-first `spot-motion` / `evaluate-motion` JSON surfaces before live preview
 - [ ] Implement deterministic per-hand motion-event baseline before TCN v2
-- [ ] Evaluate motion-event baseline on existing replay data and live diagnostic preview
+- [ ] Evaluate motion-event baseline on existing replay data before any live diagnostic preview
+- [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary
 - [ ] Decide whether to collect a tiny targeted live calibration slice
 - [ ] Design TCN v2 only after baseline evidence, with boundary/intent heads rather than window argmax only
 - [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data

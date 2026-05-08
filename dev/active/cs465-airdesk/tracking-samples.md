@@ -277,6 +277,19 @@ Latest two-hand shared TCN evidence from 003-to-004 holdout:
 - the live TCN HUD now keeps both hand streams visible at once and disables the static fist/pinch overlay, so Caden can inspect actual `stroke_left` / `stroke_right` probabilities without the top bar flashing between hands or showing unrelated primitive poses;
 - interpretation: shared per-hand TCN is still the right model shape, but the current weak labels/decoder are not yet reliable enough for live desktop actions or broad collection. Pause and target the next data/debug pass at false activations, repeated fires, and mirrored direction consistency.
 
+Recognition V2 plan-review note: the next implementation should add a
+replay-first deterministic motion-event baseline before more TCN work. Expected
+command shape is:
+
+```bash
+uv run airdesk gesture spot-motion --recording data/recordings/... --out data/evaluations/.../motion-candidates.json
+uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
+```
+
+Names may change during implementation, but the evidence order should not:
+candidate JSON first, replay evaluation second, live diagnostic preview third,
+and no desktop actions.
+
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:
 
 ```bash

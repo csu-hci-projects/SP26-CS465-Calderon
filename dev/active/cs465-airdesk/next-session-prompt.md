@@ -47,7 +47,12 @@ AirDesk is a secondary spatial input layer for Hyprland, not a keyboard/mouse re
 
 Current pivot:
 
-Stop implementation until the Recognition V2 plan is reviewed/refined. Caden read a deep research report and agreed this is a real architecture shift. The current TCN work is useful evidence and infrastructure, but it is still too close to sliding-window phase classification. AirDesk needs a continuous gesture spotting architecture:
+The Recognition V2 plan has now been reviewed against the current code
+boundaries. It survives, but the first implementation slice should be narrower
+than a broad package refactor. Caden read a deep research report and agreed this
+is a real architecture shift. The current TCN work is useful evidence and
+infrastructure, but it is still too close to sliding-window phase classification.
+AirDesk needs a continuous gesture spotting architecture:
 
 ```text
 per-hand normalized feature streams
@@ -58,7 +63,12 @@ per-hand normalized feature streams
   -> mode/profile/safety policy
 ```
 
-Do not start by building TCN v2. First review the plan and inspect the code boundaries. If the plan survives review, the likely first implementation slice is a deterministic per-hand motion-event baseline plus event decoder/command-event cleanup.
+Do not start by building TCN v2. Do not start with a wholesale
+`airdesk/recognition/` package migration. The next implementation slice is a
+small deterministic per-hand motion-event baseline at the existing gesture
+boundary, reusing `features.landmarks.FeatureRowStream`,
+`gestures.decoder.EventDecoder`, and the current evaluation utilities where they
+fit.
 
 Important evidence:
 
@@ -83,23 +93,25 @@ Important evidence:
 
 Next-session assignment:
 
-1. Review `deep-research-report.md`, `recognition-v2-plan.md`, and the current code.
-2. Challenge and refine the plan before implementation. Update the docs if the plan changes.
-3. Inspect current package boundaries around:
+1. Re-skim `recognition-v2-plan.md`, especially the Review Conclusion and Phase C.
+2. Inspect current package boundaries around:
    - `src/airdesk/features/`
    - `src/airdesk/gestures/`
    - `src/airdesk/ml/`
    - `src/airdesk/analysis/`
    - `src/airdesk/cli.py`
-4. Decide the smallest safe implementation slice. Preferred slice: deterministic per-hand motion-event baseline.
-5. Only after the plan is 100% ready, implement the first slice.
+3. Implement the smallest safe slice: deterministic per-hand motion-event baseline.
+4. Prefer a small module such as `src/airdesk/gestures/motion.py` before creating a new recognition package.
+5. Add replay-first CLI/evaluation output before any live preview:
+   - `gesture spot-motion` or equivalent JSON candidate export;
+   - `gesture evaluate-motion` or equivalent summary against labels.
 6. Add tests for:
    - per-hand stream separation;
    - repeated same-direction swipes as separate events;
    - background/idle rejection;
    - merged event ordering across hands.
-7. Add replay/evaluation CLI output before any live execution path.
-8. Keep broad combo collection paused unless the new baseline exposes a specific tiny targeted calibration need.
+7. Keep broad combo collection paused unless the new baseline exposes a specific tiny targeted calibration need.
+8. Keep all dynamic swipe outputs in replay/diagnostic surfaces only.
 9. Update README/context/tasks/tracking-samples with whatever changes.
 10. Run `uv run ruff check .` and `uv run pytest`.
 11. Commit and push.
@@ -114,7 +126,8 @@ Do not:
 
 Suggested first implementation direction after plan review:
 
-Build a deterministic per-hand motion-event baseline that consumes existing feature rows/live feature streams and emits events like:
+Build a deterministic per-hand motion-event baseline that consumes existing
+feature rows first, then live `FeatureRowStream` rows, and emits events like:
 
 ```text
 GestureEvent(
@@ -129,3 +142,9 @@ GestureEvent(
 ```
 
 It should use hand-normalized displacement, peak velocity, direction consistency, low-motion valleys, duration bounds, per-hand stream separation, and duplicate suppression by peak identity. The point is to prove whether AirDesk's current tracking/features can spot live swipes before committing to TCN v2.
+
+The first version should emit existing `GestureCandidate` objects with metadata
+for `window_start`, `window_end`, `peak_time`, normalized displacement, peak
+velocity, direction consistency, and a stable peak/evidence id. Keep raw camera
+`dx` sign as diagnostic until user-facing preview direction versus raw camera
+direction is explicitly verified.

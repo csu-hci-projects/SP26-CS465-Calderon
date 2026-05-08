@@ -225,7 +225,12 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Stop implementation here for a context reset. Next session should review `deep-research-report.md` and `recognition-v2-plan.md`, refine the plan, inspect current code boundaries, and only then begin the smallest safe implementation slice. The likely first slice is a deterministic per-hand motion-event baseline plus event decoder cleanup, not another TCN threshold/model tweak. Keep broad combo collection and live desktop actions paused.
+> Recognition V2 plan review is complete. The plan survives, but the first
+> implementation slice should be narrow: add a deterministic per-hand
+> motion-event baseline at the existing gesture boundary before TCN v2 or any
+> broad `airdesk/recognition/` package split. Start replay-first with JSON
+> candidate/evaluation output, then add live diagnostic preview only after replay
+> evidence exists. Keep broad combo collection and live desktop actions paused.
 
 ## Current Research Direction Update
 

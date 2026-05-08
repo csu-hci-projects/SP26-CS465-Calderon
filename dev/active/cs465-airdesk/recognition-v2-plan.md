@@ -57,6 +57,46 @@ TrackingFrame
   -> Mode/profile/safety policy
 ```
 
+## Review Conclusion
+
+After reviewing the current code boundaries, this plan survives, but the first
+implementation slice should be narrower than a package-wide refactor.
+
+Current useful boundaries already exist:
+
+- `features.landmarks.FeatureRowStream` emits one feature row per visible hand and
+  keeps independent per-`hand_id` motion history;
+- `gestures.decoder.EventDecoder` already converts score/candidate streams into
+  one-shot events and merges hand streams;
+- DTW and TCN evaluation paths already consume hand-scoped feature streams;
+- command-mode policy and action dispatch already live outside recognizer code.
+
+So the next pass should not start by moving everything into a new
+`airdesk/recognition/` package. Start with a small deterministic motion-evidence
+module at the existing gesture boundary, prove the replay/evaluation surface, and
+only split out a new recognition package when the baseline makes the ownership
+clear.
+
+Practical near-term shape:
+
+```text
+TrackingFrame / recording JSONL
+  -> FeatureRowStream / exported feature CSV rows
+  -> deterministic per-hand motion scorer
+  -> GestureCandidate-compatible events with motion evidence metadata
+  -> existing evaluation / decoder utilities
+  -> command queue later, still dry-run only
+```
+
+The scorer should be deliberately simple and inspectable. It is not a learned
+recognizer and should not become another threshold-sweep project. Its job is to
+answer one question:
+
+> Can the current tracker and feature stream produce replay-stable per-hand swipe
+> events before a learned scorer is involved?
+
+If the answer is no, TCN v2 is premature.
+
 ### Per-Hand Streams
 
 Each visible hand is its own temporal stream. Histories must never mix between hands.
@@ -109,6 +149,20 @@ This baseline is not the final model. It is a necessary diagnostic:
 - if it works live, tracking/features are usable and the learned model is the weak link;
 - if it fails live, the problem is lower in the stack: tracking, feature normalization, camera posture, or gesture definition.
 
+Implementation notes after code review:
+
+- prefer a small new module such as `airdesk/gestures/motion.py` over a broad
+  package migration;
+- consume `FrameFeatureRow` values from exported CSVs and from `FeatureRowStream`
+  so replay and live paths share the same evidence;
+- group rows by `hand_id`; no candidate window may cross from one hand stream to
+  another;
+- emit existing `GestureCandidate` objects first, with metadata for
+  `window_start`, `window_end`, `peak_time`, normalized displacement, peak
+  velocity, direction consistency, and a stable peak/evidence id;
+- keep user-facing direction semantics explicit in docs and JSON. Raw camera
+  `dx` sign remains diagnostic until preview/camera convention is verified.
+
 ### Event Decoder
 
 The decoder should become a first-class package boundary.
@@ -135,6 +189,14 @@ Decoder rules:
 - split repeated same-class gestures only after a new peak/valley/start cycle;
 - suppress duplicate emission from the same posterior/motion hill;
 - keep cooldown short and evidence-based, not a long class-level lockout.
+
+The existing decoder can be reused for the first slice, but review it while
+adding the motion baseline. Two known risks should stay visible:
+
+- global same-gesture suppression can hide distinct near-simultaneous events
+  from different hands if the separation window is too broad;
+- repeated same-direction swipes must be split by a new peak/valley/start cycle,
+  not by waiting for a long class-level cooldown.
 
 ### Command Queue
 
@@ -206,22 +268,40 @@ airdesk/gestures/
 
 This can be adjusted after code review. Avoid a giant rename if a smaller module boundary gets the job done.
 
+Code-review adjustment: defer this package shape until after Phase C unless the
+baseline needs it immediately. The first safe cleanup is a thin boundary around
+motion evidence, not a wholesale migration of existing DTW/TCN/decoder modules.
+
 ### Phase C: Deterministic Motion-Event Baseline
 
 Implement a per-hand swipe spotter that emits replayable events from current feature streams.
 
 Minimum CLI/evaluation surfaces:
 
-- replay evaluation on existing recordings;
-- live preview with stable HUD;
-- JSON output for candidates/events;
+- replay candidate export on existing recordings;
+- replay evaluation against existing labels;
+- JSON output for candidates/events with evidence fields;
+- live diagnostic preview only after replay output exists;
 - tests for per-hand separation, repeated same-direction swipes, background rejection, and merged ordering.
 
 Acceptance:
 
-- beats current live TCN in live diagnostic usefulness;
+- gives a clearer replay/live diagnostic than current live TCN probabilities;
+- preserves hand-scoped event ordering;
+- allows repeated same-direction events when distinct peaks exist;
+- rejects idle/background streams without leaning on desktop action policy;
 - does not trigger desktop actions;
 - reports false activations and repeated fires on replay.
+
+Suggested first commands:
+
+```bash
+uv run airdesk gesture spot-motion --recording data/recordings/... --out data/evaluations/.../motion-candidates.json
+uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
+```
+
+Names can change during implementation, but the surfaces should remain
+replay-first and JSON-backed.
 
 ### Phase D: Targeted Live Calibration Slice
 
