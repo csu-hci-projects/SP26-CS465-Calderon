@@ -1480,6 +1480,10 @@ def gesture_watch_tcn(
         bool,
         typer.Option(help="Print recovery/reset phase predictions."),
     ] = False,
+    show_motion: Annotated[
+        bool,
+        typer.Option(help="Show hand-normalized horizontal motion in the HUD."),
+    ] = True,
     profile_timing: Annotated[
         bool,
         typer.Option(help="Print per-prediction TCN timing diagnostics."),
@@ -1509,10 +1513,22 @@ def gesture_watch_tcn(
         min_tracking_confidence=min_tracking_confidence,
         delegate=hand_delegate,
         preview_mirror=mirror,
+        preview_gestures=False,
     )
     stream = FeatureRowStream()
     rows = []
-    state = {"status": "warming up", "alert": "", "alert_until": 0.0}
+    latest_predictions: dict[str, CausalTcnLivePrediction] = {}
+    latest_rows_by_hand: dict[str, object] = {}
+    state: dict[str, object] = {
+        "status": "warming up",
+        "alert": "",
+        "alert_until": 0.0,
+        "predictions": latest_predictions,
+        "rows_by_hand": latest_rows_by_hand,
+        "show_motion": show_motion,
+        "stream_count": 0,
+        "row_count": 0,
+    }
     first_timestamp: float | None = None
     next_prediction_time_by_hand: dict[str, float] = {}
 
@@ -1534,9 +1550,14 @@ def gesture_watch_tcn(
             hand_streams = _live_feature_streams(rows)
             if not hand_streams:
                 state["status"] = "warming rows=0"
+                state["stream_count"] = 0
+                state["row_count"] = 0
                 continue
-            state["status"] = f"TCN streams={len(hand_streams)} rows={len(rows)}"
+            state["stream_count"] = len(hand_streams)
+            state["row_count"] = len(rows)
+            state["status"] = _format_live_tcn_preview_predictions(state)
             for hand_id, hand_rows in hand_streams.items():
+                latest_rows_by_hand[hand_id] = hand_rows[-1]
                 if len(hand_rows) < min_rows:
                     continue
                 next_prediction_time = next_prediction_time_by_hand.get(hand_id)
@@ -1548,7 +1569,8 @@ def gesture_watch_tcn(
                 prediction_started_at = monotonic()
                 prediction = predictor.predict_rows(hand_rows)
                 prediction_ms = (monotonic() - prediction_started_at) * 1000
-                state["status"] = _format_live_tcn_status(prediction)
+                latest_predictions[hand_id] = prediction
+                state["status"] = _format_live_tcn_preview_predictions(state)
                 visible_prediction = _show_live_tcn_prediction(
                     prediction,
                     include_background=include_background,
@@ -3986,6 +4008,33 @@ def _format_live_tcn_status(prediction: CausalTcnLivePrediction) -> str:
     return f"TCN {hand}{target} {prediction.confidence:.2f} | {probabilities}"
 
 
+def _format_live_tcn_preview_predictions(state: dict[str, object]) -> str:
+    stream_count = int(state.get("stream_count", 0))
+    row_count = int(state.get("row_count", 0))
+    show_motion = bool(state.get("show_motion", False))
+    predictions = state.get("predictions", {})
+    rows_by_hand = state.get("rows_by_hand", {})
+    if not isinstance(predictions, dict) or not predictions:
+        return f"TCN streams={stream_count} rows={row_count} warming"
+    parts = [f"TCN streams={stream_count} rows={row_count}"]
+    for hand_id, prediction in sorted(predictions.items()):
+        if not isinstance(prediction, CausalTcnLivePrediction):
+            continue
+        left = prediction.probabilities.get("stroke_left", 0.0)
+        right = prediction.probabilities.get("stroke_right", 0.0)
+        motion = ""
+        if show_motion and isinstance(rows_by_hand, dict):
+            row = rows_by_hand.get(hand_id)
+            dx = getattr(row, "palm_window_dx_per_hand_scale", None)
+            if isinstance(dx, float):
+                motion = f" dx={dx:.2f}"
+        parts.append(
+            f"{hand_id}:{_short_tcn_target(prediction.target)} "
+            f"{prediction.confidence:.2f} L={left:.2f} R={right:.2f}{motion}"
+        )
+    return " | ".join(parts)
+
+
 def _format_live_tcn_prediction(
     prediction: CausalTcnLivePrediction,
     *,
@@ -4070,6 +4119,8 @@ def _short_tcn_target(target: str) -> str:
         "background": "bg",
         "swipe_left": "left",
         "swipe_right": "right",
+        "stroke_left": "left",
+        "stroke_right": "right",
     }.get(target, target)
 
 
@@ -4106,6 +4157,7 @@ def _make_tracker(
     min_tracking_confidence: float = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
     delegate: str = DEFAULT_HAND_LANDMARKER_DELEGATE,
     preview_mirror: bool = True,
+    preview_gestures: bool = True,
     preview_extended_threshold: float = 0.08,
     preview_pinch_threshold: float = 0.06,
 ) -> HandTrackerBackend:
@@ -4125,6 +4177,7 @@ def _make_tracker(
             delegate=delegate,
             show=show,
             preview_mirror=preview_mirror,
+            preview_gestures=preview_gestures,
             preview_extended_threshold=preview_extended_threshold,
             preview_pinch_threshold=preview_pinch_threshold,
         )

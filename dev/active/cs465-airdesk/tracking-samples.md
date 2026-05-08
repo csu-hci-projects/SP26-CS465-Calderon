@@ -259,7 +259,7 @@ Live two-hand TCN diagnostic preview:
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 ```
 
-This still does not trigger desktop actions. Watch for whether the printed `hand=hand-0` / `hand=hand-1` predictions match the visible hand that moved; MediaPipe tracker ids are streams, not guaranteed physical left/right identities.
+This still does not trigger desktop actions. The top HUD shows both TCN streams in one stable line, for example `hand-0:bg 0.91 L=0.04 R=0.05 dx=0.03 | hand-1:right 0.72 L=0.08 R=0.72 dx=0.84`. Watch whether `L=` or `R=` rises on the visible hand that moved, and whether `dx=` crosses the rough motion-gate scale (`0.35`) during a swipe; MediaPipe tracker ids are streams, not guaranteed physical left/right identities.
 By default, `watch-tcn` suppresses `background` and `recovery` terminal spam because those are internal phases, not user-facing gestures. Add `--include-recovery` only when checking whether the current checkpoint is collapsing into reset/recovery.
 
 Latest two-hand shared TCN evidence from 003-to-004 holdout:
@@ -271,6 +271,7 @@ Latest two-hand shared TCN evidence from 003-to-004 holdout:
 - detailed diagnostics showed most missed labels had a nearest same-gesture candidate outside the 0.5 s tolerance window; increasing match tolerance to 3.0 s raised matches to 36/48 but also left 9 false activations and 9 repeated fires;
 - non-destructive motion-peak label refinement is now available, but the first replay checks were worse than the prompt labels: 0.75s padding changed 92/100 events and scored 22/48 with 31 false activations; stricter 0.75 motion score changed 64/100 events and scored 16/48 with 28 false activations;
 - `watch-tcn` now defaults to `--max-num-hands 2`, matching the chart collection path, so live preview applies the shared checkpoint to each visible hand stream independently; it also suppresses `recovery` by default because recovery is an internal phase, not a gesture;
+- the live TCN HUD now keeps both hand streams visible at once and disables the static fist/pinch overlay, so Caden can inspect actual `stroke_left` / `stroke_right` probabilities without the top bar flashing between hands or showing unrelated primitive poses;
 - interpretation: shared per-hand TCN is still the right model shape, but the current weak labels/decoder are not yet reliable enough for live desktop actions or broad collection. Pause and target the next data/debug pass at false activations, repeated fires, and mirrored direction consistency.
 
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:

@@ -127,6 +127,7 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Make live `watch-tcn` default to two tracked hands for the two-hand diagnostic path
 - [x] Hide `recovery` by default in live TCN preview because it is an internal phase, not a gesture
 - [x] Add `phase-stroke` TCN target mode to train without the recovery class after live recovery collapse
+- [x] Stabilize live TCN HUD so both hand streams are shown together and static fist/pinch overlays are hidden
 - [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data
 - [ ] Turn refinement diagnostics into a manual label-review pass instead of automatically adopting motion-peak labels
 - [ ] Recheck decoder thresholds after label/timing diagnostics, not before

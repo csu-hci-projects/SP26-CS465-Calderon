@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from airdesk.cli import (
+    _format_live_tcn_preview_predictions,
     _format_tracker_timing,
     _handle_collection_preview_key,
     _handle_record_preview_key,
@@ -194,6 +195,7 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert "--hand-delegate" in result.stdout
     assert "--confidence-threshold" in result.stdout
     assert "--include-recovery" in result.stdout
+    assert "--show-motion" in result.stdout
     assert "--profile-timing" in result.stdout
 
 
@@ -224,6 +226,48 @@ def test_watch_tcn_filters_recovery_by_default() -> None:
         include_background=False,
         include_recovery=True,
         confidence_threshold=0.35,
+    )
+
+
+def test_live_tcn_preview_status_lists_each_hand_stably() -> None:
+    status = _format_live_tcn_preview_predictions(
+        {
+            "stream_count": 2,
+            "row_count": 15,
+            "predictions": {
+                "hand-1": CausalTcnLivePrediction(
+                    hand_id="hand-1",
+                    start_time=1.0,
+                    end_time=1.2,
+                    target="stroke_right",
+                    target_index=2,
+                    confidence=0.72,
+                    probabilities={
+                        "background": 0.2,
+                        "stroke_left": 0.08,
+                        "stroke_right": 0.72,
+                    },
+                ),
+                "hand-0": CausalTcnLivePrediction(
+                    hand_id="hand-0",
+                    start_time=1.0,
+                    end_time=1.2,
+                    target="background",
+                    target_index=0,
+                    confidence=0.91,
+                    probabilities={
+                        "background": 0.91,
+                        "stroke_left": 0.04,
+                        "stroke_right": 0.05,
+                    },
+                ),
+            },
+        }
+    )
+
+    assert status == (
+        "TCN streams=2 rows=15 | hand-0:bg 0.91 L=0.04 R=0.05 | "
+        "hand-1:right 0.72 L=0.08 R=0.72"
     )
 
 
