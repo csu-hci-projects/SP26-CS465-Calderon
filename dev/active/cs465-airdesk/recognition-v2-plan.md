@@ -240,7 +240,10 @@ Training targets should be derived from reviewed intervals, not raw prompt timin
 
 ## Refactor Plan
 
-This is a real architecture shift, so the next session should start with a review/refinement pass before implementation.
+This is a real architecture shift. The initial review/refinement pass is now
+complete, and Phase C's first deterministic motion baseline exists. Keep using
+the phase structure below to decide whether the baseline justifies a broader
+recognition package split or TCN v2.
 
 ### Phase A: Planning And Boundaries
 
@@ -250,6 +253,10 @@ This is a real architecture shift, so the next session should start with a revie
 - Update this plan if research or code inspection changes the direction.
 
 Expected outcome: a final implementation checklist before code edits.
+
+Status: complete for the first slice. The current checklist is to inspect
+motion-baseline false activations, repeated fires, weak-left misses, hand ids,
+and direction metadata before any live preview.
 
 ### Phase B: Recognition Boundary Cleanup
 
