@@ -99,7 +99,7 @@ Use the same launcher for live previews:
 
 ```bash
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
-scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 ```
 
 A successful T550 MediaPipe run prints a startup line like:
@@ -114,7 +114,7 @@ Use timing diagnostics when the live recognizer feels laggy:
 
 ```bash
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show --profile-timing
-scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 ```
 
 `watch-dtw` uses a live-optimized latest-window scan. Offline DTW evaluation still scans all candidate windows, but live preview only scores windows ending at the newest usable hand frame so it does not repeatedly rescan the whole rolling buffer.
@@ -246,6 +246,8 @@ Two-hand shared TCN replay command shape:
 ```bash
 uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke-manifest.json --feature-preset stream-invariant --target-mode phase-stroke --target-assignment motion-gated --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
 uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke-manifest.json --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke.pt --epochs 25 --batch-size 32 --hidden-channels 32 --levels 3 --validation-fraction 0.2 --seed 7
+uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke-manifest.json --feature-preset stream-invariant --target-mode phase-stroke --target-assignment motion-gated --motion-gate-min-dx-per-hand-scale 0.20 --motion-gate-min-direction-consistency 0.35 --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
+uv run airdesk gesture train-tcn --manifest data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke-manifest.json --out data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --epochs 25 --batch-size 32 --hidden-channels 32 --levels 3 --validation-fraction 0.2 --seed 7
 uv run airdesk gesture evaluate-tcn --manifest data/models/gestures/tcn-sprint4-004-test-motion-gated-manifest.json --model data/models/gestures/tcn-sprint4-003-train-motion-gated.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-003-train-004-test-motion-gated-decoded.json --confidence-threshold 0.35 --cooldown-seconds 0.5 --event-decoder --release-threshold 0.2 --min-peak-confidence 0.35
 uv run airdesk gesture diagnose-tcn-events --manifest data/models/gestures/tcn-sprint4-004-test-motion-gated-manifest.json --model data/models/gestures/tcn-sprint4-003-train-motion-gated.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-003-train-004-test-motion-gated-diagnostics-activation055.json --confidence-threshold 0.35 --cooldown-seconds 0.5 --activation-threshold 0.55 --release-threshold 0.2 --min-peak-confidence 0.35
 uv run airdesk gesture refine-chart-labels --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-refined-motion-pad075 --report data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/refined-motion-label-report-pad075.json --search-padding-seconds 0.75 --min-motion-score 0.35 --min-direction-consistency 0.35 --recovery-seconds 0.35
@@ -256,7 +258,7 @@ Use `--target-assignment motion-gated` for two-hand chart manifests. It keeps th
 Live two-hand TCN diagnostic preview:
 
 ```bash
-scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
+scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 ```
 
 This still does not trigger desktop actions. The top HUD shows both TCN streams in one stable line, for example `hand-0:bg 0.91 L=0.04 R=0.05 dx=0.03 | hand-1:right 0.72 L=0.08 R=0.72 dx=0.84`. Watch whether `L=` or `R=` rises on the visible hand that moved, and whether `dx=` crosses the rough motion-gate scale (`0.35`) during a swipe; MediaPipe tracker ids are streams, not guaranteed physical left/right identities.
@@ -268,6 +270,7 @@ Latest two-hand shared TCN evidence from 003-to-004 holdout:
 - test manifest from `sprint4-gpu-swipes-004-two-hand-extra`: 2,114 windows, with 79 `stroke_left`, 86 `stroke_right`, 138 `recovery`, and 1,811 `background`;
 - decoded TCN events on 004 after training on 003: 27/48 matched, 21 missed, 40 candidates, 11 false activations, 4 repeated fires, and about 0.85 s mean latency;
 - Caden's first live test of the recovery-inclusive phase checkpoint produced mostly high-confidence `recovery`, so `phase-stroke` target mode now excludes recovery from the model targets; 003-to-004 `phase-stroke` held-out eval scored 26/48 matched, 22 missed, 47 candidates, 17 false activations, 4 repeated fires, and about 0.93 s mean latency, so it is cleaner for live preview but not more reliable yet;
+- Caden later saw live `dx` rise above 0.50 without stroke probabilities rising, so the failure is not just that live motion falls below the old 0.35 gate. Still, a more sensitive `phase-stroke` model trained with `--motion-gate-min-dx-per-hand-scale 0.20` improved 003-to-004 held-out eval to 37/48 matched, 11 missed, 59 candidates, 18 false activations, 4 repeated fires, and about 0.98 s mean latency. This is better offline but noisier, so it is a diagnostic preview checkpoint only.
 - detailed diagnostics showed most missed labels had a nearest same-gesture candidate outside the 0.5 s tolerance window; increasing match tolerance to 3.0 s raised matches to 36/48 but also left 9 false activations and 9 repeated fires;
 - non-destructive motion-peak label refinement is now available, but the first replay checks were worse than the prompt labels: 0.75s padding changed 92/100 events and scored 22/48 with 31 false activations; stricter 0.75 motion score changed 64/100 events and scored 16/48 with 28 false activations;
 - `watch-tcn` now defaults to `--max-num-hands 2`, matching the chart collection path, so live preview applies the shared checkpoint to each visible hand stream independently; it also suppresses `recovery` by default because recovery is an internal phase, not a gesture;
