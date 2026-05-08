@@ -37,6 +37,11 @@ uv run pytest
 uv run ruff check .
 ```
 
+The public CLI entrypoint remains `airdesk.cli:app`; command ownership is split
+across focused `src/airdesk/cli_*.py` modules so recording/collection,
+label/features, system checks, TCN tooling, and live preview helpers can evolve
+without turning the entrypoint back into one large command file.
+
 Live camera/tracking support is optional:
 
 ```bash

@@ -6,16 +6,18 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from airdesk.cli import (
+from airdesk.cli import app
+from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
     _format_tracker_timing,
+    _show_live_tcn_prediction,
+)
+from airdesk.cli_recording import (
     _handle_collection_preview_key,
     _handle_record_preview_key,
     _parse_record_chart,
     _parse_record_prompt_segments,
     _record_preview_status,
-    _show_live_tcn_prediction,
-    app,
 )
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
@@ -89,6 +91,14 @@ def test_record_help_exposes_countdown_segments_and_hand_delegate() -> None:
     assert "--segment" in result.stdout
     assert "--wait-for-space" in result.stdout
     assert "--hand-delegate" in result.stdout
+
+
+def test_replay_help_exposes_recognizer_toggle() -> None:
+    result = CliRunner().invoke(app, ["replay", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--recognize" in result.stdout
+    assert "--no-recognize" in result.stdout
 
 
 def test_benchmark_replay_reports_frame_counts() -> None:
@@ -313,6 +323,16 @@ def test_chart_record_help_exposes_compact_chart_controls() -> None:
     assert "--gesture-seconds" in result.stdout
     assert "--rest-seconds" in result.stdout
     assert "--hand-delegate" in result.stdout
+
+
+def test_chart_label_help_exposes_chart_timing_controls() -> None:
+    result = CliRunner().invoke(app, ["gesture", "chart-label", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--chart" in result.stdout
+    assert "--cue-seconds" in result.stdout
+    assert "--gesture-seconds" in result.stdout
+    assert "--participant" in result.stdout
 
 
 def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:

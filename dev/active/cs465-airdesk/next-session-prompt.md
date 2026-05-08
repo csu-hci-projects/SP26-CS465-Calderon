@@ -120,17 +120,17 @@ Important evidence:
   `src/airdesk/cli_tcn.py`, label/feature commands live in
   `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands live in
   `src/airdesk/cli_system.py`, shared CLI helpers live in
-  `src/airdesk/cli_support.py`, and live preview/status formatting helpers live
-  in `src/airdesk/cli_live.py`. `src/airdesk/cli.py` still owns live
-  tracking/runtime/preview command bodies.
+  `src/airdesk/cli_support.py`, live preview/status formatting helpers live in
+  `src/airdesk/cli_live.py`, recording/collection/chart workflows live in
+  `src/airdesk/cli_recording.py`, and shared tracker construction lives in
+  `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is now about 1,971 LOC and
+  still owns live tracking/runtime/diagnostic command bodies.
 
 Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. The first cleanup chunk was useful, but `src/airdesk/cli.py`
-is still about 3,371 LOC and still mixes command registration, recording and
-collection workflows, chart parsing, runtime action wiring, and live tracking
-loops. Treat targeted V2 recording as deferred until the structure is easier to
+architecture work. The recording extraction chunk is complete, so treat targeted
+V2 recording as deferred until the remaining live/runtime structure is easier to
 trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
@@ -138,13 +138,10 @@ trust.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - extract recording, collection, chart-prompt parsing, chart label writing,
-     preview key handling, and collection path helpers from `src/airdesk/cli.py`
-     into a dedicated module such as `src/airdesk/cli_recording.py`;
+   - isolate runtime/live-action command boundaries in a separate module so
+     dry-run safety is easy to audit;
    - keep the public `airdesk.cli:app` entrypoint stable and preserve command
      names/options/help output;
-   - after recording is split, isolate runtime/live-action command boundaries in
-     a separate chunk so dry-run safety is easy to audit;
    - separate TCN v2 evidence/dataset/evaluation concerns where they are
      currently muddy;
    - remove or quarantine dead legacy command paths only after proving they are
