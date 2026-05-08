@@ -2,7 +2,7 @@
 
 Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
-Current context-reset task: evaluate the new deterministic motion-event baseline on existing replay data before any live preview. Do not collect broad combo data or keep sweeping current TCN thresholds.
+Current context-reset task: do a staff-level review/refactor pass before recording new V2 data. Look for bugs, dead code, oversized files/functions, weak boundaries, and missing tests; keep behavior stable, dry-run/live-action safety intact, and leave the repo ready for targeted V2 collection.
 
 ## Phase 0: Project Setup
 
@@ -153,6 +153,10 @@ Current context-reset task: evaluate the new deterministic motion-event baseline
 - [ ] Recollect targeted combo/chained swipe charts after the weak-label/decoder pass
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [x] Split offline TCN, label/features, and small system CLI commands out of `cli.py`
+- [ ] Run staff-level codebase review before targeted V2 data collection
+- [ ] Refactor oversized/unclear CLI, ML, analysis, feature, or gesture boundaries found in that review
+- [ ] Remove or quarantine confirmed dead code with tests/docs updated
+- [ ] Confirm targeted V2 recording commands/protocol after cleanup
 - [ ] Continue no-behavior-change CLI refactor for live tracking/runtime/preview commands
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes

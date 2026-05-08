@@ -232,9 +232,11 @@ Current next step:
 > data confirms the surface is coherent but not yet a useful recognizer:
 > same-batch training on `sprint4-swipes-001` produced high frame accuracy, but
 > event decoding still matched only `0/16` at `0.35` thresholds and `1/16` with
-> permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`. Next,
-> improve V2 calibration/targets and collect a targeted continuous V2 slice
-> rather than sweeping thresholds or wiring live actions.
+> permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`.
+> Before recording the targeted V2 slice, do a staff-level review/refactor pass
+> so the collection path is organized, tested, and easy to trust. Then improve
+> V2 calibration/targets and collect the targeted continuous data rather than
+> sweeping thresholds or wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -288,6 +290,20 @@ Current CLI cleanup state:
 - `src/airdesk/cli.py` still owns live tracking/runtime/preview command paths
   and shared live-preview formatting helpers. Continue refactoring those in
   small behavior-preserving chunks rather than doing a package rename.
+
+Next review/refactor emphasis:
+
+- Start with a code-review/report pass, then make scoped behavior-preserving
+  changes.
+- Prioritize real bugs, dead code, oversized files/functions, duplicated logic,
+  unclear package ownership, missing tests, and anything that could make the
+  targeted V2 recording session ambiguous or fragile.
+- Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
+  `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
+  `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and
+  `src/airdesk/gestures/`.
+- Do not collect the new V2 data until this cleanup pass is complete and tests
+  pass, unless Caden explicitly changes the plan.
 
 ## Current Research Direction Update
 

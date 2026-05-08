@@ -119,37 +119,49 @@ Important evidence:
 
 Next-session assignment:
 
-1. Re-skim `recognition-v2-plan.md`, especially the Review Conclusion, TCN V2 Shape, and Phase E.
-2. Inspect current package boundaries around:
-   - `src/airdesk/features/`
-   - `src/airdesk/gestures/`
-   - `src/airdesk/ml/`
-   - `src/airdesk/analysis/`
-   - `src/airdesk/cli.py` and the extracted `src/airdesk/cli_*.py` modules
-3. Inspect existing TCN manifest/model/evaluation code enough to design the
-   smallest TCN v2 slice.
-4. Review the TCN v2 data/model/evaluation surface:
-   causal per-hand context windows, one shared model shape applied independently
-   to each `hand_id`, and decoder-facing evidence outputs instead of one argmax
-   gesture label per semantic window.
-5. Treat old replay data as regression coverage, not final proof. The first v2
-   smoke says the path is coherent but underconfident/direction-confused on old
-   data.
-6. Improve the next V2 target/calibration/data plan before collecting: repeated
-   events need enough positive frame evidence, direction heads need separation,
-   and negatives need intentional-motion rejection.
-7. Plan or collect a small targeted
-   continuous V2 training/testing slice: repeated same-direction swipes,
-   alternating swipes, weak/tiny lefts, natural desk-motion negatives, hand
-   enters/leaves frame, near/far starts, and two visible hands with one resting.
-8. Keep broad combo collection paused until that targeted V2 slice has
-   event-level replay evidence.
-9. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
-10. Continue behavior-preserving CLI refactors only if they unblock the V2 work;
-    `src/airdesk/cli.py` still owns live tracking/runtime/preview paths.
-11. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
-12. Run `uv run ruff check .` and `uv run pytest`.
-13. Commit and push.
+Do a staff-level review and refactor pass before recording the new V2 data. The
+goal is to get the repo organized, testable, and boring enough that the targeted
+data collection session can focus on data quality rather than fighting code
+shape.
+
+1. Start with a review/reporting pass before editing. Look for real bugs, dead
+   code, overly long files/functions, poor ownership boundaries, duplicated
+   helpers, confusing command surfaces, unsafe live-action paths, weak tests, and
+   architecture drift from the Recognition V2 direction.
+2. Produce a short prioritized refactor plan after the review pass. Favor
+   FAANG-level maintainability: clear module ownership, small behavior-preserving
+   moves, tests around contracts, and no clever abstractions unless they remove
+   real complexity.
+3. Audit these boundaries first:
+   - `src/airdesk/cli.py` and extracted `src/airdesk/cli_*.py` modules
+   - `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`, and
+     `src/airdesk/analysis/evaluation.py`
+   - `src/airdesk/features/`, especially per-hand/no-hand stream handling
+   - `src/airdesk/gestures/`, especially motion/decoder/DTW overlap
+   - tests covering CLI help, manifest compatibility, replay evaluation, and
+     no-hand/tracking-drop behavior
+4. Refactor in meaningful chunks. Good likely candidates:
+   - continue splitting live tracking/runtime/preview responsibilities out of
+     `src/airdesk/cli.py` without changing the public `airdesk.cli:app`
+     entrypoint;
+   - separate TCN v2 evidence/dataset/evaluation concerns where they are
+     currently muddy;
+   - remove or quarantine dead legacy command paths only after proving they are
+     unused;
+   - add tests before changing behavior around replay, labels, feature rows, and
+     decoder output.
+5. Preserve current behavior unless a bug is found and fixed intentionally. Keep
+   live desktop actions disabled/dry-run by default.
+6. Do not record the new V2 data during this review/refactor session unless the
+   cleanup is complete, tests pass, and Caden explicitly decides to proceed.
+7. End by leaving the repo ready for the targeted V2 recording slice: repeated
+   same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
+   negatives, hand enters/leaves frame, near/far starts, and two visible hands
+   with one resting.
+8. Update README/context/tasks/tracking-samples/next-session docs with whatever
+   changes.
+9. Run `uv run ruff check .` and `uv run pytest`.
+10. Commit meaningful chunks and push to `origin/main`.
 
 Do not:
 
