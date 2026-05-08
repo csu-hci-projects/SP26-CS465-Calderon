@@ -1440,7 +1440,7 @@ def gesture_watch_tcn(
     max_num_hands: Annotated[
         int,
         typer.Option(help="Maximum number of hands for MediaPipe to track."),
-    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    ] = 2,
     min_detection_confidence: Annotated[
         float,
         typer.Option(help="Minimum palm detection confidence."),

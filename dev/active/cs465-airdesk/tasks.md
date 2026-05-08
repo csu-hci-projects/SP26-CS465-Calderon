@@ -124,6 +124,7 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Train/evaluate shared per-hand TCN on 003-to-004 two-hand chart split and document non-live-ready evidence
 - [x] Add decoded TCN event diagnostics for misses, false activations, repeated fires, hand ids, and nearest-event timing
 - [x] Add non-destructive motion-peak chart label refinement and document that first refined-label TCN checks were worse than prompt labels
+- [x] Make live `watch-tcn` default to two tracked hands for the two-hand diagnostic path
 - [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data
 - [ ] Turn refinement diagnostics into a manual label-review pass instead of automatically adopting motion-peak labels
 - [ ] Recheck decoder thresholds after label/timing diagnostics, not before

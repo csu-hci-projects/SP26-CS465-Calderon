@@ -187,6 +187,8 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert result.exit_code == 0
     assert "--model" in result.stdout
     assert "--hand-model-path" in result.stdout
+    assert "--max-num-hands" in result.stdout
+    assert "[default: 2]" in result.stdout
     assert "--hand-delegate" in result.stdout
     assert "--confidence-threshold" in result.stdout
     assert "--profile-timing" in result.stdout
