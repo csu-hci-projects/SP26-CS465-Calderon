@@ -294,11 +294,12 @@ airdesk/recognition/
 This package shape is provisional. The next session should review the current code before moving files. The first implementation slice should be a deterministic motion-event baseline, not TCN v2.
 
 May 2026 plan review update: keep this package shape as the likely future
-direction, but do not start the next slice with a broad migration. Current code
-already has `FeatureRowStream`, a replayable event decoder, hand-scoped DTW/TCN
-evaluation, and separate command/action policy. The immediate implementation
-should add a small deterministic motion-evidence scorer at the existing gesture
-boundary, then decide whether a top-level `recognition/` package is justified.
+direction, but do not start with a broad migration. Current code already has
+`FeatureRowStream`, a replayable event decoder, hand-scoped DTW/TCN evaluation,
+and separate command/action policy. The first deterministic motion-evidence
+scorer now lives at the existing gesture boundary in `airdesk/gestures/motion.py`;
+evaluate that boundary before deciding whether a top-level `recognition/`
+package is justified.
 
 ## Modes
 

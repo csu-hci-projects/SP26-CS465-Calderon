@@ -219,18 +219,17 @@ Sprint 2 established a working live and replay foundation:
 - `airdesk gesture refine-chart-labels` now writes non-destructive experimental label copies aligned to nearby per-hand motion peaks and a JSON report for review. Do not use these refined labels as training truth yet. On the same 003-train / 004-test split, 0.75s padding changed 92/100 events and scored 22/48 with 31 false activations; a stricter 0.75 motion-score pass changed 64/100 events and scored 16/48 with 28 false activations. The result says naive nearest-motion-peak relabeling is too noisy in combo/repeated sections, even though the report is useful for finding labels that need human review.
 - Separate physical-hand TCNs remain deferred. The current live/dataset path already gives each visible hand one responsibility by splitting rows by `hand_id` and running the shared checkpoint per stream. Training separate `hand-0`/`hand-1` checkpoints would only be justified after adding stable physical-hand identity labels, because MediaPipe tracker ids can swap and are not guaranteed to mean left hand vs right hand.
 - Caden added `deep-research-report.md`, which supports a larger recognizer architecture pivot: keep a causal temporal model as a possible core, but move from sliding-window classification to continuous gesture spotting with per-hand normalized streams, motion/activity proposals, boundary-aware event decoding, and a command queue. The planning entrypoint is now `dev/active/cs465-airdesk/recognition-v2-plan.md`. The next session should review/refine that plan before coding.
+- Recognition V2 first implementation slice is now in place. `airdesk/gestures/motion.py` adds a deterministic per-hand motion-event baseline over existing `FrameFeatureRow` streams. `airdesk gesture spot-motion` writes replay JSON candidates with hand id, peak timing, normalized displacement, peak velocity, direction consistency, and a stable evidence id. `airdesk gesture evaluate-motion` evaluates those events with the same intended/matched/missed/false-activation summary used by rule, DTW, and TCN evaluation. This is replay/diagnostic tooling only and still does not trigger desktop actions.
 - `airdesk benchmark` now reports timing slices for live MediaPipe runs: camera read, color conversion, MediaPipe inference, normalization, preview draw, and total loop time.
 - The T550 GPU path is now opt-in through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`. Plain `--hand-delegate gpu` can still land on Intel/Mesa EGL under Hyprland; the launcher selects the NVIDIA GLVND EGL vendor and Wayland EGL platform before Python starts. The success signal is a MediaPipe log line containing `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - Short bounded smoke evidence on 2026-05-06: CPU delegate inference averaged about `16.84 ms`; plain GPU-on-Intel averaged about `13.60 ms`; T550 GPU via the launcher averaged about `4.17 ms`. Capture is still camera-paced around 30 FPS, so the practical benefit should be judged with hand-in-frame fast-swipe tracking continuity, not FPS alone.
 
 Current next step:
 
-> Recognition V2 plan review is complete. The plan survives, but the first
-> implementation slice should be narrow: add a deterministic per-hand
-> motion-event baseline at the existing gesture boundary before TCN v2 or any
-> broad `airdesk/recognition/` package split. Start replay-first with JSON
-> candidate/evaluation output, then add live diagnostic preview only after replay
-> evidence exists. Keep broad combo collection and live desktop actions paused.
+> Run the new deterministic motion baseline on existing labeled recordings and
+> compare its false activations, repeated fires, and misses against DTW/TCN
+> evidence. Add live diagnostic preview only if replay output is informative.
+> Keep broad combo collection and live desktop actions paused.
 
 ## Current Research Direction Update
 

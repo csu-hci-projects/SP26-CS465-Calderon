@@ -2,7 +2,7 @@
 
 Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
-Current context-reset task: review and refine `recognition-v2-plan.md` before implementation. Do not collect broad combo data or keep sweeping current TCN thresholds.
+Current context-reset task: evaluate the new deterministic motion-event baseline on existing replay data before any live preview. Do not collect broad combo data or keep sweeping current TCN thresholds.
 
 ## Phase 0: Project Setup
 
@@ -133,9 +133,9 @@ Current context-reset task: review and refine `recognition-v2-plan.md` before im
 - [x] Train/evaluate more sensitive `phase-stroke` TCN with 0.20 motion gate and document higher false-activation tradeoff
 - [x] Create Recognition V2 architecture plan after deep research report and live TCN misses
 - [x] Review/refine Recognition V2 plan before implementation
-- [ ] Add a narrow deterministic motion-evidence module at the existing gesture boundary
-- [ ] Add replay-first `spot-motion` / `evaluate-motion` JSON surfaces before live preview
-- [ ] Implement deterministic per-hand motion-event baseline before TCN v2
+- [x] Add a narrow deterministic motion-evidence module at the existing gesture boundary
+- [x] Add replay-first `spot-motion` / `evaluate-motion` JSON surfaces before live preview
+- [x] Implement deterministic per-hand motion-event baseline before TCN v2
 - [ ] Evaluate motion-event baseline on existing replay data before any live diagnostic preview
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary
 - [ ] Decide whether to collect a tiny targeted live calibration slice

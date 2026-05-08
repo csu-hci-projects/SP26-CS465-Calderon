@@ -645,6 +645,77 @@ def test_gesture_spot_dtw_cli_writes_unlabeled_candidates(tmp_path: Path) -> Non
     assert payload["candidates"][0]["gesture"] == "swipe_left"
 
 
+def test_gesture_spot_motion_cli_writes_unlabeled_candidates(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-right.jsonl"
+    output = tmp_path / "motion-candidates.json"
+    _write_cli_motion_recording(recording)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "spot-motion",
+            "--recording",
+            str(recording),
+            "--out",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=motion" in result.stdout
+    assert "wrote candidates=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["candidate_count"] >= 1
+    assert payload["motion_config"]["positive_dx_gesture"] == "swipe_right"
+    assert payload["candidates"][0]["gesture"] == "swipe_right"
+    assert payload["candidates"][0]["hand_id"] == "hand-0"
+    assert "evidence_id" in payload["candidates"][0]["metadata"]
+
+
+def test_gesture_evaluate_motion_cli_writes_summary(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-right.jsonl"
+    labels = tmp_path / "swipe-right.labels.json"
+    evaluation = tmp_path / "motion-evaluation.json"
+    _write_cli_motion_recording(recording)
+    CliRunner().invoke(app, ["label", "init", str(recording), "--out", str(labels)])
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-event",
+            str(labels),
+            "--gesture",
+            "swipe_right",
+            "--start",
+            "0",
+            "--end",
+            "1.0",
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "evaluate-motion",
+            "--recording",
+            str(recording),
+            "--labels",
+            str(labels),
+            "--out",
+            str(evaluation),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=motion" in result.stdout
+    assert "intended=1" in result.stdout
+    assert evaluation.exists()
+    payload = json.loads(evaluation.read_text(encoding="utf-8"))
+    assert payload["matched_events"] == 1
+
+
 def test_gesture_score_sequence_cli_scores_ordered_candidates(tmp_path: Path) -> None:
     candidates = tmp_path / "candidates.json"
     score = tmp_path / "score.json"

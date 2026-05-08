@@ -64,11 +64,14 @@ per-hand normalized feature streams
 ```
 
 Do not start by building TCN v2. Do not start with a wholesale
-`airdesk/recognition/` package migration. The next implementation slice is a
-small deterministic per-hand motion-event baseline at the existing gesture
-boundary, reusing `features.landmarks.FeatureRowStream`,
-`gestures.decoder.EventDecoder`, and the current evaluation utilities where they
-fit.
+`airdesk/recognition/` package migration. The first deterministic per-hand
+motion-event baseline now exists at `src/airdesk/gestures/motion.py`, with
+replay-first CLI surfaces:
+
+```bash
+uv run airdesk gesture spot-motion --recording data/recordings/... --out data/evaluations/.../motion-candidates.json
+uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
+```
 
 Important evidence:
 
@@ -100,17 +103,11 @@ Next-session assignment:
    - `src/airdesk/ml/`
    - `src/airdesk/analysis/`
    - `src/airdesk/cli.py`
-3. Implement the smallest safe slice: deterministic per-hand motion-event baseline.
-4. Prefer a small module such as `src/airdesk/gestures/motion.py` before creating a new recognition package.
-5. Add replay-first CLI/evaluation output before any live preview:
-   - `gesture spot-motion` or equivalent JSON candidate export;
-   - `gesture evaluate-motion` or equivalent summary against labels.
-6. Add tests for:
-   - per-hand stream separation;
-   - repeated same-direction swipes as separate events;
-   - background/idle rejection;
-   - merged event ordering across hands.
-7. Keep broad combo collection paused unless the new baseline exposes a specific tiny targeted calibration need.
+3. Run the motion baseline on existing labeled replay data and compare it against DTW/TCN summaries.
+4. Inspect false activations, repeated fires, missed events, hand ids, and direction metadata.
+5. Tune only enough to expose whether tracking/features are viable; do not turn this into another broad threshold sweep.
+6. Add live diagnostic preview only after replay output is useful.
+7. Keep broad combo collection paused unless the baseline exposes a specific tiny targeted calibration need.
 8. Keep all dynamic swipe outputs in replay/diagnostic surfaces only.
 9. Update README/context/tasks/tracking-samples with whatever changes.
 10. Run `uv run ruff check .` and `uv run pytest`.
@@ -124,10 +121,10 @@ Do not:
 - Do not train separate tracker-slot models as a shortcut.
 - Do not turn `deep-research-report.md` citations into paper citations without verifying them; the report is useful for architecture direction, not final bibliography text.
 
-Suggested first implementation direction after plan review:
+Current implementation direction after plan review:
 
-Build a deterministic per-hand motion-event baseline that consumes existing
-feature rows first, then live `FeatureRowStream` rows, and emits events like:
+The deterministic per-hand motion-event baseline consumes existing feature rows
+and emits events like:
 
 ```text
 GestureEvent(
@@ -143,8 +140,8 @@ GestureEvent(
 
 It should use hand-normalized displacement, peak velocity, direction consistency, low-motion valleys, duration bounds, per-hand stream separation, and duplicate suppression by peak identity. The point is to prove whether AirDesk's current tracking/features can spot live swipes before committing to TCN v2.
 
-The first version should emit existing `GestureCandidate` objects with metadata
-for `window_start`, `window_end`, `peak_time`, normalized displacement, peak
+The first version emits existing `GestureCandidate` objects with metadata for
+`window_start`, `window_end`, `peak_time`, normalized displacement, peak
 velocity, direction consistency, and a stable peak/evidence id. Keep raw camera
 `dx` sign as diagnostic until user-facing preview direction versus raw camera
 direction is explicitly verified.

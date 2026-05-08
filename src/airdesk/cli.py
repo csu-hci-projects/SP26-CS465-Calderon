@@ -12,7 +12,7 @@ from math import ceil
 from pathlib import Path
 from statistics import fmean
 from time import monotonic
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import uuid4
 
 import typer
@@ -30,6 +30,7 @@ from airdesk.analysis import (
     diagnose_tcn_manifest_events,
     evaluate_dtw_holdout,
     evaluate_dtw_recognizer,
+    evaluate_motion_recognizer,
     evaluate_rule_recognizer,
     evaluate_tcn_manifest,
     format_analysis,
@@ -49,6 +50,7 @@ from airdesk.gestures.dtw import (
     DtwTemplateRecognizer,
     calibrate_dtw_model,
 )
+from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer, SwipeGesture
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import (
@@ -461,6 +463,8 @@ def gesture_evaluate(
     label_file = load_label_file(labels)
     if recognizer == "rule":
         evaluation = evaluate_rule_recognizer(recording, labels, label_file)
+    elif recognizer == "motion":
+        evaluation = evaluate_motion_recognizer(recording, labels, label_file)
     elif recognizer == "dtw":
         if model is None:
             typer.echo("--model is required when --recognizer dtw.", err=True)
@@ -472,7 +476,7 @@ def gesture_evaluate(
             DtwGestureModel.load(model),
         )
     else:
-        typer.echo(f"Unsupported recognizer={recognizer}. Use rule or dtw.", err=True)
+        typer.echo(f"Unsupported recognizer={recognizer}. Use rule, motion, or dtw.", err=True)
         raise typer.Exit(code=1)
     if out is not None:
         save_evaluation_json(evaluation, out)
@@ -688,6 +692,144 @@ def gesture_spot_dtw(
         )
     if out is not None:
         typer.echo(f"wrote candidates={out}")
+
+
+@gesture_app.command("spot-motion")
+def gesture_spot_motion(
+    recording: Annotated[Path, typer.Option(exists=True, readable=True, help="Recording JSONL.")],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON candidate output path.")] = None,
+    min_dx_per_hand_scale: Annotated[
+        float,
+        typer.Option(help="Minimum absolute hand-normalized horizontal displacement."),
+    ] = 0.65,
+    min_peak_velocity: Annotated[
+        float,
+        typer.Option(help="Minimum peak absolute horizontal velocity."),
+    ] = 0.45,
+    min_direction_consistency: Annotated[
+        float,
+        typer.Option(help="Minimum same-direction motion consistency in [0, 1]."),
+    ] = 0.60,
+    release_velocity: Annotated[
+        float,
+        typer.Option(help="Commit an active motion when immediate velocity drops below this."),
+    ] = 0.20,
+    min_duration_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds from activation to peak."),
+    ] = 0.08,
+    max_duration_seconds: Annotated[
+        float,
+        typer.Option(help="Maximum seconds from activation to peak."),
+    ] = 1.25,
+    min_event_separation: Annotated[
+        float,
+        typer.Option(help="Minimum same-gesture separation per hand stream."),
+    ] = 0.20,
+    positive_dx_gesture: Annotated[
+        str,
+        typer.Option(help="Gesture name for positive raw camera dx: swipe_right or swipe_left."),
+    ] = "swipe_right",
+) -> None:
+    """Spot deterministic per-hand motion events in an unlabeled recording."""
+    try:
+        config = _motion_event_config(
+            min_dx_per_hand_scale=min_dx_per_hand_scale,
+            min_peak_velocity=min_peak_velocity,
+            min_direction_consistency=min_direction_consistency,
+            release_velocity=release_velocity,
+            min_duration_seconds=min_duration_seconds,
+            max_duration_seconds=max_duration_seconds,
+            min_event_separation=min_event_separation,
+            positive_dx_gesture=positive_dx_gesture,
+        )
+        frames = _tracking_frames_from_recording(recording)
+        rows = extract_feature_rows(frames)
+        candidates = MotionEventRecognizer(config).recognize_rows(rows)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    payload = _candidate_payload(
+        recording=recording,
+        recognizer="motion",
+        candidates=candidates,
+        first_timestamp=frames[0].timestamp if frames else None,
+        extra={"motion_config": config.to_dict()},
+    )
+    if out is not None:
+        _write_json(out, payload)
+    typer.echo(
+        f"recording={Path(recording).name} recognizer=motion candidates={len(candidates)}"
+    )
+    for item in payload["candidates"]:
+        typer.echo(
+            f"{item['index']:02d} gesture={item['gesture']} "
+            f"hand={item['hand_id'] or 'unknown'} "
+            f"t={item['timestamp_relative']:.3f} confidence={item['confidence']:.3f}"
+        )
+    if out is not None:
+        typer.echo(f"wrote candidates={out}")
+
+
+@gesture_app.command("evaluate-motion")
+def gesture_evaluate_motion(
+    recording: Annotated[Path, typer.Option(exists=True, readable=True, help="Recording JSONL.")],
+    labels: Annotated[Path, typer.Option(exists=True, readable=True, help="Gesture labels JSON.")],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON output path.")] = None,
+    min_dx_per_hand_scale: Annotated[
+        float,
+        typer.Option(help="Minimum absolute hand-normalized horizontal displacement."),
+    ] = 0.65,
+    min_peak_velocity: Annotated[
+        float,
+        typer.Option(help="Minimum peak absolute horizontal velocity."),
+    ] = 0.45,
+    min_direction_consistency: Annotated[
+        float,
+        typer.Option(help="Minimum same-direction motion consistency in [0, 1]."),
+    ] = 0.60,
+    release_velocity: Annotated[
+        float,
+        typer.Option(help="Commit an active motion when immediate velocity drops below this."),
+    ] = 0.20,
+    min_duration_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds from activation to peak."),
+    ] = 0.08,
+    max_duration_seconds: Annotated[
+        float,
+        typer.Option(help="Maximum seconds from activation to peak."),
+    ] = 1.25,
+    min_event_separation: Annotated[
+        float,
+        typer.Option(help="Minimum same-gesture separation per hand stream."),
+    ] = 0.20,
+    positive_dx_gesture: Annotated[
+        str,
+        typer.Option(help="Gesture name for positive raw camera dx: swipe_right or swipe_left."),
+    ] = "swipe_right",
+) -> None:
+    """Evaluate deterministic per-hand motion events against labels."""
+    label_file = load_label_file(labels)
+    try:
+        config = _motion_event_config(
+            min_dx_per_hand_scale=min_dx_per_hand_scale,
+            min_peak_velocity=min_peak_velocity,
+            min_direction_consistency=min_direction_consistency,
+            release_velocity=release_velocity,
+            min_duration_seconds=min_duration_seconds,
+            max_duration_seconds=max_duration_seconds,
+            min_event_separation=min_event_separation,
+            positive_dx_gesture=positive_dx_gesture,
+        )
+        evaluation = evaluate_motion_recognizer(recording, labels, label_file, config)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if out is not None:
+        save_evaluation_json(evaluation, out)
+    typer.echo(format_evaluation(evaluation))
 
 
 @gesture_app.command("chart-record")
@@ -3911,6 +4053,80 @@ def _candidate_from_json(item: dict[str, object]) -> GestureCandidate:
         hand_id=str(item["hand_id"]) if isinstance(item.get("hand_id"), str) else None,
         metadata=metadata,
     )
+
+
+def _tracking_frames_from_recording(recording: Path) -> list[TrackingFrame]:
+    return [
+        record.payload
+        for record in iter_recording(recording)
+        if record.kind == "tracking_frame" and isinstance(record.payload, TrackingFrame)
+    ]
+
+
+def _motion_event_config(
+    *,
+    min_dx_per_hand_scale: float,
+    min_peak_velocity: float,
+    min_direction_consistency: float,
+    release_velocity: float,
+    min_duration_seconds: float,
+    max_duration_seconds: float,
+    min_event_separation: float,
+    positive_dx_gesture: str,
+) -> MotionEventConfig:
+    if positive_dx_gesture not in {"swipe_left", "swipe_right"}:
+        raise ValueError("positive_dx_gesture must be swipe_left or swipe_right")
+    return MotionEventConfig(
+        min_dx_per_hand_scale=min_dx_per_hand_scale,
+        min_peak_velocity=min_peak_velocity,
+        min_direction_consistency=min_direction_consistency,
+        release_velocity=release_velocity,
+        min_duration_seconds=min_duration_seconds,
+        max_duration_seconds=max_duration_seconds,
+        min_event_separation_seconds=min_event_separation,
+        positive_dx_gesture=cast(SwipeGesture, positive_dx_gesture),
+    )
+
+
+def _candidate_payload(
+    *,
+    recording: Path,
+    recognizer: str,
+    candidates: list[GestureCandidate],
+    first_timestamp: float | None,
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "recording": str(recording),
+        "recognizer": recognizer,
+        "candidate_count": len(candidates),
+        "candidates": [
+            {
+                "index": index,
+                "gesture": candidate.name,
+                "timestamp": candidate.timestamp,
+                "timestamp_relative": (
+                    candidate.timestamp - first_timestamp
+                    if first_timestamp is not None
+                    else None
+                ),
+                "hand_id": candidate.hand_id,
+                "confidence": candidate.confidence,
+                "metadata": candidate.metadata,
+            }
+            for index, candidate in enumerate(candidates, start=1)
+        ],
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def _lcs_length(left: list[str], right: list[str]) -> int:

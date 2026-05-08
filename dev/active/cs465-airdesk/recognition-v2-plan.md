@@ -62,6 +62,11 @@ TrackingFrame
 After reviewing the current code boundaries, this plan survives, but the first
 implementation slice should be narrower than a package-wide refactor.
 
+Implementation update: the first narrow slice now exists. `airdesk/gestures/motion.py`
+adds a deterministic per-hand motion-event baseline, and the CLI exposes
+`gesture spot-motion` plus `gesture evaluate-motion` for replay-first JSON
+candidate export and label evaluation. This does not add live desktop actions.
+
 Current useful boundaries already exist:
 
 - `features.landmarks.FeatureRowStream` emits one feature row per visible hand and
@@ -300,8 +305,8 @@ uv run airdesk gesture spot-motion --recording data/recordings/... --out data/ev
 uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
 ```
 
-Names can change during implementation, but the surfaces should remain
-replay-first and JSON-backed.
+These surfaces are now implemented. Use their JSON output to decide whether the
+motion baseline is good enough to justify live diagnostic preview.
 
 ### Phase D: Targeted Live Calibration Slice
 

@@ -16,6 +16,7 @@ from airdesk.gestures.dtw import (
     DtwTemplateRecognizer,
     calibrate_dtw_model,
 )
+from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import GestureEventLabel, GestureLabelFile, load_label_file
@@ -170,6 +171,30 @@ def evaluate_dtw_recognizer(
         label_path=label_path,
         labels=labels,
         recognizer="dtw",
+        candidates=candidates,
+        match_tolerance_seconds=0.5,
+    )
+
+
+def evaluate_motion_recognizer(
+    recording_path: Path,
+    label_path: Path,
+    labels: GestureLabelFile,
+    config: MotionEventConfig | None = None,
+) -> GestureEvaluation:
+    """Evaluate the deterministic motion baseline against event labels."""
+    frames = [
+        record.payload
+        for record in iter_recording(recording_path)
+        if record.kind == "tracking_frame" and isinstance(record.payload, TrackingFrame)
+    ]
+    rows = extract_feature_rows(frames, labels=labels)
+    candidates = MotionEventRecognizer(config).recognize_rows(rows)
+    return evaluate_candidates(
+        recording_path=recording_path,
+        label_path=label_path,
+        labels=labels,
+        recognizer="motion",
         candidates=candidates,
         match_tolerance_seconds=0.5,
     )
