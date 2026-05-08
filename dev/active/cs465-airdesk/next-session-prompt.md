@@ -104,14 +104,15 @@ Next-session assignment:
    - `src/airdesk/analysis/`
    - `src/airdesk/cli.py`
 3. Run the motion baseline on existing labeled replay data and compare it against DTW/TCN summaries.
-4. Inspect false activations, repeated fires, missed events, hand ids, and direction metadata.
-5. Tune only enough to expose whether tracking/features are viable; do not turn this into another broad threshold sweep.
-6. Add live diagnostic preview only after replay output is useful.
-7. Keep broad combo collection paused unless the baseline exposes a specific tiny targeted calibration need.
-8. Keep all dynamic swipe outputs in replay/diagnostic surfaces only.
-9. Update README/context/tasks/tracking-samples with whatever changes.
-10. Run `uv run ruff check .` and `uv run pytest`.
-11. Commit and push.
+4. Start from the first replay result: `sprint4-swipes-001` default mapping matched 0/16 with 12 false activations; flipped mapping matched 5/16 with 12 false activations; stricter flipped dx 1.0 matched 3/16 with 5 false activations; `sprint4-chained-003` default matched 4/10 with 3 repeated fires and 0 false activations.
+5. Inspect false activations, repeated fires, missed events, hand ids, and direction metadata.
+6. Tune only enough to expose whether tracking/features are viable; do not turn this into another broad threshold sweep.
+7. Add live diagnostic preview only after replay output is useful, or explicitly frame it as a low-level feature probe.
+8. Keep broad combo collection paused unless the baseline exposes a specific tiny targeted calibration need.
+9. Keep all dynamic swipe outputs in replay/diagnostic surfaces only.
+10. Update README/context/tasks/tracking-samples with whatever changes.
+11. Run `uv run ruff check .` and `uv run pytest`.
+12. Commit and push.
 
 Do not:
 

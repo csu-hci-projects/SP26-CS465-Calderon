@@ -290,6 +290,14 @@ diagnostic preview third, and no desktop actions. If raw camera direction appear
 flipped against the mirrored preview, rerun with `--positive-dx-gesture
 swipe_left` and document the convention.
 
+First replay check result: default raw-positive-dx mapping matched 0/16 intended
+events on `sprint4-swipes-001`, while flipped mapping matched 5/16 with 12 false
+activations. A stricter `--min-dx-per-hand-scale 1.0` reduced false activations
+to 5 but matched only 3/16. On `sprint4-chained-003`, default mapping matched
+4/10 with 3 repeated fires and 0 false activations. Treat this as evidence that
+the baseline is useful for inspecting feature/tracking health, not for live
+control.
+
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:
 
 ```bash

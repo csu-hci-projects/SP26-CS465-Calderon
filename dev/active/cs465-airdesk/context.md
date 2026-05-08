@@ -220,6 +220,7 @@ Sprint 2 established a working live and replay foundation:
 - Separate physical-hand TCNs remain deferred. The current live/dataset path already gives each visible hand one responsibility by splitting rows by `hand_id` and running the shared checkpoint per stream. Training separate `hand-0`/`hand-1` checkpoints would only be justified after adding stable physical-hand identity labels, because MediaPipe tracker ids can swap and are not guaranteed to mean left hand vs right hand.
 - Caden added `deep-research-report.md`, which supports a larger recognizer architecture pivot: keep a causal temporal model as a possible core, but move from sliding-window classification to continuous gesture spotting with per-hand normalized streams, motion/activity proposals, boundary-aware event decoding, and a command queue. The planning entrypoint is now `dev/active/cs465-airdesk/recognition-v2-plan.md`. The next session should review/refine that plan before coding.
 - Recognition V2 first implementation slice is now in place. `airdesk/gestures/motion.py` adds a deterministic per-hand motion-event baseline over existing `FrameFeatureRow` streams. `airdesk gesture spot-motion` writes replay JSON candidates with hand id, peak timing, normalized displacement, peak velocity, direction consistency, and a stable evidence id. `airdesk gesture evaluate-motion` evaluates those events with the same intended/matched/missed/false-activation summary used by rule, DTW, and TCN evaluation. This is replay/diagnostic tooling only and still does not trigger desktop actions.
+- First bounded replay check: on all 24 `sprint4-swipes-001` recordings, the default raw-positive-dx direction mapping matched 0/16 intended events and produced 12 false activations, confirming the mirrored-preview/raw-camera direction concern. Flipping with `--positive-dx-gesture swipe_left` improved only to 5/16 matched with the same 12 false activations. Raising `--min-dx-per-hand-scale` to 1.0 reduced false activations to 5 but dropped matches to 3/16. On `sprint4-chained-003`, the default mapping matched 4/10 with 0 false activations but 3 repeated fires; flipped mapping matched 0/10. Interpretation: the baseline is a useful diagnostic, not a control recognizer. Motion energy alone is too loose for negatives and still misses weak left swipes.
 - `airdesk benchmark` now reports timing slices for live MediaPipe runs: camera read, color conversion, MediaPipe inference, normalization, preview draw, and total loop time.
 - The T550 GPU path is now opt-in through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`. Plain `--hand-delegate gpu` can still land on Intel/Mesa EGL under Hyprland; the launcher selects the NVIDIA GLVND EGL vendor and Wayland EGL platform before Python starts. The success signal is a MediaPipe log line containing `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - Short bounded smoke evidence on 2026-05-06: CPU delegate inference averaged about `16.84 ms`; plain GPU-on-Intel averaged about `13.60 ms`; T550 GPU via the launcher averaged about `4.17 ms`. Capture is still camera-paced around 30 FPS, so the practical benefit should be judged with hand-in-frame fast-swipe tracking continuity, not FPS alone.
@@ -227,9 +228,10 @@ Sprint 2 established a working live and replay foundation:
 Current next step:
 
 > Run the new deterministic motion baseline on existing labeled recordings and
-> compare its false activations, repeated fires, and misses against DTW/TCN
-> evidence. Add live diagnostic preview only if replay output is informative.
-> Keep broad combo collection and live desktop actions paused.
+> inspect its candidate evidence around false activations, weak left swipes, and
+> repeated fires. Do not add live diagnostic preview until the replay evidence is
+> cleaner or the preview is explicitly framed as a low-level feature probe. Keep
+> broad combo collection and live desktop actions paused.
 
 ## Current Research Direction Update
 
