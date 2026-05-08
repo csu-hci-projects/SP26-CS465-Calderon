@@ -219,9 +219,13 @@ Live desktop actions stay disabled for learned/DTW/dynamic swipes until replay e
 
 ## TCN V2 Shape
 
-Do not build this first. Build the deterministic motion-event baseline first.
+The deterministic motion-event baseline now exists and has done its job: it made
+the lower-level failure modes visible without hiding them behind a learned model.
+Do not keep polishing that baseline indefinitely. The next implementation slice
+should start the TCN v2 data/model surface while preserving the motion baseline
+as a replay regression and proposal diagnostic.
 
-When the plan is reviewed and the baseline gives evidence, TCN v2 should be:
+TCN v2 should be:
 
 - shared across per-hand streams;
 - causal;
@@ -236,14 +240,23 @@ Preferred heads:
 - `end` boundary
 - optional `hand_role` later: one-hand / both-hands / left physical / right physical, only if labels support it
 
-Training targets should be derived from reviewed intervals, not raw prompt timing. Recovery/reset can be useful as decoder context but should not be a user-facing command target.
+Training targets should be derived from reviewed intervals, not raw prompt timing.
+Recovery/reset can be useful as decoder context but should not be a user-facing
+command target.
+
+Important nuance: "continuous" does not mean no rolling context. The model can
+still consume causal context windows/receptive fields. The difference from the
+old scaffold is that a window is compute context, not the semantic gesture unit.
+The output should be frame/event evidence for a decoder, not one argmax label for
+an arbitrary clip.
 
 ## Refactor Plan
 
 This is a real architecture shift. The initial review/refinement pass is now
-complete, and Phase C's first deterministic motion baseline exists. Keep using
-the phase structure below to decide whether the baseline justifies a broader
-recognition package split or TCN v2.
+complete, and Phase C's first deterministic motion baseline exists. The next
+session should move from Phase C into a scoped Phase E start: TCN v2
+manifest/target/model plumbing plus a targeted continuous-data plan. Old replay
+data stays useful as a regression suite, not as final proof of V2 quality.
 
 ### Phase A: Planning And Boundaries
 
@@ -319,32 +332,39 @@ uv run airdesk gesture spot-motion --recording data/recordings/... --out data/ev
 uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
 ```
 
-These surfaces are now implemented. Use their JSON output to decide whether the
-motion baseline is good enough to justify live diagnostic preview.
+These surfaces are now implemented. Use their JSON output as regression evidence
+while building TCN v2; do not require the motion baseline to become a live
+recognizer before moving on.
 
-### Phase D: Targeted Live Calibration Slice
+### Phase D: Targeted Continuous Data Slice
 
-Only after the baseline exists, collect a tiny targeted slice if needed.
+Collect a targeted new continuous slice after the initial TCN v2 data/model
+surface exists, so the recording protocol matches the model targets.
 
 Suggested slice:
 
-- 1-2 minutes real posture;
-- single-hand left/right swipes;
-- repeated swipes;
-- idle face/desk movement;
-- both hands visible sometimes;
+- repeated same-direction swipes such as `R R` and `L L`;
+- alternating swipes such as `R L R L`;
+- weak/tiny left swipes;
+- natural desk motion negatives;
+- hand enters/leaves frame and tracking-drop cases;
+- near/far and left/center/right starts;
+- both hands visible sometimes, with one hand resting;
 - `--max-num-hands 2`;
+- exact-ish labels or an explicit label-review workflow;
 - immediate feature export and replay scoring.
 
-Do not collect broad combo data until this targeted failure mode is understood.
+Do not collect broad combo data before this targeted slice.
 
 ### Phase E: TCN V2
 
-Only after Phase C/D evidence:
+Next implementation slice:
 
-- add multi-head training targets;
-- build start/end/intent labels from reviewed intervals;
-- train/evaluate on continuous splits;
+- add a TCN v2 manifest/target shape with per-frame/event evidence targets;
+- preserve one shared model applied independently to each `hand_id` stream;
+- add boundary/intent targets without making recovery a user-facing command;
+- evaluate on old replay data as a regression check against known failures;
+- collect the targeted continuous slice above for the real V2 train/test split;
 - compare against the deterministic motion baseline and DTW, not just window accuracy;
 - keep it preview/replay only until event-level evidence is strong.
 
@@ -370,7 +390,9 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Only then start Phase C or the smallest prerequisite refactor.
+4. Start the smallest TCN v2 manifest/target/model slice.
 5. Keep live desktop actions disabled.
 
-If the next agent finds the plan too broad, it should narrow Phase C rather than skipping directly to TCN v2.
+If the next agent finds the plan too broad, it should narrow TCN v2 to the
+manifest/target/evaluation surface first rather than jumping straight to live
+preview or broad collection.

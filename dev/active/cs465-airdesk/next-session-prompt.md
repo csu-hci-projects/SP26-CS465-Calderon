@@ -48,11 +48,10 @@ AirDesk is a secondary spatial input layer for Hyprland, not a keyboard/mouse re
 Current pivot:
 
 The Recognition V2 plan has now been reviewed against the current code
-boundaries. It survives, but the first implementation slice should be narrower
-than a broad package refactor. Caden read a deep research report and agreed this
-is a real architecture shift. The current TCN work is useful evidence and
-infrastructure, but it is still too close to sliding-window phase classification.
-AirDesk needs a continuous gesture spotting architecture:
+boundaries. Caden read a deep research report and agreed this is a real
+architecture shift. The current TCN work is useful evidence and infrastructure,
+but it is still too close to sliding-window phase classification. AirDesk needs
+a continuous gesture spotting architecture:
 
 ```text
 per-hand normalized feature streams
@@ -63,15 +62,18 @@ per-hand normalized feature streams
   -> mode/profile/safety policy
 ```
 
-Do not start by building TCN v2. Do not start with a wholesale
-`airdesk/recognition/` package migration. The first deterministic per-hand
-motion-event baseline now exists at `src/airdesk/gestures/motion.py`, with
-replay-first CLI surfaces:
+The first deterministic per-hand motion-event baseline now exists at
+`src/airdesk/gestures/motion.py`, with replay-first CLI surfaces:
 
 ```bash
 uv run airdesk gesture spot-motion --recording data/recordings/... --out data/evaluations/.../motion-candidates.json
+uv run airdesk gesture spot-motion --recording data/recordings/... --labels data/labels/...labels.json --out data/evaluations/.../motion-candidates.json
 uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
 ```
+
+That baseline did its job: it exposed lower-level failure modes. Do not keep
+polishing it forever. The next implementation slice should start TCN v2 while
+keeping the old replay data as a regression suite.
 
 Important evidence:
 
@@ -93,24 +95,40 @@ Important evidence:
 - Motion-peak auto-refinement worsened held-out TCN performance and should be used only for diagnostics/manual review.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Keep live desktop actions disabled.
+- TCN v2 is not implemented yet. The next slice should implement its
+  manifest/target/model/evaluation surface before collecting the new V2 data.
 
 Next-session assignment:
 
-1. Re-skim `recognition-v2-plan.md`, especially the Review Conclusion and Phase C.
+1. Re-skim `recognition-v2-plan.md`, especially the Review Conclusion, TCN V2 Shape, and Phase E.
 2. Inspect current package boundaries around:
    - `src/airdesk/features/`
    - `src/airdesk/gestures/`
    - `src/airdesk/ml/`
    - `src/airdesk/analysis/`
    - `src/airdesk/cli.py`
-3. Run the motion baseline on existing labeled replay data and compare it against DTW/TCN summaries.
-4. Start from the first replay result: `sprint4-swipes-001` default mapping matched 0/16 with 12 false activations; flipped mapping matched 5/16 with 12 false activations; stricter flipped dx 1.0 matched 3/16 with 5 false activations; `sprint4-chained-003` default matched 4/10 with 3 repeated fires and 0 false activations.
-5. Use `spot-motion --labels ...` and the `motion_diagnostics` JSON rows to inspect false activations, repeated fires, missed events, hand ids, direction metadata, and label phase/event context.
-6. Tune only enough to expose whether tracking/features are viable; do not turn this into another broad threshold sweep.
-7. Add live diagnostic preview only after replay output is useful, or explicitly frame it as a low-level feature probe.
-8. Keep broad combo collection paused unless the baseline exposes a specific tiny targeted calibration need.
-9. Keep all dynamic swipe outputs in replay/diagnostic surfaces only.
-10. Update README/context/tasks/tracking-samples with whatever changes.
+3. Inspect existing TCN manifest/model/evaluation code enough to design the
+   smallest TCN v2 slice.
+4. Implement the TCN v2 data/model/evaluation surface:
+   causal per-hand stream context, one shared model applied independently to
+   each `hand_id`, and decoder-facing evidence outputs instead of one argmax
+   gesture label per semantic window.
+5. Add target support for boundary/intent evidence, likely:
+   `background` / `intentional_motion`, `stroke_left` / `stroke_right`,
+   `start`, and `end`. Recovery/reset may be decoder context, but not a
+   user-facing command target.
+6. Use old replay data as a regression suite, not final proof:
+   `sprint4-swipes-001`, `sprint4-chained-003`, and motion diagnostic JSON for
+   sign convention, weak-left/tracking-drop behavior, negative-motion false
+   activations, and repeated fires.
+7. After the TCN v2 target shape exists, plan or collect a small targeted
+   continuous V2 training/testing slice: repeated same-direction swipes,
+   alternating swipes, weak/tiny lefts, natural desk-motion negatives, hand
+   enters/leaves frame, near/far starts, and two visible hands with one resting.
+8. Keep broad combo collection paused until that targeted V2 slice has
+   event-level replay evidence.
+9. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
+10. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
 11. Run `uv run ruff check .` and `uv run pytest`.
 12. Commit and push.
 
@@ -118,6 +136,7 @@ Do not:
 
 - Do not collect broad new combo data first.
 - Do not keep sweeping current TCN thresholds.
+- Do not treat old data as final V2 proof; use it as regression coverage.
 - Do not wire learned/DTW/motion swipes to live desktop actions.
 - Do not train separate tracker-slot models as a shortcut.
 - Do not turn `deep-research-report.md` citations into paper citations without verifying them; the report is useful for architecture direction, not final bibliography text.
@@ -139,7 +158,10 @@ GestureEvent(
 )
 ```
 
-It should use hand-normalized displacement, peak velocity, direction consistency, low-motion valleys, duration bounds, per-hand stream separation, and duplicate suppression by peak identity. The point is to prove whether AirDesk's current tracking/features can spot live swipes before committing to TCN v2.
+It uses hand-normalized displacement, peak velocity, direction consistency,
+low-motion valleys, duration bounds, per-hand stream separation, and duplicate
+suppression by peak identity. Its purpose now is diagnostic/regression support,
+not live control and not a blocker to TCN v2.
 
 The first version emits existing `GestureCandidate` objects with metadata for
 `window_start`, `window_end`, `peak_time`, normalized displacement, peak

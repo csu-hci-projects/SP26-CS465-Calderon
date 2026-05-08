@@ -228,11 +228,13 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Use the new motion diagnostics to compare rejected/accepted motion rows across
-> a few existing labeled recordings, then decide the next replay-only rejection
-> feature. The first evidence points toward intent/negative-motion rejection and
-> tracking-continuity diagnostics before any live preview. Keep broad combo
-> collection and live desktop actions paused.
+> Start TCN v2 rather than continuing to polish the motion baseline indefinitely.
+> Use the old replay data as a regression suite for known failures, then collect a
+> targeted new continuous slice for V2 training/testing. The next implementation
+> should define the V2 manifest/target/model/evaluation surface: causal per-hand
+> stream context, frame/event evidence outputs, boundary/intent targets, and
+> decoder-facing events. Keep broad combo collection and live desktop actions
+> paused.
 
 ## Current Research Direction Update
 
