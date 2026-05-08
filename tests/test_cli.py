@@ -13,6 +13,7 @@ from airdesk.cli import (
     _parse_record_chart,
     _parse_record_prompt_segments,
     _record_preview_status,
+    _show_live_tcn_prediction,
     app,
 )
 from airdesk.features import FrameFeatureRow
@@ -23,6 +24,7 @@ from airdesk.labels import (
     load_label_file,
     save_label_file,
 )
+from airdesk.ml import CausalTcnLivePrediction
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -191,7 +193,38 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert "[default: 2]" in result.stdout
     assert "--hand-delegate" in result.stdout
     assert "--confidence-threshold" in result.stdout
+    assert "--include-recovery" in result.stdout
     assert "--profile-timing" in result.stdout
+
+
+def test_watch_tcn_filters_recovery_by_default() -> None:
+    prediction = CausalTcnLivePrediction(
+        hand_id="hand-0",
+        start_time=1.0,
+        end_time=1.2,
+        target="recovery",
+        target_index=3,
+        confidence=0.99,
+        probabilities={
+            "background": 0.0,
+            "stroke_left": 0.0,
+            "stroke_right": 0.0,
+            "recovery": 0.99,
+        },
+    )
+
+    assert not _show_live_tcn_prediction(
+        prediction,
+        include_background=False,
+        include_recovery=False,
+        confidence_threshold=0.35,
+    )
+    assert _show_live_tcn_prediction(
+        prediction,
+        include_background=False,
+        include_recovery=True,
+        confidence_threshold=0.35,
+    )
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:

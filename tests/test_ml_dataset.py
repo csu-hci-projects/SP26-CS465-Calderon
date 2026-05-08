@@ -431,6 +431,35 @@ def test_build_tcn_manifest_supports_stream_invariant_phase_targets(tmp_path: Pa
     assert manifest.windows[0].target == "stroke_left"
 
 
+def test_build_tcn_manifest_phase_stroke_targets_treat_recovery_as_background(
+    tmp_path: Path,
+) -> None:
+    features = tmp_path / "chained.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="stroke_left"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_left"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="recovery"),
+            _row(timestamp=1.3, frame_index=3, event="", phase="recovery"),
+            _row(timestamp=1.4, frame_index=4, event="", phase="recovery"),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        target_mode="phase-stroke",
+    )
+
+    assert manifest.targets == ("background", "stroke_left", "stroke_right")
+    assert manifest.target_mode == "phase-stroke"
+    assert [window.target for window in manifest.windows] == ["stroke_left", "background"]
+
+
 def test_save_tcn_dataset_manifest_writes_summary(tmp_path: Path) -> None:
     features = tmp_path / "normal-desk-motion-negative-001.csv"
     _write_features(

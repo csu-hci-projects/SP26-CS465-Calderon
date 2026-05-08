@@ -1143,7 +1143,7 @@ def gesture_build_tcn_dataset(
     ] = "legacy",
     target_mode: Annotated[
         str,
-        typer.Option(help="Target mode: event or phase."),
+        typer.Option(help="Target mode: event, phase, or phase-stroke."),
     ] = "event",
     target_assignment: Annotated[
         str,
@@ -1476,6 +1476,10 @@ def gesture_watch_tcn(
         bool,
         typer.Option(help="Print background predictions as well as gestures."),
     ] = False,
+    include_recovery: Annotated[
+        bool,
+        typer.Option(help="Print recovery/reset phase predictions."),
+    ] = False,
     profile_timing: Annotated[
         bool,
         typer.Option(help="Print per-prediction TCN timing diagnostics."),
@@ -1545,16 +1549,19 @@ def gesture_watch_tcn(
                 prediction = predictor.predict_rows(hand_rows)
                 prediction_ms = (monotonic() - prediction_started_at) * 1000
                 state["status"] = _format_live_tcn_status(prediction)
-                if profile_timing:
+                visible_prediction = _show_live_tcn_prediction(
+                    prediction,
+                    include_background=include_background,
+                    include_recovery=include_recovery,
+                    confidence_threshold=confidence_threshold,
+                )
+                if profile_timing and visible_prediction:
                     typer.echo(
                         f"tcn_predict_ms={prediction_ms:.2f} hand={hand_id} "
                         f"rows={len(hand_rows)} target={prediction.target} "
                         f"confidence={prediction.confidence:.3f}"
                     )
-                if (
-                    prediction.target != "background"
-                    and prediction.confidence >= confidence_threshold
-                ):
+                if _is_live_tcn_gesture_target(prediction.target) and visible_prediction:
                     state["alert"] = (
                         f"{hand_id} {prediction.target} {prediction.confidence:.2f}"
                     )
@@ -1562,11 +1569,13 @@ def gesture_watch_tcn(
                 next_prediction_time_by_hand[hand_id] = (
                     hand_rows[-1].timestamp + predictor.stride_seconds
                 )
-                if prediction.confidence < confidence_threshold:
-                    continue
-                if prediction.target == "background" and not include_background:
-                    continue
-                typer.echo(_format_live_tcn_prediction(prediction, first_timestamp=first_timestamp))
+                if visible_prediction:
+                    typer.echo(
+                        _format_live_tcn_prediction(
+                            prediction,
+                            first_timestamp=first_timestamp,
+                        )
+                    )
     except KeyboardInterrupt:
         typer.echo("interrupted")
     except RuntimeError as exc:
@@ -1768,7 +1777,10 @@ def gesture_holdout_tcn(
         str,
         typer.Option(help="Feature preset: legacy or stream-invariant."),
     ] = "legacy",
-    target_mode: Annotated[str, typer.Option(help="Target mode: event or phase.")] = "event",
+    target_mode: Annotated[
+        str,
+        typer.Option(help="Target mode: event, phase, or phase-stroke."),
+    ] = "event",
     target_assignment: Annotated[
         str,
         typer.Option(help="Target assignment: label or motion-gated."),
@@ -3988,6 +4000,30 @@ def _format_live_tcn_prediction(
         f"t={relative:7.3f}s{hand} target={prediction.target} "
         f"confidence={prediction.confidence:.3f} {probabilities}"
     )
+
+
+def _show_live_tcn_prediction(
+    prediction: CausalTcnLivePrediction,
+    *,
+    include_background: bool,
+    include_recovery: bool,
+    confidence_threshold: float,
+) -> bool:
+    if prediction.confidence < confidence_threshold:
+        return False
+    if prediction.target == "background":
+        return include_background
+    if _is_live_tcn_recovery_target(prediction.target):
+        return include_recovery
+    return True
+
+
+def _is_live_tcn_gesture_target(target: str) -> bool:
+    return target in {"swipe_left", "swipe_right", "stroke_left", "stroke_right"}
+
+
+def _is_live_tcn_recovery_target(target: str) -> bool:
+    return target in {"recovery", "reset", "release", "cooldown"}
 
 
 def _format_live_dtw_candidate(

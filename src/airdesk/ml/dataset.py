@@ -13,6 +13,7 @@ from airdesk.labels import GestureLabelFile, load_label_file
 
 TCN_EVENT_TARGETS = ("background", "swipe_left", "swipe_right")
 TCN_PHASE_TARGETS = ("background", "stroke_left", "stroke_right", "recovery")
+TCN_PHASE_STROKE_TARGETS = ("background", "stroke_left", "stroke_right")
 TCN_TARGETS = TCN_EVENT_TARGETS
 TCN_LEGACY_FEATURE_COLUMNS = (
     "dt",
@@ -70,7 +71,7 @@ TCN_FEATURE_PRESETS = {
     "legacy": TCN_LEGACY_FEATURE_COLUMNS,
     "stream-invariant": TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
 }
-TCN_TARGET_MODES = ("event", "phase")
+TCN_TARGET_MODES = ("event", "phase", "phase-stroke")
 TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
 DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE = 0.35
 DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY = 0.45
@@ -374,6 +375,8 @@ def targets_for_mode(target_mode: str) -> tuple[str, ...]:
         return TCN_EVENT_TARGETS
     if target_mode == "phase":
         return TCN_PHASE_TARGETS
+    if target_mode == "phase-stroke":
+        return TCN_PHASE_STROKE_TARGETS
     options = ", ".join(TCN_TARGET_MODES)
     raise ValueError(f"unsupported target_mode={target_mode}; use one of: {options}")
 
@@ -462,7 +465,7 @@ def _target_for_row(
     motion_gate_min_dx_per_hand_scale: float,
     motion_gate_min_direction_consistency: float,
 ) -> str:
-    if target_mode == "phase":
+    if target_mode in {"phase", "phase-stroke"}:
         phase = (
             row.phase
             if row.phase and row.phase != "background"
