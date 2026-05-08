@@ -233,10 +233,14 @@ Current next step:
 > same-batch training on `sprint4-swipes-001` produced high frame accuracy, but
 > event decoding still matched only `0/16` at `0.35` thresholds and `1/16` with
 > permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`.
-> Before recording the targeted V2 slice, do a staff-level review/refactor pass
-> so the collection path is organized, tested, and easy to trust. Then improve
-> V2 calibration/targets and collect the targeted continuous data rather than
-> sweeping thresholds or wiring live actions.
+> Before recording the targeted V2 slice, continue the staff-level
+> review/refactor pass more aggressively. The first cleanup chunk was useful but
+> not enough: `src/airdesk/cli.py` is still about 3,371 LOC and still mixes
+> command registration, recording/collection workflows, chart prompt parsing,
+> runtime action wiring, and live tracking loops. Do the right architectural
+> cleanup in behavior-preserving chunks, with tests, before collecting data.
+> Then improve V2 calibration/targets and collect the targeted continuous data
+> rather than sweeping thresholds or wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -298,8 +302,10 @@ Current CLI cleanup state:
   `src/airdesk/features/`; DTW, motion, TCN dataset building, and live TCN
   preview use the same grouping contract.
 - `src/airdesk/cli.py` still owns live tracking/runtime/preview command bodies.
-  Continue refactoring those in small behavior-preserving chunks rather than
-  doing a package rename.
+  Continue refactoring those in behavior-preserving chunks. The next pass may
+  be more aggressive about moving real ownership out of `cli.py`; keep the
+  public `airdesk.cli:app` entrypoint stable and test CLI behavior as the
+  boundary.
 
 Next review/refactor emphasis:
 
@@ -309,6 +315,11 @@ Next review/refactor emphasis:
 - Continue prioritizing real bugs, dead code, oversized files/functions,
   duplicated logic, unclear package ownership, missing tests, and anything that
   could make the targeted V2 recording session ambiguous or fragile.
+- Caden explicitly wants the next context to push harder on structure and do
+  what is right/best rather than stopping after cosmetic extraction. Good
+  candidates are extracting recording/collection/chart-prompt ownership into a
+  dedicated module, then isolating runtime/live-action boundaries in a separate
+  chunk.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and

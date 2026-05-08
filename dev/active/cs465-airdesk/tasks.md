@@ -2,7 +2,7 @@
 
 Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
-Current context-reset task: do a staff-level review/refactor pass before recording new V2 data. Look for bugs, dead code, oversized files/functions, weak boundaries, and missing tests; keep behavior stable, dry-run/live-action safety intact, and leave the repo ready for targeted V2 collection.
+Current context-reset task: continue the staff-level review/refactor pass before recording new V2 data. Caden wants the next session to be more aggressive about doing the right architectural cleanup, not just cosmetic extraction. Look for bugs, dead code, oversized files/functions, weak boundaries, and missing tests; keep behavior stable, dry-run/live-action safety intact, and leave the repo ready for targeted V2 collection.
 
 ## Phase 0: Project Setup
 
@@ -161,6 +161,9 @@ Current context-reset task: do a staff-level review/refactor pass before recordi
 - [x] Centralize hand/no-hand feature stream grouping for DTW, motion, TCN datasets, and live preview
 - [x] Add V2 no-hand/tracking-drop evidence tests and keep no-hand rows background-only
 - [x] Run `uv run ruff check .` and `uv run pytest` for the cleanup chunk
+- [ ] Aggressively split recording/collection/chart-prompt ownership out of `src/airdesk/cli.py` while preserving `airdesk.cli:app`
+- [ ] Isolate runtime/live-action command boundaries after recording extraction, with dry-run safety tests
+- [ ] Add/expand CLI help and behavior tests for extracted recording/runtime modules
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke

@@ -126,16 +126,25 @@ Important evidence:
 
 Next-session assignment:
 
-Continue from the completed cleanup chunk. The repo is closer to targeted V2
-recording readiness, but do one quick status/review pass before any collection.
+Continue the review/refactor pass and be more aggressive about doing the right
+architecture work. The first cleanup chunk was useful, but `src/airdesk/cli.py`
+is still about 3,371 LOC and still mixes command registration, recording and
+collection workflows, chart parsing, runtime action wiring, and live tracking
+loops. Treat targeted V2 recording as deferred until the structure is easier to
+trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. Decide with Caden whether to proceed to the targeted V2 recording slice or do
-   one more cleanup chunk first. Reasonable remaining cleanup candidates:
-   - continue splitting live tracking/runtime/preview responsibilities out of
-     `src/airdesk/cli.py` without changing the public `airdesk.cli:app`
-     entrypoint;
+2. Start with a short review/reporting pass, then implement the highest-value
+   cleanup chunk without stopping for permission unless there is a real blocker.
+   Reasonable first candidates:
+   - extract recording, collection, chart-prompt parsing, chart label writing,
+     preview key handling, and collection path helpers from `src/airdesk/cli.py`
+     into a dedicated module such as `src/airdesk/cli_recording.py`;
+   - keep the public `airdesk.cli:app` entrypoint stable and preserve command
+     names/options/help output;
+   - after recording is split, isolate runtime/live-action command boundaries in
+     a separate chunk so dry-run safety is easy to audit;
    - separate TCN v2 evidence/dataset/evaluation concerns where they are
      currently muddy;
    - remove or quarantine dead legacy command paths only after proving they are
@@ -144,8 +153,9 @@ recording readiness, but do one quick status/review pass before any collection.
      decoder output.
 3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
-4. Do not record the new V2 data unless tests pass and Caden explicitly decides
-   to proceed in that session.
+4. Do not record the new V2 data in this cleanup session unless tests pass, the
+   refactor is complete enough to trust, and Caden explicitly decides to switch
+   from cleanup into collection.
 5. The targeted V2 recording slice should still be: repeated
    same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
    negatives, hand enters/leaves frame, near/far starts, and two visible hands
