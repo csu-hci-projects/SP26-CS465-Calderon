@@ -21,7 +21,12 @@ Before doing anything:
 3. Do not discard user changes.
 4. Read:
    - `README.md`
+   - `deep-research-report.md` if present
    - `dev/active/cs465-airdesk/context.md`
+   - `dev/active/cs465-airdesk/recognition-v2-plan.md`
+   - `dev/active/cs465-airdesk/architecture.md`
+   - `dev/active/cs465-airdesk/plan.md`
+   - `dev/active/cs465-airdesk/tasks.md`
    - `dev/active/cs465-airdesk/context-reset-prompt.md`
    - `dev/active/cs465-airdesk/handoff-prompt.md`
    - `dev/active/cs465-airdesk/dynamic-gesture-research.md`
@@ -29,7 +34,6 @@ Before doing anything:
    - `dev/active/cs465-airdesk/sprint-4.md`
    - `dev/active/cs465-airdesk/sprint-5.md`
    - `dev/active/cs465-airdesk/tracking-samples.md`
-   - `dev/active/cs465-airdesk/tasks.md`
 5. Plan before editing.
 6. Use `apply_patch` for manual edits.
 7. Add/update tests alongside implementation.
@@ -43,27 +47,18 @@ AirDesk is a secondary spatial input layer for Hyprland, not a keyboard/mouse re
 
 Current pivot:
 
-Pause broad combo/chained swipe data collection until the weak active-hand labels and decoder thresholds improve. Caden realized the one-hand default contaminated combo data: if one hand stays tracked in frame, the other hand's gesture may not become active. Feature export now emits per-hand rows, DTW/TCN windows are hand-scoped, event decoding merges decoded hand streams with cooldown suppression, and chart recording defaults to `--max-num-hands 2`.
+Stop implementation until the Recognition V2 plan is reviewed/refined. Caden read a deep research report and agreed this is a real architecture shift. The current TCN work is useful evidence and infrastructure, but it is still too close to sliding-window phase classification. AirDesk needs a continuous gesture spotting architecture:
 
-Cleaned data:
+```text
+per-hand normalized feature streams
+  -> motion activity proposal
+  -> recognizer/scorer
+  -> event decoder
+  -> command queue
+  -> mode/profile/safety policy
+```
 
-- Deleted `data/recordings/sprint4-gpu-swipes-002-structured/*`.
-- Deleted `data/labels/sprint4-gpu-swipes-002-structured/*`.
-- Keep `data/recordings/sprint4-gpu-swipes-002-singles` for now, but treat it as legacy/single-hand-only until reviewed or recollected with two-hand background/rest conditions.
-
-Next implementation chunk:
-
-1. Check git status and read the active docs listed above.
-2. Start from the 003+004 two-hand evidence already collected and avoid broad new data collection for a moment.
-3. Improve active-hand weak-label assignment and timestamp alignment for shared per-hand TCN.
-4. Verify mirrored/user-facing direction conventions before using raw dx sign for any label or gate.
-5. If another data pass is needed, recollect targeted combo charts with explicit `--max-num-hands 2` using updated commands in `tracking-samples.md`.
-6. Export features immediately after each kept chart and verify both hands appear as separate `hand_id` streams.
-7. Run DTW spotting, TCN event decoding, and sequence scoring on the targeted charts.
-8. Keep live desktop actions disabled.
-9. Update README/tasks/tracking-samples/context docs with results and any revised collection commands.
-10. Run `uv run ruff check .` and `uv run pytest`.
-11. Commit and push.
+Do not start by building TCN v2. First review the plan and inspect the code boundaries. If the plan survives review, the likely first implementation slice is a deterministic per-hand motion-event baseline plus event decoder/command-event cleanup.
 
 Important evidence:
 
@@ -72,10 +67,65 @@ Important evidence:
 - Plain DTW and TCN both missed held-out left swipes.
 - Gated/window-feature DTW improved isolated holdout but remains tuned on existing evidence.
 - Structured chained sessions showed plausible order but still misses/repeats.
-- Live TCN is useful as diagnostic preview only.
-- Shared per-hand TCN is now the recommended learned-model shape: one checkpoint run independently on each `hand_id` stream, followed by event decoding/merge/cooldown. Do not train separate `hand-0` and `hand-1` tracker-slot models yet.
-- Two-hand motion-gated TCN target assignment exists via `--target-assignment motion-gated`. It gates on active-hand motion energy, not raw direction sign, because mirrored preview/raw camera direction conventions were brittle across 003+004.
-- 003-to-004 shared per-hand TCN decoded holdout matched 27/48, missed 21, produced 11 false activations and 4 repeated fires. Improved, but not live-control-ready.
-- `airdesk gesture diagnose-tcn-events` exists for decoded TCN failure reports. On the same split, increasing match tolerance from 0.5 s to 3.0 s raised matches from 27/48 to 36/48, so many misses are late/early relative to chart prompt labels rather than completely absent predictions.
+- The one-hand default contaminated combo data; the old `sprint4-gpu-swipes-002-structured` batch was deleted.
+- Feature export now emits per-hand rows with independent motion history.
+- DTW/TCN windows are hand-scoped and decoded hand streams are merged.
+- Shared per-hand model shape remains correct: one shared scorer/checkpoint run independently on each visible `hand_id`, then decoded/merged.
+- Do not train separate `hand-0` / `hand-1` tracker-slot models unless stable physical-hand identity labels exist.
+- Recovery-inclusive TCN collapsed into `recovery` during live preview.
+- `phase-stroke` removed recovery but did not solve live recognition.
+- Caden saw live `dx > 0.50` while `L=` / `R=` stayed flat, so the failure is not just a too-high motion gate.
+- A more sensitive 0.20 motion-gate TCN improved 003-to-004 replay to 37/48, but with 18 false activations; diagnostic only.
+- Chart labels are prompt-timing weak labels, not exact active-hand truth.
+- Motion-peak auto-refinement worsened held-out TCN performance and should be used only for diagnostics/manual review.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
-- Current UI for chart collection is a stable HUD with a progress bar and fixed upcoming cards.
+- Keep live desktop actions disabled.
+
+Next-session assignment:
+
+1. Review `deep-research-report.md`, `recognition-v2-plan.md`, and the current code.
+2. Challenge and refine the plan before implementation. Update the docs if the plan changes.
+3. Inspect current package boundaries around:
+   - `src/airdesk/features/`
+   - `src/airdesk/gestures/`
+   - `src/airdesk/ml/`
+   - `src/airdesk/analysis/`
+   - `src/airdesk/cli.py`
+4. Decide the smallest safe implementation slice. Preferred slice: deterministic per-hand motion-event baseline.
+5. Only after the plan is 100% ready, implement the first slice.
+6. Add tests for:
+   - per-hand stream separation;
+   - repeated same-direction swipes as separate events;
+   - background/idle rejection;
+   - merged event ordering across hands.
+7. Add replay/evaluation CLI output before any live execution path.
+8. Keep broad combo collection paused unless the new baseline exposes a specific tiny targeted calibration need.
+9. Update README/context/tasks/tracking-samples with whatever changes.
+10. Run `uv run ruff check .` and `uv run pytest`.
+11. Commit and push.
+
+Do not:
+
+- Do not collect broad new combo data first.
+- Do not keep sweeping current TCN thresholds.
+- Do not wire learned/DTW/motion swipes to live desktop actions.
+- Do not train separate tracker-slot models as a shortcut.
+- Do not turn `deep-research-report.md` citations into paper citations without verifying them; the report is useful for architecture direction, not final bibliography text.
+
+Suggested first implementation direction after plan review:
+
+Build a deterministic per-hand motion-event baseline that consumes existing feature rows/live feature streams and emits events like:
+
+```text
+GestureEvent(
+  name="swipe_left" | "swipe_right",
+  hand_id="hand-0",
+  start_time=...,
+  peak_time=...,
+  end_time=...,
+  confidence=...,
+  evidence={dx, peak_velocity, direction_consistency}
+)
+```
+
+It should use hand-normalized displacement, peak velocity, direction consistency, low-motion valleys, duration bounds, per-hand stream separation, and duplicate suppression by peak identity. The point is to prove whether AirDesk's current tracking/features can spot live swipes before committing to TCN v2.

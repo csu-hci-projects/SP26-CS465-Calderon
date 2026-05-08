@@ -2,6 +2,8 @@
 
 Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
+Current context-reset task: review and refine `recognition-v2-plan.md` before implementation. Do not collect broad combo data or keep sweeping current TCN thresholds.
+
 ## Phase 0: Project Setup
 
 - [ ] Initialize new repo in `/home/caden/projects/AirDesk` if desired
@@ -129,6 +131,13 @@ Current next sprint: shift recognition work toward continuous gesture spotting, 
 - [x] Add `phase-stroke` TCN target mode to train without the recovery class after live recovery collapse
 - [x] Stabilize live TCN HUD so both hand streams are shown together and static fist/pinch overlays are hidden
 - [x] Train/evaluate more sensitive `phase-stroke` TCN with 0.20 motion gate and document higher false-activation tradeoff
+- [x] Create Recognition V2 architecture plan after deep research report and live TCN misses
+- [ ] Review/refine Recognition V2 plan before implementation
+- [ ] Refactor recognition boundaries around per-hand streams, evidence, event decoder, and command queue
+- [ ] Implement deterministic per-hand motion-event baseline before TCN v2
+- [ ] Evaluate motion-event baseline on existing replay data and live diagnostic preview
+- [ ] Decide whether to collect a tiny targeted live calibration slice
+- [ ] Design TCN v2 only after baseline evidence, with boundary/intent heads rather than window argmax only
 - [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data
 - [ ] Turn refinement diagnostics into a manual label-review pass instead of automatically adopting motion-peak labels
 - [ ] Recheck decoder thresholds after label/timing diagnostics, not before

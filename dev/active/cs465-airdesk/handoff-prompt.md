@@ -27,17 +27,19 @@ Read these files first:
 1. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/context.md`
 2. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/plan.md`
 3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
-4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
-5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/dynamic-gesture-research.md`
-6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
-7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
-8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
-9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
-10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-4.md`
-11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-5.md`
-12. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
-13. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
-14. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/context-reset-prompt.md`
+4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/recognition-v2-plan.md`
+5. `/home/caden/projects/AirDesk/deep-research-report.md` if present
+6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
+7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/dynamic-gesture-research.md`
+8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-0.md`
+9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-1.md`
+10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-2.md`
+11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
+12. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-4.md`
+13. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-5.md`
+14. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
+15. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+16. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/context-reset-prompt.md`
 
 Current preferred research question:
 
@@ -54,8 +56,8 @@ Prototype idea:
 - rule-based gesture recognizers first
 - intent-gated phrase recognizers for dynamic commands
 - template/DTW fallback for calibration and safety
-- causal TCN as the first learned temporal recognizer scaffold after collecting phase-labeled real data
-- continuous gesture spotting as the current recognition target: invariant features, phase/event labels, event decoding, and explicit non-gesture handling
+- causal TCN as a possible learned temporal core after the continuous-spotting architecture is cleaned up
+- continuous gesture spotting as the current recognition target: per-hand streams, motion activity proposal, scorer/model adapter, event decoding, command queue, and explicit non-gesture handling
 - clutch gesture: open palm held for ~300 ms enters listening mode
 - modes: command, cursor, text/virtual-keyboard, media, window-manager, presentation, accessibility
 - profiles: window manager, media/kitchen, presentation, cursor, virtual keyboard, hybrid keyboard+hands, accessibility, study safe, experimental
@@ -197,6 +199,7 @@ Current Sprint 4 dataset/evidence:
 - Latest two-hand pivot: stop combo data collection until the two-hand replay path is checked end-to-end. The old chart combo recordings under `sprint4-gpu-swipes-002-structured` were deleted because collection used the one-hand default and feature export consumed only `frame.hands[0]`. AirDesk now exports per-hand rows with independent motion history, scores DTW/TCN streams per hand, decodes per-hand event streams, and merges them with cooldown/repeated-fire suppression. Future combo collection should use `--max-num-hands 2`; the chart recorder now defaults to that. The `sprint4-gpu-swipes-002-singles` batch remains local but should be treated as legacy/single-hand-only until reviewed or recollected.
 - New two-hand TCN evidence: Caden collected batches `sprint4-gpu-swipes-003-two-hand` and `sprint4-gpu-swipes-004-two-hand-extra`. The recommended learned architecture is one shared per-hand TCN checkpoint applied independently to each `hand_id` stream, then event decoding/merge/cooldown; do not train separate `hand-0` and `hand-1` tracker-slot models yet. A new TCN manifest option, `--target-assignment motion-gated`, keeps weak prompt-time labels from teaching a stationary visible hand as the active stroke. It gates on motion energy rather than raw dx sign because mirrored preview/raw camera direction signs were brittle across the batches. Training on 003 and evaluating decoded events on 004 matched 27/48 intended events, missed 21, with 11 false activations and 4 repeated fires. This is progress but not live-control-ready; pause broad new collection until active-hand weak labels and decoder thresholds improve.
 - `airdesk gesture diagnose-tcn-events` writes detailed decoded TCN failure reports. On the same 003-to-004 split, many missed labels had same-gesture candidates outside the 0.5 s tolerance window; raising tolerance to 3.0 s increased matches to 36/48 while leaving 9 false activations. This points to prompt-timing labels and active-hand/timestamp alignment as the next blocker, not just threshold sweeping.
+- Recognition V2 pivot: after the deep research report and live TCN misses, stop treating the current TCN as the recognizer architecture. It is a scaffold. The next session should review/refine `recognition-v2-plan.md`, inspect current code boundaries, and then implement the smallest safe slice, likely a deterministic per-hand motion-event baseline plus event decoder/command-event cleanup. Do not collect broad combo data or wire live desktop actions.
 
 Current Sprint 5 direction:
 

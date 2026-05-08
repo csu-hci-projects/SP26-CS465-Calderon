@@ -11,6 +11,7 @@ Start here:
 - `dev/active/cs465-airdesk/context.md` - current state and project framing
 - `dev/active/cs465-airdesk/plan.md` - research plan, prototype scope, study design
 - `dev/active/cs465-airdesk/architecture.md` - proposed system architecture and package boundaries
+- `dev/active/cs465-airdesk/recognition-v2-plan.md` - current recognizer architecture pivot and next-session plan
 - `dev/active/cs465-airdesk/research-notes.md` - technical research notes and current working positions
 - `dev/active/cs465-airdesk/dynamic-gesture-research.md` - dynamic gesture recognition research and model strategy
 - `dev/active/cs465-airdesk/sprint-0.md` - first implementation sprint plan and acceptance criteria

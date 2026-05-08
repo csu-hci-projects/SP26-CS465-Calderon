@@ -49,15 +49,17 @@ Important stance:
 
 1. `/home/caden/projects/AirDesk/README.md`
 2. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/context.md`
-3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/plan.md`
-4. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
-5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
-6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/dynamic-gesture-research.md`
-7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
-8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-4.md`
-9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-5.md`
-10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
-11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
+3. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/recognition-v2-plan.md`
+4. `/home/caden/projects/AirDesk/deep-research-report.md` if present
+5. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/plan.md`
+6. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/architecture.md`
+7. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/research-notes.md`
+8. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/dynamic-gesture-research.md`
+9. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-3.md`
+10. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-4.md`
+11. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/sprint-5.md`
+12. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tracking-samples.md`
+13. `/home/caden/projects/AirDesk/dev/active/cs465-airdesk/tasks.md`
 
 ## Current Implementation State
 
@@ -102,7 +104,8 @@ Important live findings:
 - On Caden's Hyprland/Arch/T550 setup, use `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu` when testing MediaPipe GPU tracking on the T550. Plain `--hand-delegate gpu` may still use Intel/Mesa EGL. Confirm the MediaPipe startup log contains `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - `airdesk benchmark` reports live timing slices; short bounded smokes showed T550 inference around 4 ms per frame, but capture remains camera-paced around 30 FPS.
 - Two-hand combo data remains the next blocker, but the broad collection pause has moved from "pipeline not implemented" to "weak labels and decoder need tightening." The old one-hand default was wrong for alternating-hand/chained combos: MediaPipe collection defaulted to one hand, and feature export used to consume only `frame.hands[0]`. AirDesk now exports per-hand feature rows, keeps independent per-hand motion history, scores DTW/TCN streams per hand, and decodes hand streams before merging events with cooldown suppression. The chart recorder defaults to `--max-num-hands 2`. The `sprint4-gpu-swipes-002-structured` combo recordings were deleted.
-- New two-hand shared TCN evidence: batches 003+004 are local under ignored `data/`. Use one shared TCN checkpoint independently on each `hand_id` stream, not separate tracker-slot models. Use `gesture build-tcn-dataset --feature-preset stream-invariant --target-mode phase --target-assignment motion-gated` for two-hand chart manifests so a stationary visible hand is not trained as the prompted stroke. The motion gate uses motion energy rather than raw dx sign because mirrored preview/raw camera direction conventions were brittle across the two-hand batches. Training on 003 and evaluating decoded events on 004 matched 27/48, missed 21, with 11 false activations and 4 repeated fires. This is useful progress but not live-control-ready.
+- Recognition V2 pivot: Caden added `deep-research-report.md` and wants a full plan/review pass before implementation. The current TCN work is useful evidence but is still too close to sliding-window phase classification. Read `recognition-v2-plan.md` and refine it before coding. The likely first implementation slice is a deterministic per-hand motion-event baseline plus event decoder/command-event cleanup, not TCN v2.
+- New two-hand shared TCN evidence: batches 003+004 are local under ignored `data/`. Use one shared TCN checkpoint independently on each `hand_id` stream, not separate tracker-slot models. Motion-gated two-hand manifests keep weak prompt-time labels from training a stationary visible hand as active. Recovery-inclusive TCN collapsed into `recovery`; `phase-stroke` removed that class but still failed live. Caden saw live `dx > 0.50` while stroke probabilities stayed flat, so stop rescuing the current TCN with threshold sweeps.
 - `airdesk gesture diagnose-tcn-events` exists for decoded TCN failure reports. On the 003-to-004 split, most misses had nearest same-gesture candidates outside the 0.5 s tolerance window; increasing match tolerance to 3.0 s raised matches to 36/48 while leaving 9 false activations. Treat chart labels as prompt-time weak labels until active-hand/timestamp alignment improves.
 - Hyprland 0.54.3 supports `hyprctl dispatch movecursor x y`, which is how the first real cursor mode works.
 - `ydotool`/`wtype` were not installed during the cursor spike, so click/drag injection remains pending.

@@ -58,6 +58,8 @@ May 2026 shared-model update: Caden's intuition was right that the model should 
 
 Weak label note: chart labels are prompt-timing labels, not hand-specific truth. For two-hand TCN manifests, use motion-gated target assignment so a resting visible hand is not labeled as the active stroke. The gate should use recent motion energy rather than raw left/right dx sign because mirrored preview and raw camera coordinate conventions can flip or blur the sign evidence across sessions.
 
+May 2026 Recognition V2 update: after Caden's deep research report and live TCN tests, stop treating the current TCN scaffold as the recognizer architecture. It is still useful evidence, but AirDesk now needs a cleaner continuous-spotting architecture: per-hand normalized streams, motion activity proposal, scorer/model adapter, event decoder, command queue, and mode/profile safety policy. Caden saw live `dx > 0.50` while TCN stroke probabilities stayed flat, so the failure is not only a motion threshold. The next implementation should review/refine `recognition-v2-plan.md`, then build a deterministic per-hand motion-event baseline before any TCN v2 work.
+
 The model plan is:
 
 1. Use **rule + feature gates** for immediate safety and debugging.

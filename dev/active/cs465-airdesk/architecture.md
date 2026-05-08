@@ -252,6 +252,47 @@ Once AirDesk can record and label real sessions:
 
 Later, evaluate public datasets or pretrained models for broader gesture recognition. The goal is to reduce per-user setup without losing reliability.
 
+### Recognition V2 Architecture
+
+Current evidence says the recognition package needs a cleaner continuous-spotting boundary before more model work.
+
+The detailed plan is in `recognition-v2-plan.md`. The short version:
+
+```text
+TrackingFrame
+  -> per-hand feature stream
+  -> motion activity proposal
+  -> scorer / model adapter
+  -> event decoder
+  -> command queue
+  -> mode/profile/safety policy
+```
+
+Important boundaries:
+
+- feature streams own normalization, masks, and per-hand history;
+- recognizers score evidence but do not execute actions;
+- event decoding turns noisy frame/window evidence into one-shot command events;
+- command queue and mode/profile policy own ordering, chaining, and safety;
+- live desktop actions remain opt-in and guarded outside recognition.
+
+Potential package cleanup:
+
+```text
+airdesk/features/
+  stream.py
+  normalized.py
+
+airdesk/recognition/
+  evidence.py
+  motion.py
+  decoder.py
+  queue.py
+  tcn_v2.py
+```
+
+This package shape is provisional. The next session should review the current code before moving files. The first implementation slice should be a deterministic motion-event baseline, not TCN v2.
+
 ## Modes
 
 Modes describe interaction technique. Profiles describe context and bindings.

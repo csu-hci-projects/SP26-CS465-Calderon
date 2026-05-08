@@ -98,6 +98,35 @@ The first hard problem is gesture spotting, not just classification:
 - whether mode/profile state allows it
 - whether confidence is high enough to execute a command
 
+### Recognition V2 Pivot
+
+May 2026 update: AirDesk is due for a recognizer architecture cleanup before more broad data collection.
+
+The current TCN work proved useful infrastructure, but the live tests showed that the implementation is still too close to sliding-window phase classification. The next architecture should treat TCN as one possible temporal core inside a continuous spotting system, not as the whole recognizer.
+
+The new planning entrypoint is `recognition-v2-plan.md`.
+
+Working stance:
+
+- keep MediaPipe as backend zero, not project identity;
+- keep one shared per-hand model/scorer applied independently to each `hand_id` stream;
+- do not train separate `hand-0` / `hand-1` models unless stable physical-hand identity labels exist;
+- stop threshold-sweeping the current TCN after live `dx` rose above 0.50 while stroke probabilities stayed flat;
+- build a deterministic motion-event baseline first to prove the tracking/features path;
+- then build a boundary-aware TCN v2 only if the plan and baseline evidence support it;
+- keep learned and dynamic swipes in replay/preview only until event-level evidence supports guarded execution.
+
+Target continuous-spotting shape:
+
+```text
+per-hand normalized feature streams
+  -> motion activity proposal
+  -> recognizer/scorer
+  -> event decoder
+  -> command queue
+  -> mode/profile/safety policy
+```
+
 ## Interaction Modes
 
 AirDesk should be designed as a set of explicit modes. This is both a product-design decision and a research decision: modes make accidental activation easier to reason about, and they let the study compare specific interaction techniques rather than one vague "gesture control" bucket.
