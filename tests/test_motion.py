@@ -4,8 +4,8 @@ from pathlib import Path
 
 from airdesk.analysis import evaluate_motion_recognizer
 from airdesk.features import extract_feature_rows
-from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer
-from airdesk.labels import add_event_label, init_label_file, save_label_file
+from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer, diagnose_motion_rows
+from airdesk.labels import add_event_label, add_phase_label, init_label_file, save_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -76,6 +76,45 @@ def test_motion_recognizer_can_flip_raw_dx_direction_mapping() -> None:
 
     assert [candidate.name for candidate in candidates] == ["swipe_left"]
     assert candidates[0].metadata["positive_dx_gesture"] == "swipe_left"
+
+
+def test_motion_diagnostics_explain_rejected_weak_motion() -> None:
+    rows = extract_feature_rows(_one_hand_frames((0.30, 0.30, 0.34, 0.36, 0.36)))
+
+    diagnostics = diagnose_motion_rows(rows, limit_per_hand=3)
+
+    assert diagnostics
+    assert diagnostics[0].would_emit is False
+    assert "dx_per_hand_scale_below_min" in diagnostics[0].rejection_reasons
+
+
+def test_motion_diagnostics_include_label_phase_context(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-right.jsonl"
+    frames = _one_hand_frames((0.30, 0.30, 0.44, 0.60, 0.60))
+    _write_recording(recording, (0.30, 0.30, 0.44, 0.60, 0.60))
+    labels = init_label_file(recording)
+    labels = add_phase_label(
+        labels,
+        phase="stroke_right",
+        start_time=frames[2].timestamp,
+        end_time=frames[3].timestamp,
+        gesture="swipe_right",
+    )
+    labels = add_event_label(
+        labels,
+        gesture="swipe_right",
+        start_time=frames[2].timestamp,
+        end_time=frames[3].timestamp,
+    )
+
+    rows = extract_feature_rows(frames, labels=labels)
+    candidates = MotionEventRecognizer().recognize_rows(rows)
+    diagnostics = diagnose_motion_rows(rows, limit_per_hand=1)
+
+    assert candidates[0].metadata["peak_phase"] == "stroke_right"
+    assert candidates[0].metadata["peak_event"] == "swipe_right"
+    assert diagnostics[0].phase == "stroke_right"
+    assert diagnostics[0].event == "swipe_right"
 
 
 def test_evaluate_motion_recognizer_reports_replay_metrics(tmp_path: Path) -> None:

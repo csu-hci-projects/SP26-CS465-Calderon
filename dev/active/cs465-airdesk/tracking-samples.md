@@ -282,6 +282,7 @@ baseline now exists. Run it before more TCN work:
 
 ```bash
 uv run airdesk gesture spot-motion --recording data/recordings/... --out data/evaluations/.../motion-candidates.json
+uv run airdesk gesture spot-motion --recording data/recordings/... --labels data/labels/...labels.json --out data/evaluations/.../motion-candidates.json
 uv run airdesk gesture evaluate-motion --recording data/recordings/... --labels data/labels/... --out data/evaluations/.../motion-summary.json
 ```
 
@@ -297,6 +298,17 @@ to 5 but matched only 3/16. On `sprint4-chained-003`, default mapping matched
 4/10 with 3 repeated fires and 0 false activations. Treat this as evidence that
 the baseline is useful for inspecting feature/tracking health, not for live
 control.
+
+Focused diagnostic replay after adding label-aware `motion_diagnostics`:
+
+- `normal-desk-motion-negative-007` produced three background candidates. The two strongest rightward false activations had `dx_per_hand_scale` about `1.5-1.7`, peak velocity about `0.51`, and direction consistency `1.0`, so motion energy alone cannot reject natural lateral desk motion.
+- `swipe-left-positive-007` produced no candidate. Its strongest label-time rows were inside `stroke_left` / `swipe_left`, but normalized dx was only about `0.28` after a tracking dropout reset the rolling window; this is weak-left/tracking-continuity evidence, not just label timing.
+- `swipe-right-positive-007` with `--positive-dx-gesture swipe_left` produced one matched candidate at about `1.35s`; its raw dx was negative and the label context was `stroke_right`, confirming the sign convention has to stay explicit.
+
+Next replay-only rejection ideas should focus on intent/background separation,
+tracking-drop diagnostics, low-motion valleys/reset evidence, and peak identity
+for repeated fires. Do not sweep thresholds broadly or wire motion swipes into
+desktop actions.
 
 Default chart timing is `3s` lead-in, `1.5s` cue, `0.75s` stroke, `0.75s` recovery, and `10s` rest. Adjust with `--lead-in-seconds`, `--cue-seconds`, `--gesture-seconds`, `--recovery-seconds`, and `--rest-seconds` if the prompts feel too tight or too slow. If a recording was made without labels, rebuild the same coarse labels later:
 

@@ -41,6 +41,37 @@ class MotionEvidence:
     dx_per_hand_scale: float
     peak_velocity: float
     direction_consistency: float
+    palm_x: float
+    palm_y: float
+    palm_vx: float
+    palm_vy: float
+    phase: str
+    event: str
+
+
+@dataclass(frozen=True)
+class MotionRowDiagnostic:
+    """A compact per-row diagnostic for replay motion failures."""
+
+    hand_id: str
+    frame_index: int
+    timestamp: float
+    mapped_gesture: SwipeGesture
+    would_emit: bool
+    rejection_reasons: tuple[str, ...]
+    raw_dx: float
+    dx_per_hand_scale: float
+    peak_velocity: float
+    direction_consistency: float
+    palm_x: float
+    palm_y: float
+    palm_vx: float
+    palm_vy: float
+    phase: str
+    event: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
 
 
 @dataclass
@@ -175,6 +206,12 @@ def _motion_evidence(
         dx_per_hand_scale=dx_per_scale,
         peak_velocity=row.palm_window_peak_abs_vx,
         direction_consistency=row.palm_window_direction_consistency,
+        palm_x=row.palm_x,
+        palm_y=row.palm_y,
+        palm_vx=row.palm_vx,
+        palm_vy=row.palm_vy,
+        phase=row.phase,
+        event=row.event,
     )
 
 
@@ -268,6 +305,12 @@ def _candidate_from_motion(
             "dx_per_hand_scale": evidence.dx_per_hand_scale,
             "peak_velocity": evidence.peak_velocity,
             "direction_consistency": evidence.direction_consistency,
+            "peak_palm_x": evidence.palm_x,
+            "peak_palm_y": evidence.palm_y,
+            "peak_palm_vx": evidence.palm_vx,
+            "peak_palm_vy": evidence.palm_vy,
+            "peak_phase": evidence.phase,
+            "peak_event": evidence.event,
             "positive_dx_gesture": config.positive_dx_gesture,
         },
     )
@@ -290,6 +333,93 @@ def _gesture_for_dx(raw_dx: float, config: MotionEventConfig) -> SwipeGesture:
     if raw_dx >= 0:
         return config.positive_dx_gesture
     return "swipe_left" if config.positive_dx_gesture == "swipe_right" else "swipe_right"
+
+
+def diagnose_motion_rows(
+    rows: list[FrameFeatureRow],
+    config: MotionEventConfig | None = None,
+    *,
+    limit_per_hand: int = 8,
+) -> list[MotionRowDiagnostic]:
+    """Return strongest row-level motion diagnostics for replay inspection.
+
+    The motion baseline deliberately emits only accepted candidates. This helper keeps
+    near-misses visible without turning the recognizer into a threshold sweep.
+    """
+    active_config = config or MotionEventConfig()
+    _validate_config(active_config)
+    if limit_per_hand < 0:
+        raise ValueError("limit_per_hand must be non-negative")
+    diagnostics: list[MotionRowDiagnostic] = []
+    for hand_rows in _diagnostic_hand_streams(rows):
+        ranked = sorted(
+            hand_rows,
+            key=lambda row: (
+                abs(row.palm_window_dx_per_hand_scale),
+                row.palm_window_peak_abs_vx,
+                row.palm_window_direction_consistency,
+            ),
+            reverse=True,
+        )
+        for row in ranked[:limit_per_hand]:
+            reasons = _motion_rejection_reasons(row, active_config)
+            diagnostics.append(
+                MotionRowDiagnostic(
+                    hand_id=row.hand_id,
+                    frame_index=row.frame_index,
+                    timestamp=row.timestamp,
+                    mapped_gesture=_gesture_for_dx(row.palm_window_dx, active_config),
+                    would_emit=not reasons,
+                    rejection_reasons=tuple(reasons),
+                    raw_dx=row.palm_window_dx,
+                    dx_per_hand_scale=row.palm_window_dx_per_hand_scale,
+                    peak_velocity=row.palm_window_peak_abs_vx,
+                    direction_consistency=row.palm_window_direction_consistency,
+                    palm_x=row.palm_x,
+                    palm_y=row.palm_y,
+                    palm_vx=row.palm_vx,
+                    palm_vy=row.palm_vy,
+                    phase=row.phase,
+                    event=row.event,
+                )
+            )
+    return sorted(
+        diagnostics,
+        key=lambda item: (
+            item.hand_id,
+            -abs(item.dx_per_hand_scale),
+            -item.peak_velocity,
+            item.frame_index,
+        ),
+    )
+
+
+def _diagnostic_hand_streams(rows: list[FrameFeatureRow]) -> list[list[FrameFeatureRow]]:
+    streams: dict[str, list[FrameFeatureRow]] = {}
+    for row in rows:
+        if row.tracking_present != 1 or not row.hand_id:
+            continue
+        streams.setdefault(row.hand_id, []).append(row)
+    return [streams[key] for key in sorted(streams)]
+
+
+def _motion_rejection_reasons(
+    row: FrameFeatureRow,
+    config: MotionEventConfig,
+) -> list[str]:
+    reasons: list[str] = []
+    if not _usable_row(row):
+        reasons.append("tracking_missing")
+        return reasons
+    if abs(row.palm_vx) <= config.release_velocity:
+        reasons.append("immediate_velocity_below_release")
+    if abs(row.palm_window_dx_per_hand_scale) < config.min_dx_per_hand_scale:
+        reasons.append("dx_per_hand_scale_below_min")
+    if row.palm_window_peak_abs_vx < config.min_peak_velocity:
+        reasons.append("peak_velocity_below_min")
+    if row.palm_window_direction_consistency < config.min_direction_consistency:
+        reasons.append("direction_consistency_below_min")
+    return reasons
 
 
 def _separation_ok(

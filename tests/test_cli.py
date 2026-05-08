@@ -668,9 +668,73 @@ def test_gesture_spot_motion_cli_writes_unlabeled_candidates(tmp_path: Path) -> 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["candidate_count"] >= 1
     assert payload["motion_config"]["positive_dx_gesture"] == "swipe_right"
+    assert payload["labels"] is None
+    assert payload["motion_diagnostics"]
     assert payload["candidates"][0]["gesture"] == "swipe_right"
     assert payload["candidates"][0]["hand_id"] == "hand-0"
     assert "evidence_id" in payload["candidates"][0]["metadata"]
+
+
+def test_gesture_spot_motion_cli_can_include_label_diagnostics(tmp_path: Path) -> None:
+    recording = tmp_path / "swipe-right.jsonl"
+    labels = tmp_path / "swipe-right.labels.json"
+    output = tmp_path / "motion-candidates.json"
+    _write_cli_motion_recording(recording)
+    CliRunner().invoke(app, ["label", "init", str(recording), "--out", str(labels)])
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-phase",
+            str(labels),
+            "--phase",
+            "stroke_right",
+            "--start",
+            "0.2",
+            "--end",
+            "0.9",
+            "--gesture",
+            "swipe_right",
+        ],
+    )
+    CliRunner().invoke(
+        app,
+        [
+            "label",
+            "add-event",
+            str(labels),
+            "--gesture",
+            "swipe_right",
+            "--start",
+            "0.2",
+            "--end",
+            "0.9",
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "spot-motion",
+            "--recording",
+            str(recording),
+            "--labels",
+            str(labels),
+            "--out",
+            str(output),
+            "--diagnostic-limit",
+            "5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["labels"] == str(labels)
+    assert len(payload["motion_diagnostics"]) == 5
+    assert any(item["phase"] == "stroke_right" for item in payload["motion_diagnostics"])
+    assert any(item["event"] == "swipe_right" for item in payload["motion_diagnostics"])
+    assert payload["candidates"][0]["metadata"]["peak_phase"] == "stroke_right"
 
 
 def test_gesture_evaluate_motion_cli_writes_summary(tmp_path: Path) -> None:

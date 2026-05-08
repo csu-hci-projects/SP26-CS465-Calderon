@@ -221,17 +221,18 @@ Sprint 2 established a working live and replay foundation:
 - Caden added `deep-research-report.md`, which supports a larger recognizer architecture pivot: keep a causal temporal model as a possible core, but move from sliding-window classification to continuous gesture spotting with per-hand normalized streams, motion/activity proposals, boundary-aware event decoding, and a command queue. The planning entrypoint is now `dev/active/cs465-airdesk/recognition-v2-plan.md`; the plan review is complete, and the first deterministic motion baseline is implemented.
 - Recognition V2 first implementation slice is now in place. `airdesk/gestures/motion.py` adds a deterministic per-hand motion-event baseline over existing `FrameFeatureRow` streams. `airdesk gesture spot-motion` writes replay JSON candidates with hand id, peak timing, normalized displacement, peak velocity, direction consistency, and a stable evidence id. `airdesk gesture evaluate-motion` evaluates those events with the same intended/matched/missed/false-activation summary used by rule, DTW, and TCN evaluation. This is replay/diagnostic tooling only and still does not trigger desktop actions.
 - First bounded replay check: on all 24 `sprint4-swipes-001` recordings, the default raw-positive-dx direction mapping matched 0/16 intended events and produced 12 false activations, confirming the mirrored-preview/raw-camera direction concern. Flipping with `--positive-dx-gesture swipe_left` improved only to 5/16 matched with the same 12 false activations. Raising `--min-dx-per-hand-scale` to 1.0 reduced false activations to 5 but dropped matches to 3/16. On `sprint4-chained-003`, the default mapping matched 4/10 with 0 false activations but 3 repeated fires; flipped mapping matched 0/10. Interpretation: the baseline is a useful diagnostic, not a control recognizer. Motion energy alone is too loose for negatives and still misses weak left swipes.
+- Motion-baseline diagnostics now exist in `spot-motion` JSON. Add `--labels` to annotate the strongest per-hand motion rows with label phase/event context and rejection reasons. Focused replay inspection showed `normal-desk-motion-negative-007` has background lateral motion strong enough to pass the baseline (`dx_per_hand_scale` about `1.5-1.7`, direction consistency `1.0`), while `swipe-left-positive-007` has label-time motion far below the default displacement gate (`dx_per_hand_scale` about `0.28`) after a tracking dropout resets the rolling motion window. `swipe-right-positive-007` confirms the raw-camera sign convention: with flipped mapping its negative raw dx maps to the user-facing `swipe_right` label. Interpretation: the current blocker is not one thing. Direction convention must stay explicit, but the larger reliability problems are negative-motion rejection/intent evidence and weak-left/tracking-continuity behavior.
 - `airdesk benchmark` now reports timing slices for live MediaPipe runs: camera read, color conversion, MediaPipe inference, normalization, preview draw, and total loop time.
 - The T550 GPU path is now opt-in through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`. Plain `--hand-delegate gpu` can still land on Intel/Mesa EGL under Hyprland; the launcher selects the NVIDIA GLVND EGL vendor and Wayland EGL platform before Python starts. The success signal is a MediaPipe log line containing `OpenGL ES 3.2 NVIDIA` and `NVIDIA T550 Laptop GPU`.
 - Short bounded smoke evidence on 2026-05-06: CPU delegate inference averaged about `16.84 ms`; plain GPU-on-Intel averaged about `13.60 ms`; T550 GPU via the launcher averaged about `4.17 ms`. Capture is still camera-paced around 30 FPS, so the practical benefit should be judged with hand-in-frame fast-swipe tracking continuity, not FPS alone.
 
 Current next step:
 
-> Run the new deterministic motion baseline on existing labeled recordings and
-> inspect its candidate evidence around false activations, weak left swipes, and
-> repeated fires. Do not add live diagnostic preview until the replay evidence is
-> cleaner or the preview is explicitly framed as a low-level feature probe. Keep
-> broad combo collection and live desktop actions paused.
+> Use the new motion diagnostics to compare rejected/accepted motion rows across
+> a few existing labeled recordings, then decide the next replay-only rejection
+> feature. The first evidence points toward intent/negative-motion rejection and
+> tracking-continuity diagnostics before any live preview. Keep broad combo
+> collection and live desktop actions paused.
 
 ## Current Research Direction Update
 

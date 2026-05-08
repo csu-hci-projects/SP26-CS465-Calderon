@@ -7,7 +7,11 @@ from airdesk.gestures.decoder import (
     EventDecoderConfig,
     frames_from_candidates,
 )
-from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer
+from airdesk.gestures.motion import (
+    MotionEventConfig,
+    MotionEventRecognizer,
+    diagnose_motion_rows,
+)
 from airdesk.gestures.phrases import (
     GesturePhase,
     IntentGatedSwipeRecognizer,
@@ -27,5 +31,6 @@ __all__ = [
     "MotionEventRecognizer",
     "PhraseRecognizerConfig",
     "StaticHandPoseRecognizer",
+    "diagnose_motion_rows",
     "frames_from_candidates",
 ]

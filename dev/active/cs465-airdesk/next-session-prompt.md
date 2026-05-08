@@ -105,7 +105,7 @@ Next-session assignment:
    - `src/airdesk/cli.py`
 3. Run the motion baseline on existing labeled replay data and compare it against DTW/TCN summaries.
 4. Start from the first replay result: `sprint4-swipes-001` default mapping matched 0/16 with 12 false activations; flipped mapping matched 5/16 with 12 false activations; stricter flipped dx 1.0 matched 3/16 with 5 false activations; `sprint4-chained-003` default matched 4/10 with 3 repeated fires and 0 false activations.
-5. Inspect false activations, repeated fires, missed events, hand ids, and direction metadata.
+5. Use `spot-motion --labels ...` and the `motion_diagnostics` JSON rows to inspect false activations, repeated fires, missed events, hand ids, direction metadata, and label phase/event context.
 6. Tune only enough to expose whether tracking/features are viable; do not turn this into another broad threshold sweep.
 7. Add live diagnostic preview only after replay output is useful, or explicitly frame it as a low-level feature probe.
 8. Keep broad combo collection paused unless the baseline exposes a specific tiny targeted calibration need.
@@ -146,3 +146,13 @@ The first version emits existing `GestureCandidate` objects with metadata for
 velocity, direction consistency, and a stable peak/evidence id. Keep raw camera
 `dx` sign as diagnostic until user-facing preview direction versus raw camera
 direction is explicitly verified.
+
+Focused motion-diagnostic evidence: `normal-desk-motion-negative-007` contains
+background lateral motion strong enough to pass the baseline, with normalized dx
+around `1.5-1.7` and direction consistency `1.0`; `swipe-left-positive-007`
+misses because its label-time normalized dx is only about `0.28` after tracking
+dropout/reset; `swipe-right-positive-007` matches under flipped mapping and
+confirms that raw negative dx corresponds to that user-facing right swipe in
+this take. Next code should stay replay-only and target intent/background
+separation, tracking-drop diagnostics, low-motion valleys/reset evidence, and
+peak identity for repeated fires.

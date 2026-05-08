@@ -137,7 +137,9 @@ Current context-reset task: evaluate the new deterministic motion-event baseline
 - [x] Add replay-first `spot-motion` / `evaluate-motion` JSON surfaces before live preview
 - [x] Implement deterministic per-hand motion-event baseline before TCN v2
 - [x] Evaluate motion-event baseline on existing replay data before any live diagnostic preview
-- [ ] Inspect motion-baseline false activations and weak-left misses before live preview
+- [x] Inspect motion-baseline false activations and weak-left misses before live preview
+- [x] Add label-aware motion diagnostic rows for accepted/rejected replay evidence
+- [ ] Add the next replay-only negative-motion/intent rejection check after comparing diagnostics across a few labeled recordings
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary
 - [ ] Decide whether to collect a tiny targeted live calibration slice
 - [ ] Design TCN v2 only after baseline evidence, with boundary/intent heads rather than window argmax only

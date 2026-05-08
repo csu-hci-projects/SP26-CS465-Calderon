@@ -258,6 +258,13 @@ Status: complete for the first slice. The current checklist is to inspect
 motion-baseline false activations, repeated fires, weak-left misses, hand ids,
 and direction metadata before any live preview.
 
+Status update: the first inspection pass is complete. `spot-motion` now writes
+label-aware `motion_diagnostics` rows that keep rejected near-misses visible.
+The focused failures split into two main buckets: natural background motion can
+look like clean lateral motion to the baseline, and weak-left examples can fall
+below the displacement gate when tracking drops/reset the rolling motion window.
+Direction convention remains explicit, but it is not the only blocker.
+
 ### Phase B: Recognition Boundary Cleanup
 
 Likely package shape:

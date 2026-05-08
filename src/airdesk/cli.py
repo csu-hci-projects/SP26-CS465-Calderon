@@ -50,7 +50,12 @@ from airdesk.gestures.dtw import (
     DtwTemplateRecognizer,
     calibrate_dtw_model,
 )
-from airdesk.gestures.motion import MotionEventConfig, MotionEventRecognizer, SwipeGesture
+from airdesk.gestures.motion import (
+    MotionEventConfig,
+    MotionEventRecognizer,
+    SwipeGesture,
+    diagnose_motion_rows,
+)
 from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import (
@@ -698,6 +703,14 @@ def gesture_spot_dtw(
 def gesture_spot_motion(
     recording: Annotated[Path, typer.Option(exists=True, readable=True, help="Recording JSONL.")],
     out: Annotated[Path | None, typer.Option(help="Optional JSON candidate output path.")] = None,
+    labels: Annotated[
+        Path | None,
+        typer.Option(exists=True, readable=True, help="Optional labels JSON for diagnostics."),
+    ] = None,
+    diagnostic_limit: Annotated[
+        int,
+        typer.Option(help="Number of strongest motion rows to include per hand stream."),
+    ] = 8,
     min_dx_per_hand_scale: Annotated[
         float,
         typer.Option(help="Minimum absolute hand-normalized horizontal displacement."),
@@ -744,8 +757,10 @@ def gesture_spot_motion(
             positive_dx_gesture=positive_dx_gesture,
         )
         frames = _tracking_frames_from_recording(recording)
-        rows = extract_feature_rows(frames)
+        label_file = load_label_file(labels) if labels is not None else None
+        rows = extract_feature_rows(frames, labels=label_file)
         candidates = MotionEventRecognizer(config).recognize_rows(rows)
+        diagnostics = diagnose_motion_rows(rows, config, limit_per_hand=diagnostic_limit)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
@@ -755,7 +770,11 @@ def gesture_spot_motion(
         recognizer="motion",
         candidates=candidates,
         first_timestamp=frames[0].timestamp if frames else None,
-        extra={"motion_config": config.to_dict()},
+        extra={
+            "labels": str(labels) if labels is not None else None,
+            "motion_config": config.to_dict(),
+            "motion_diagnostics": [item.to_dict() for item in diagnostics],
+        },
     )
     if out is not None:
         _write_json(out, payload)
