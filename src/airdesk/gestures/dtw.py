@@ -8,7 +8,12 @@ from math import dist
 from pathlib import Path
 from typing import Any
 
-from airdesk.features import FrameFeatureRow, extract_feature_rows
+from airdesk.features import (
+    FrameFeatureRow,
+    extract_feature_rows,
+    group_feature_rows_by_stream,
+    is_tracked_feature_row,
+)
 from airdesk.labels import GestureLabelFile
 from airdesk.recording.jsonl import iter_recording
 from airdesk.state.types import GestureCandidate, TrackingFrame
@@ -626,12 +631,7 @@ def _candidate_from_match(
 
 
 def _hand_streams(rows: list[FrameFeatureRow]) -> list[list[FrameFeatureRow]]:
-    streams: dict[str, list[FrameFeatureRow]] = {}
-    for row in rows:
-        if not _usable_row(row):
-            continue
-        streams.setdefault(row.hand_id, []).append(row)
-    return [streams[key] for key in sorted(streams)]
+    return group_feature_rows_by_stream(rows)
 
 
 def _candidate_windows(
@@ -749,7 +749,7 @@ def _suppress_candidates(
 
 
 def _usable_row(row: FrameFeatureRow) -> bool:
-    return row.tracking_present == 1 and bool(row.hand_id)
+    return is_tracked_feature_row(row)
 
 
 def _vector_distance(first: tuple[float, ...], second: tuple[float, ...]) -> float:

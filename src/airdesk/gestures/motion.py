@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Literal
 
+from airdesk.feature_streams import group_feature_rows_by_stream, is_tracked_feature_row
 from airdesk.state.types import GestureCandidate
 
 if TYPE_CHECKING:
@@ -317,16 +318,11 @@ def _candidate_from_motion(
 
 
 def _hand_streams(rows: list[FrameFeatureRow]) -> list[list[FrameFeatureRow]]:
-    streams: dict[str, list[FrameFeatureRow]] = {}
-    for row in rows:
-        if not _usable_row(row):
-            continue
-        streams.setdefault(row.hand_id, []).append(row)
-    return [streams[key] for key in sorted(streams)]
+    return group_feature_rows_by_stream(rows)
 
 
 def _usable_row(row: FrameFeatureRow) -> bool:
-    return row.tracking_present == 1 and bool(row.hand_id)
+    return is_tracked_feature_row(row)
 
 
 def _gesture_for_dx(raw_dx: float, config: MotionEventConfig) -> SwipeGesture:
@@ -395,12 +391,7 @@ def diagnose_motion_rows(
 
 
 def _diagnostic_hand_streams(rows: list[FrameFeatureRow]) -> list[list[FrameFeatureRow]]:
-    streams: dict[str, list[FrameFeatureRow]] = {}
-    for row in rows:
-        if row.tracking_present != 1 or not row.hand_id:
-            continue
-        streams.setdefault(row.hand_id, []).append(row)
-    return [streams[key] for key in sorted(streams)]
+    return group_feature_rows_by_stream(rows)
 
 
 def _motion_rejection_reasons(

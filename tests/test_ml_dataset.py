@@ -691,6 +691,98 @@ def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path
     assert all(frame == [0.0, 0.0, 0.0, 0.0, 0.0] for frame in resting_targets)
 
 
+def test_build_tcn_manifest_v2_keeps_no_hand_tracking_drop_as_background(
+    tmp_path: Path,
+) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "tracking-drop.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", tracking_present=0, hand_id=""),
+            _row(timestamp=1.1, frame_index=1, event="", tracking_present=0, hand_id=""),
+            _row(timestamp=1.2, frame_index=2, event="", tracking_present=0, hand_id=""),
+            _row(timestamp=3.0, frame_index=3, event="", phase="stroke_right"),
+            _row(timestamp=3.1, frame_index=4, event="", phase="stroke_right"),
+            _row(timestamp=3.2, frame_index=5, event="", phase="background"),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=3.2,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-drop",
+                    label_type="gesture",
+                    gesture="swipe_left",
+                    start_time=1.0,
+                    end_time=1.1,
+                ),
+                GestureEventLabel(
+                    label_id="event-valid",
+                    label_type="gesture",
+                    gesture="swipe_right",
+                    start_time=3.0,
+                    end_time=3.1,
+                ),
+            ),
+            phase_labels=(
+                GesturePhaseLabel(
+                    label_id="phase-drop",
+                    phase="stroke_left",
+                    start_time=1.0,
+                    end_time=1.1,
+                    gesture="swipe_left",
+                ),
+                GesturePhaseLabel(
+                    label_id="phase-valid",
+                    phase="stroke_right",
+                    start_time=3.0,
+                    end_time=3.1,
+                    gesture="swipe_right",
+                ),
+            ),
+        ),
+        labels_dir / "tracking-drop.labels.json",
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+    )
+
+    no_hand_window = next(
+        window for window in manifest.windows if window.hand_id == NO_HAND_STREAM_ID
+    )
+    no_hand_targets = feature_window_frame_targets(
+        no_hand_window,
+        evidence_targets=manifest.evidence_targets,
+    )
+    assert all(frame == [0.0, 0.0, 0.0, 0.0, 0.0] for frame in no_hand_targets)
+    assert manifest.sources[0].evidence_frame_counts == {
+        "intentional_motion": 2,
+        "stroke_left": 0,
+        "stroke_right": 2,
+        "start": 1,
+        "end": 1,
+    }
+
+
 def test_save_tcn_dataset_manifest_writes_summary(tmp_path: Path) -> None:
     features = tmp_path / "normal-desk-motion-negative-001.csv"
     _write_features(

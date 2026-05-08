@@ -265,6 +265,14 @@ uv run airdesk gesture evaluate-tcn-v2 --manifest data/models/gestures/tcn-v2-00
 
 This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps stroke evidence back through the replay event decoder. Manifest summaries report source-frame `evidence_frame_counts`, no-hand windows are explicit `__no_hand__` streams, and offline evaluation decodes a deduplicated all-row evidence stream. Use it on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
 
+Cleanup note: V2 evidence generation now keeps no-hand/tracking-drop rows
+background-only even when a coarse label interval spans the dropout. `start` and
+`end` heads are assigned only to tracked intentional evidence inside the
+matching labeled event interval, so a weak or fully dropped gesture should not
+move boundary targets onto unrelated later motion. Shared stream grouping for
+DTW, motion, TCN datasets, and live preview now goes through the same
+hand/no-hand helper contract.
+
 First old-data TCN v2 smoke:
 
 - `sprint4-swipes-001` label-assigned v2 manifest: 24 sources, 760 windows, evidence frames `intentional_motion=208`, `stroke_left=104`, `stroke_right=104`, `start=16`, `end=16`.

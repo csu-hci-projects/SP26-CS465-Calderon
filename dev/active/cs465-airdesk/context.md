@@ -258,6 +258,11 @@ Current TCN v2 implementation state:
 - No-hand windows are now represented explicitly as `__no_hand__` so old
   tracking-drop/background rows do not accidentally load interleaved tracked-hand
   rows during training.
+- First cleanup pass tightened the V2 evidence contract: no-hand/tracking-drop
+  rows now stay background-only for decoder-facing evidence heads, and `start` /
+  `end` boundary targets are assigned only to tracked intentional evidence inside
+  the corresponding labeled event interval. This prevents weak/missing events
+  from moving boundary targets onto unrelated later motion.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
 
@@ -287,17 +292,23 @@ Current CLI cleanup state:
 - Camera, Hyprland dry-run, and profile validation commands now live in
   `src/airdesk/cli_system.py`.
 - Small shared CLI helpers live in `src/airdesk/cli_support.py`.
-- `src/airdesk/cli.py` still owns live tracking/runtime/preview command paths
-  and shared live-preview formatting helpers. Continue refactoring those in
-  small behavior-preserving chunks rather than doing a package rename.
+- Live preview/status formatting helpers now live in `src/airdesk/cli_live.py`.
+- Shared hand/no-hand feature stream helpers now live in
+  `src/airdesk/feature_streams.py` and are re-exported through
+  `src/airdesk/features/`; DTW, motion, TCN dataset building, and live TCN
+  preview use the same grouping contract.
+- `src/airdesk/cli.py` still owns live tracking/runtime/preview command bodies.
+  Continue refactoring those in small behavior-preserving chunks rather than
+  doing a package rename.
 
 Next review/refactor emphasis:
 
-- Start with a code-review/report pass, then make scoped behavior-preserving
-  changes.
-- Prioritize real bugs, dead code, oversized files/functions, duplicated logic,
-  unclear package ownership, missing tests, and anything that could make the
-  targeted V2 recording session ambiguous or fragile.
+- The first staff-level review/refactor chunk is complete: baseline tests passed,
+  duplicated stream helpers were centralized, V2 tracking-drop evidence was
+  covered by tests, and pure live-preview formatting left `cli.py`.
+- Continue prioritizing real bugs, dead code, oversized files/functions,
+  duplicated logic, unclear package ownership, missing tests, and anything that
+  could make the targeted V2 recording session ambiguous or fragile.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and

@@ -38,10 +38,21 @@ from airdesk.analysis import (
 )
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_labeling import register_feature_commands, register_label_commands
+from airdesk.cli_live import (
+    _format_live_dtw_candidate,
+    _format_live_tcn_prediction,
+    _format_live_tcn_preview_predictions,
+    _format_tracker_timing,
+    _is_live_tcn_gesture_target,
+    _live_dtw_preview_status,
+    _live_feature_streams,
+    _live_tcn_preview_status,
+    _show_live_tcn_prediction,
+)
 from airdesk.cli_support import _save_valid_label_file, _tracking_frames_from_recording
 from airdesk.cli_system import register_system_commands
 from airdesk.cli_tcn import register_tcn_commands
-from airdesk.features import FeatureRowStream, extract_feature_rows
+from airdesk.features import FeatureRowStream, FrameFeatureRow, extract_feature_rows
 from airdesk.gestures.base import CompositeGestureRecognizer
 from airdesk.gestures.decoder import EventDecoder, EventDecoderConfig, frames_from_candidates
 from airdesk.gestures.dtw import (
@@ -1133,7 +1144,7 @@ def gesture_watch_tcn(
         preview_gestures=False,
     )
     stream = FeatureRowStream()
-    rows = []
+    rows: list[FrameFeatureRow] = []
     latest_predictions: dict[str, CausalTcnLivePrediction] = {}
     latest_rows_by_hand: dict[str, object] = {}
     state: dict[str, object] = {
@@ -1316,7 +1327,7 @@ def gesture_watch_dtw(
     )
     recognizer = DtwTemplateRecognizer(dtw_model)
     stream = FeatureRowStream()
-    rows = []
+    rows: list[FrameFeatureRow] = []
     state = {"status": "warming up", "alert": "", "alert_until": 0.0}
     first_timestamp: float | None = None
     next_scan_time: float | None = None
@@ -3213,42 +3224,6 @@ def _average_fps_from_timestamps(timestamps: list[float]) -> float | None:
     return 1.0 / fmean(intervals)
 
 
-def _format_tracker_timing(tracker: HandTrackerBackend) -> str:
-    samples = getattr(tracker, "timing_samples", None)
-    if not samples:
-        return ""
-    fields = (
-        ("capture_read", "capture_read_ms"),
-        ("color_convert", "color_convert_ms"),
-        ("mediapipe_inference", "inference_ms"),
-        ("normalize", "normalize_ms"),
-        ("preview_draw", "preview_draw_ms"),
-        ("tracker_total", "total_ms"),
-    )
-    parts = [f"timing_frames={len(samples)}"]
-    for label, attr in fields:
-        values = [
-            float(value)
-            for sample in samples
-            if (value := getattr(sample, attr, None)) is not None
-        ]
-        if not values:
-            continue
-        parts.append(f"{label}_mean_ms={fmean(values):.2f}")
-        parts.append(f"{label}_p95_ms={_percentile(values, 0.95):.2f}")
-    return " ".join(parts)
-
-
-def _percentile(values: list[float], quantile: float) -> float:
-    if not values:
-        raise ValueError("percentile requires at least one value")
-    if len(values) == 1:
-        return values[0]
-    ordered = sorted(values)
-    index = round((len(ordered) - 1) * quantile)
-    return ordered[index]
-
-
 def _sequence_token(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_")
     if normalized in {"r", "right", "swipe_right"}:
@@ -3350,147 +3325,6 @@ def _lcs_length(left: list[str], right: list[str]) -> int:
                 current[index] = max(previous[index], current[index - 1])
         previous = current
     return previous[-1]
-
-
-def _format_live_tcn_status(prediction: CausalTcnLivePrediction) -> str:
-    probabilities = _compact_probabilities(prediction.probabilities)
-    target = _short_tcn_target(prediction.target)
-    hand = f"{prediction.hand_id} " if prediction.hand_id else ""
-    return f"TCN {hand}{target} {prediction.confidence:.2f} | {probabilities}"
-
-
-def _format_live_tcn_preview_predictions(state: dict[str, object]) -> str:
-    stream_count = int(state.get("stream_count", 0))
-    row_count = int(state.get("row_count", 0))
-    show_motion = bool(state.get("show_motion", False))
-    predictions = state.get("predictions", {})
-    rows_by_hand = state.get("rows_by_hand", {})
-    if not isinstance(predictions, dict) or not predictions:
-        return f"TCN streams={stream_count} rows={row_count} warming"
-    parts = [f"TCN streams={stream_count} rows={row_count}"]
-    for hand_id, prediction in sorted(predictions.items()):
-        if not isinstance(prediction, CausalTcnLivePrediction):
-            continue
-        left = prediction.probabilities.get("stroke_left", 0.0)
-        right = prediction.probabilities.get("stroke_right", 0.0)
-        motion = ""
-        if show_motion and isinstance(rows_by_hand, dict):
-            row = rows_by_hand.get(hand_id)
-            dx = getattr(row, "palm_window_dx_per_hand_scale", None)
-            if isinstance(dx, float):
-                motion = f" dx={dx:.2f}"
-        parts.append(
-            f"{hand_id}:{_short_tcn_target(prediction.target)} "
-            f"{prediction.confidence:.2f} L={left:.2f} R={right:.2f}{motion}"
-        )
-    return " | ".join(parts)
-
-
-def _format_live_tcn_prediction(
-    prediction: CausalTcnLivePrediction,
-    *,
-    first_timestamp: float | None,
-) -> str:
-    relative = prediction.end_time
-    if first_timestamp is not None:
-        relative = prediction.end_time - first_timestamp
-    probabilities = _compact_probabilities(prediction.probabilities)
-    hand = f" hand={prediction.hand_id}" if prediction.hand_id else ""
-    return (
-        f"t={relative:7.3f}s{hand} target={prediction.target} "
-        f"confidence={prediction.confidence:.3f} {probabilities}"
-    )
-
-
-def _show_live_tcn_prediction(
-    prediction: CausalTcnLivePrediction,
-    *,
-    include_background: bool,
-    include_recovery: bool,
-    confidence_threshold: float,
-) -> bool:
-    if prediction.confidence < confidence_threshold:
-        return False
-    if prediction.target == "background":
-        return include_background
-    if _is_live_tcn_recovery_target(prediction.target):
-        return include_recovery
-    return True
-
-
-def _is_live_tcn_gesture_target(target: str) -> bool:
-    return target in {"swipe_left", "swipe_right", "stroke_left", "stroke_right"}
-
-
-def _is_live_tcn_recovery_target(target: str) -> bool:
-    return target in {"recovery", "reset", "release", "cooldown"}
-
-
-def _format_live_dtw_candidate(
-    candidate: GestureCandidate,
-    *,
-    first_timestamp: float | None,
-) -> str:
-    relative = candidate.timestamp
-    if first_timestamp is not None:
-        relative = candidate.timestamp - first_timestamp
-    distance = candidate.metadata.get("distance", "unknown")
-    threshold = candidate.metadata.get("threshold", "unknown")
-    if isinstance(distance, float):
-        distance = f"{distance:.3f}"
-    if isinstance(threshold, float):
-        threshold = f"{threshold:.3f}"
-    hand = f" hand={candidate.hand_id}" if candidate.hand_id else ""
-    return (
-        f"t={relative:7.3f}s{hand} target={candidate.name} "
-        f"confidence={candidate.confidence:.3f} distance={distance} threshold={threshold}"
-    )
-
-
-def _live_feature_streams(rows: list[object]) -> dict[str, list[object]]:
-    streams: dict[str, list[object]] = {}
-    for row in rows:
-        hand_id = str(getattr(row, "hand_id", ""))
-        tracking_present = int(getattr(row, "tracking_present", 0))
-        if not hand_id or tracking_present != 1:
-            continue
-        streams.setdefault(hand_id, []).append(row)
-    return streams
-
-
-def _compact_probabilities(probabilities: dict[str, float]) -> str:
-    return " ".join(
-        f"{_short_tcn_target(target)}={probability:.2f}"
-        for target, probability in sorted(probabilities.items())
-    )
-
-
-def _short_tcn_target(target: str) -> str:
-    return {
-        "background": "bg",
-        "swipe_left": "left",
-        "swipe_right": "right",
-        "stroke_left": "left",
-        "stroke_right": "right",
-    }.get(target, target)
-
-
-def _live_tcn_preview_status(state: dict[str, object]) -> str:
-    status = str(state["status"])
-    alert_until = float(state.get("alert_until", 0.0))
-    alert = str(state.get("alert", ""))
-    if alert and monotonic() <= alert_until:
-        return f"{status} | GESTURE {alert}"
-    return status
-
-
-def _live_dtw_preview_status(state: dict[str, object]) -> str:
-    status = str(state["status"])
-    alert_until = float(state.get("alert_until", 0.0))
-    alert = str(state.get("alert", ""))
-    if alert and monotonic() <= alert_until:
-        return f"{status} | GESTURE {alert}"
-    return status
 
 
 def _make_tracker(

@@ -153,11 +153,14 @@ Current context-reset task: do a staff-level review/refactor pass before recordi
 - [ ] Recollect targeted combo/chained swipe charts after the weak-label/decoder pass
 - [x] Run first event-decoder replay smokes on isolated holdout and chained DTW candidates
 - [x] Split offline TCN, label/features, and small system CLI commands out of `cli.py`
-- [ ] Run staff-level codebase review before targeted V2 data collection
-- [ ] Refactor oversized/unclear CLI, ML, analysis, feature, or gesture boundaries found in that review
+- [x] Run staff-level codebase review before targeted V2 data collection
+- [x] Refactor oversized/unclear CLI, ML, analysis, feature, or gesture boundaries found in that review
 - [ ] Remove or quarantine confirmed dead code with tests/docs updated
 - [ ] Confirm targeted V2 recording commands/protocol after cleanup
-- [ ] Continue no-behavior-change CLI refactor for live tracking/runtime/preview commands
+- [x] Continue no-behavior-change CLI refactor for live tracking/runtime/preview commands
+- [x] Centralize hand/no-hand feature stream grouping for DTW, motion, TCN datasets, and live preview
+- [x] Add V2 no-hand/tracking-drop evidence tests and keep no-hand rows background-only
+- [x] Run `uv run ruff check .` and `uv run pytest` for the cleanup chunk
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [ ] Run `ruff`, `pytest`, and replay evaluation smoke

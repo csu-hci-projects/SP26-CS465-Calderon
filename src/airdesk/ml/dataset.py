@@ -9,7 +9,13 @@ from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
 
-from airdesk.features import FrameFeatureRow
+from airdesk.features import (
+    NO_HAND_STREAM_ID,
+    FrameFeatureRow,
+    feature_stream_id,
+    group_indexed_feature_rows_by_stream,
+    is_tracked_feature_row,
+)
 from airdesk.labels import GestureLabelFile, load_label_file
 
 TCN_EVENT_TARGETS = ("background", "swipe_left", "swipe_right")
@@ -84,8 +90,6 @@ TCN_TARGET_MODES = ("event", "phase", "phase-stroke", "v2-evidence")
 TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
 DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE = 0.35
 DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY = 0.45
-NO_HAND_STREAM_ID = "__no_hand__"
-
 _INT_FIELDS = {
     "frame_index",
     "tracking_present",
@@ -371,7 +375,7 @@ def build_tcn_dataset_manifest(
                 ),
             )
         )
-        for stream_rows in _feature_streams(rows):
+        for stream_rows in group_indexed_feature_rows_by_stream(rows, include_no_hand=True):
             windows.extend(
                 _windows_for_source(
                     stream_rows,
@@ -661,7 +665,9 @@ def _v2_evidence_targets_for_rows(
             continue
         candidate_indices = [
             index
-            for index, frame_evidence in enumerate(evidence)
+            for index, (row, frame_evidence) in enumerate(zip(rows, evidence, strict=True))
+            if event.start_time <= row.timestamp <= event.end_time
+            and is_tracked_feature_row(row)
             if frame_evidence["intentional_motion"] > 0
         ]
         if not candidate_indices:
@@ -687,6 +693,14 @@ def _v2_evidence_for_row(
     motion_gate_min_dx_per_hand_scale: float,
     motion_gate_min_direction_consistency: float,
 ) -> dict[str, float]:
+    if not is_tracked_feature_row(row):
+        return {
+            "intentional_motion": 0.0,
+            "stroke_left": 0.0,
+            "stroke_right": 0.0,
+            "start": 0.0,
+            "end": 0.0,
+        }
     phase = (
         row.phase
         if row.phase and row.phase != "background"
@@ -818,16 +832,8 @@ def _windows_for_source(
     return windows
 
 
-def _feature_streams(rows: list[FrameFeatureRow]) -> list[list[tuple[int, FrameFeatureRow]]]:
-    """Split flat feature rows into independent hand/no-hand streams."""
-    streams: dict[str, list[tuple[int, FrameFeatureRow]]] = {}
-    for index, row in enumerate(rows):
-        streams.setdefault(_stream_id_for_row(row), []).append((index, row))
-    return [streams[key] for key in sorted(streams)]
-
-
 def _stream_id_for_row(row: FrameFeatureRow) -> str:
-    return row.hand_id if row.tracking_present else NO_HAND_STREAM_ID
+    return feature_stream_id(row)
 
 
 def _window_target(

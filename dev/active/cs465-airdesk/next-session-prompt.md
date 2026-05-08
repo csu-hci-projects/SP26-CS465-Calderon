@@ -109,38 +109,30 @@ Important evidence:
 - V2 manifest/evaluation cleanup from that smoke is in place: summaries include
   `evidence_frame_counts`, no-hand windows use explicit `__no_hand__` stream ids,
   and offline v2 evaluation decodes a deduplicated all-row causal-context stream.
-- A first behavior-preserving CLI cleanup pass has started. The public entrypoint
-  remains `airdesk.cli:app`, but offline TCN commands moved to
-  `src/airdesk/cli_tcn.py`, label/feature commands moved to
-  `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands moved
-  to `src/airdesk/cli_system.py`, and shared helper functions moved to
-  `src/airdesk/cli_support.py`. `src/airdesk/cli.py` still owns live
-  tracking/runtime/preview commands.
+- A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
+  helpers live in `src/airdesk/feature_streams.py` and are re-exported through
+  `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
+  the same stream grouping contract. V2 evidence generation keeps no-hand /
+  tracking-drop rows background-only and scopes `start` / `end` targets to
+  tracked intentional evidence inside each labeled event interval.
+- CLI cleanup has continued without changing the public entrypoint. The public
+  entrypoint remains `airdesk.cli:app`; offline TCN commands live in
+  `src/airdesk/cli_tcn.py`, label/feature commands live in
+  `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands live in
+  `src/airdesk/cli_system.py`, shared CLI helpers live in
+  `src/airdesk/cli_support.py`, and live preview/status formatting helpers live
+  in `src/airdesk/cli_live.py`. `src/airdesk/cli.py` still owns live
+  tracking/runtime/preview command bodies.
 
 Next-session assignment:
 
-Do a staff-level review and refactor pass before recording the new V2 data. The
-goal is to get the repo organized, testable, and boring enough that the targeted
-data collection session can focus on data quality rather than fighting code
-shape.
+Continue from the completed cleanup chunk. The repo is closer to targeted V2
+recording readiness, but do one quick status/review pass before any collection.
 
-1. Start with a review/reporting pass before editing. Look for real bugs, dead
-   code, overly long files/functions, poor ownership boundaries, duplicated
-   helpers, confusing command surfaces, unsafe live-action paths, weak tests, and
-   architecture drift from the Recognition V2 direction.
-2. Produce a short prioritized refactor plan after the review pass. Favor
-   FAANG-level maintainability: clear module ownership, small behavior-preserving
-   moves, tests around contracts, and no clever abstractions unless they remove
-   real complexity.
-3. Audit these boundaries first:
-   - `src/airdesk/cli.py` and extracted `src/airdesk/cli_*.py` modules
-   - `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`, and
-     `src/airdesk/analysis/evaluation.py`
-   - `src/airdesk/features/`, especially per-hand/no-hand stream handling
-   - `src/airdesk/gestures/`, especially motion/decoder/DTW overlap
-   - tests covering CLI help, manifest compatibility, replay evaluation, and
-     no-hand/tracking-drop behavior
-4. Refactor in meaningful chunks. Good likely candidates:
+1. Check `git status`, reread the active docs, and verify the latest tests if
+   the checkout has changed.
+2. Decide with Caden whether to proceed to the targeted V2 recording slice or do
+   one more cleanup chunk first. Reasonable remaining cleanup candidates:
    - continue splitting live tracking/runtime/preview responsibilities out of
      `src/airdesk/cli.py` without changing the public `airdesk.cli:app`
      entrypoint;
@@ -150,18 +142,18 @@ shape.
      unused;
    - add tests before changing behavior around replay, labels, feature rows, and
      decoder output.
-5. Preserve current behavior unless a bug is found and fixed intentionally. Keep
+3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
-6. Do not record the new V2 data during this review/refactor session unless the
-   cleanup is complete, tests pass, and Caden explicitly decides to proceed.
-7. End by leaving the repo ready for the targeted V2 recording slice: repeated
+4. Do not record the new V2 data unless tests pass and Caden explicitly decides
+   to proceed in that session.
+5. The targeted V2 recording slice should still be: repeated
    same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
    negatives, hand enters/leaves frame, near/far starts, and two visible hands
    with one resting.
-8. Update README/context/tasks/tracking-samples/next-session docs with whatever
+6. Update README/context/tasks/tracking-samples/next-session docs with whatever
    changes.
-9. Run `uv run ruff check .` and `uv run pytest`.
-10. Commit meaningful chunks and push to `origin/main`.
+7. Run `uv run ruff check .` and `uv run pytest`.
+8. Commit meaningful chunks and push to `origin/main`.
 
 Do not:
 

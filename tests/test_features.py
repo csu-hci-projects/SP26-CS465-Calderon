@@ -5,7 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from airdesk.features import FeatureRowStream, export_features_csv, extract_feature_rows
+from airdesk.features import (
+    NO_HAND_STREAM_ID,
+    FeatureRowStream,
+    export_features_csv,
+    extract_feature_rows,
+    group_feature_rows_by_stream,
+    group_indexed_feature_rows_by_stream,
+    is_tracked_feature_row,
+)
 from airdesk.labels import GesturePhaseLabel, init_label_file
 from airdesk.recording.jsonl import JsonlRecordingWriter
 from airdesk.state.types import (
@@ -159,6 +167,43 @@ def test_extract_feature_rows_preserve_no_hand_background_rows() -> None:
     assert rows[0].tracking_present == 0
     assert rows[0].hand_count == 0
     assert rows[0].hand_id == ""
+
+
+def test_feature_stream_helpers_split_tracked_and_no_hand_rows(
+    make_hand: Callable[[str], NormalizedHand],
+) -> None:
+    left = _with_hand_id(_move_hand(make_hand("open_palm"), x=0.3), "left-hand")
+    right = _with_hand_id(_move_hand(make_hand("open_palm"), x=0.7), "right-hand")
+    no_hand_metadata = FrameMetadata(
+        timestamp=1.2,
+        source_id="feature-test",
+        width=640,
+        height=480,
+        sequence=3,
+    )
+    rows = extract_feature_rows(
+        [
+            frame_with_hands(1.0, 1, left, right),
+            TrackingFrame(
+                timestamp=1.2,
+                source_id="feature-test",
+                frame=no_hand_metadata,
+                hands=(),
+            ),
+        ]
+    )
+
+    tracked_streams = group_feature_rows_by_stream(rows)
+    indexed_streams = group_indexed_feature_rows_by_stream(rows, include_no_hand=True)
+
+    assert [stream[0].hand_id for stream in tracked_streams] == ["left-hand", "right-hand"]
+    assert all(is_tracked_feature_row(row) for stream in tracked_streams for row in stream)
+    assert [stream[0][1].hand_id or NO_HAND_STREAM_ID for stream in indexed_streams] == [
+        NO_HAND_STREAM_ID,
+        "left-hand",
+        "right-hand",
+    ]
+    assert indexed_streams[0][0][1].tracking_present == 0
 
 
 def test_export_features_csv_writes_rows(
