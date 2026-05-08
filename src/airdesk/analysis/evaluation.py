@@ -357,9 +357,12 @@ def evaluate_tcn_v2_manifest(
 ) -> tuple[GestureEvaluation, ...]:
     """Evaluate TCN v2 decoder-facing evidence against labeled manifest sources."""
     manifest = load_tcn_dataset_manifest(manifest_path)
-    predictions = predict_causal_tcn_v2_manifest(
-        model_path=model_path,
-        manifest_path=manifest_path,
+    predictions = _dedupe_tcn_v2_predictions(
+        predict_causal_tcn_v2_manifest(
+            model_path=model_path,
+            manifest_path=manifest_path,
+            emit_all_rows=True,
+        )
     )
     predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
     for prediction in predictions:
@@ -441,6 +444,31 @@ def _decode_tcn_v2_predictions(
         for prediction in predictions
     ]
     return EventDecoder(config).decode(frames)
+
+
+def _dedupe_tcn_v2_predictions(
+    predictions: list[CausalTcnEvidencePrediction],
+) -> list[CausalTcnEvidencePrediction]:
+    """Keep one causal-context prediction for each source/hand/timestamp frame."""
+    selected: dict[tuple[str, str | None, str, float], CausalTcnEvidencePrediction] = {}
+    for prediction in predictions:
+        key = (
+            prediction.feature_path,
+            prediction.label_path,
+            prediction.hand_id,
+            prediction.timestamp,
+        )
+        existing = selected.get(key)
+        if existing is None or _context_seconds(prediction) > _context_seconds(existing):
+            selected[key] = prediction
+    return sorted(
+        selected.values(),
+        key=lambda item: (item.feature_path, item.timestamp, item.hand_id, item.sample_id),
+    )
+
+
+def _context_seconds(prediction: CausalTcnEvidencePrediction) -> float:
+    return max(0.0, prediction.timestamp - prediction.window_start)
 
 
 def evaluate_candidates(

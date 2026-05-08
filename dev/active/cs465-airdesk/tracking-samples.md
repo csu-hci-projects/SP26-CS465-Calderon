@@ -263,7 +263,15 @@ uv run airdesk gesture train-tcn-v2 --manifest data/models/gestures/tcn-v2-003-0
 uv run airdesk gesture evaluate-tcn-v2 --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --model data/models/gestures/tcn-v2-003-004-two-hand.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-v2-regression-summary.json --activation-threshold 0.35 --release-threshold 0.2 --min-peak-confidence 0.35 --cooldown-seconds 0.5
 ```
 
-This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps stroke evidence back through the replay event decoder. Use it on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
+This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps stroke evidence back through the replay event decoder. Manifest summaries report source-frame `evidence_frame_counts`, no-hand windows are explicit `__no_hand__` streams, and offline evaluation decodes a deduplicated all-row evidence stream. Use it on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
+
+First old-data TCN v2 smoke:
+
+- `sprint4-swipes-001` label-assigned v2 manifest: 24 sources, 760 windows, evidence frames `intentional_motion=208`, `stroke_left=104`, `stroke_right=104`, `start=16`, `end=16`.
+- `sprint4-swipes-001` motion-gated v2 manifest: evidence frames `intentional_motion=50`, `stroke_left=8`, `stroke_right=42`, `start=11`, `end=11`; useful as a diagnostic view, too sparse as current training truth.
+- 5-epoch label-assigned model trained cleanly but decoded poorly: at `0.35` activation/min-peak it matched `0/16` and produced 0 candidates; at permissive `0.30` thresholds it matched `1/16`, missed 15, produced 3 candidates and 2 false activations.
+- Applying that swipes-trained model to `sprint4-chained-003` matched `0/10` even at the permissive thresholds.
+- Interpretation: v2 plumbing works and catches the intended old-data failure modes, but the first quick model is underconfident/direction-confused. The next useful work is targeted V2 data and target/calibration improvement, not live wiring.
 
 Live two-hand TCN diagnostic preview:
 

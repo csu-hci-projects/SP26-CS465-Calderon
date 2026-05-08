@@ -141,7 +141,9 @@ Current context-reset task: evaluate the new deterministic motion-event baseline
 - [x] Add label-aware motion diagnostic rows for accepted/rejected replay evidence
 - [x] Start TCN v2 manifest/target/model surface with boundary/intent heads rather than window argmax only
 - [x] Add replay-only `train-tcn-v2` / `evaluate-tcn-v2` surfaces for decoder-facing evidence heads
-- [ ] Use old motion/DTW/TCN replay data as a V2 regression suite for known failures
+- [x] Use old motion/DTW/TCN replay data as a first V2 regression smoke for known failures
+- [x] Add V2 manifest/evaluation cleanup from the regression smoke: evidence-frame summaries, explicit no-hand stream windows, and deduped all-row causal-context event evaluation
+- [ ] Improve TCN v2 calibration/target balance after old-data underconfidence and direction confusion
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented
 - [ ] Add the next replay-only negative-motion/intent rejection check only if V2 needs it as an explicit proposal gate
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary

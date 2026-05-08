@@ -875,6 +875,44 @@ def test_gesture_build_tcn_dataset_cli_writes_manifest(tmp_path: Path) -> None:
     assert payload["summary"]["window_counts"]["swipe_left"] == 1
 
 
+def test_gesture_build_tcn_dataset_cli_reports_v2_evidence_counts(tmp_path: Path) -> None:
+    features_dir = tmp_path / "features"
+    features_dir.mkdir()
+    _write_feature_csv(
+        features_dir / "swipe-left-positive-001.csv",
+        events=("", "swipe_left", "swipe_left", ""),
+    )
+    output = tmp_path / "manifest.json"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "build-tcn-dataset",
+            "--features-dir",
+            str(features_dir),
+            "--out",
+            str(output),
+            "--target-mode",
+            "v2-evidence",
+            "--window-seconds",
+            "0.2",
+            "--stride-seconds",
+            "0.2",
+            "--min-rows",
+            "2",
+            "--min-gesture-fraction",
+            "0.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "evidence_frames=(" in result.stdout
+    assert "stroke_left=2" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["summary"]["evidence_frame_counts"]["stroke_left"] == 2
+
+
 def test_gesture_diagnose_features_cli_writes_report(tmp_path: Path) -> None:
     features_dir = tmp_path / "features"
     labels_dir = tmp_path / "labels"

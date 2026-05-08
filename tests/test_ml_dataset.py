@@ -12,6 +12,7 @@ from airdesk.analysis import (
     evaluate_tcn_manifest,
     evaluate_tcn_v2_manifest,
 )
+from airdesk.analysis.evaluation import _dedupe_tcn_v2_predictions
 from airdesk.features import FrameFeatureRow
 from airdesk.gestures.decoder import EventDecoderConfig
 from airdesk.labels import (
@@ -22,8 +23,10 @@ from airdesk.labels import (
     save_label_file,
 )
 from airdesk.ml import (
+    NO_HAND_STREAM_ID,
     TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
     TCN_V2_EVIDENCE_TARGETS,
+    CausalTcnEvidencePrediction,
     CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
     build_feature_diagnostics_report,
@@ -121,6 +124,62 @@ def test_build_tcn_manifest_keeps_two_hand_windows_separate(tmp_path: Path) -> N
     for window in manifest.windows:
         matrix = feature_window_matrix(window, feature_columns=("palm_x",))
         assert len(matrix) == 3
+
+
+def test_build_tcn_manifest_keeps_no_hand_windows_separate(tmp_path: Path) -> None:
+    features = tmp_path / "tracking-drop.csv"
+    _write_features(
+        features,
+        [
+            _row(
+                timestamp=1.0,
+                frame_index=0,
+                event="",
+                hand_id="",
+                tracking_present=0,
+                hand_count=0,
+            ),
+            _row(
+                timestamp=1.1,
+                frame_index=1,
+                event="",
+                hand_id="hand-0",
+                tracking_present=1,
+                hand_count=1,
+            ),
+            _row(
+                timestamp=1.2,
+                frame_index=2,
+                event="",
+                hand_id="",
+                tracking_present=0,
+                hand_count=0,
+            ),
+            _row(
+                timestamp=1.3,
+                frame_index=3,
+                event="",
+                hand_id="",
+                tracking_present=0,
+                hand_count=0,
+            ),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+    )
+
+    no_hand_window = next(
+        window for window in manifest.windows if window.hand_id == NO_HAND_STREAM_ID
+    )
+    matrix = feature_window_matrix(no_hand_window, feature_columns=manifest.feature_columns)
+    assert len(matrix) == no_hand_window.row_count
+    assert no_hand_window.target_frame_counts["background"] == no_hand_window.row_count
 
 
 def test_build_tcn_manifest_motion_gates_stationary_second_hand(tmp_path: Path) -> None:
@@ -544,6 +603,13 @@ def test_build_tcn_manifest_v2_evidence_targets_framewise_heads(tmp_path: Path) 
         "start",
         "end",
     )
+    assert manifest.sources[0].evidence_frame_counts == {
+        "intentional_motion": 3,
+        "stroke_left": 2,
+        "stroke_right": 0,
+        "start": 1,
+        "end": 1,
+    }
     assert manifest.windows[0].target == "stroke_left"
     frame_targets = feature_window_frame_targets(
         manifest.windows[0],
@@ -555,6 +621,13 @@ def test_build_tcn_manifest_v2_evidence_targets_framewise_heads(tmp_path: Path) 
     arrays = prepare_tcn_v2_training_arrays(manifest)
     assert arrays.lengths == (3,)
     assert arrays.frame_targets[0][1][1] == 1.0
+    assert manifest.to_dict()["summary"]["evidence_frame_counts"] == {
+        "intentional_motion": 3,
+        "stroke_left": 2,
+        "stroke_right": 0,
+        "start": 1,
+        "end": 1,
+    }
 
 
 def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path) -> None:
@@ -981,6 +1054,33 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
     assert evaluations[0].intended_events == 1
 
 
+def test_tcn_v2_prediction_dedupe_keeps_fullest_causal_context() -> None:
+    short_context = CausalTcnEvidencePrediction(
+        sample_id="window-002",
+        feature_path="features.csv",
+        label_path="labels.json",
+        hand_id="hand-0",
+        timestamp=1.0,
+        window_start=0.9,
+        window_end=1.2,
+        evidence={"stroke_left": 0.2},
+    )
+    long_context = CausalTcnEvidencePrediction(
+        sample_id="window-001",
+        feature_path="features.csv",
+        label_path="labels.json",
+        hand_id="hand-0",
+        timestamp=1.0,
+        window_start=0.5,
+        window_end=1.1,
+        evidence={"stroke_left": 0.8},
+    )
+
+    deduped = _dedupe_tcn_v2_predictions([short_context, long_context])
+
+    assert deduped == [long_context]
+
+
 def _write_features(path: Path, rows: list[FrameFeatureRow]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -1045,14 +1145,16 @@ def _row(
     phase: str = "",
     palm_x: float = 0.5,
     hand_id: str = "hand-0",
+    tracking_present: int = 1,
+    hand_count: int = 1,
     palm_window_dx_per_hand_scale: float | None = None,
 ) -> FrameFeatureRow:
     return FrameFeatureRow(
         frame_index=frame_index,
         timestamp=timestamp,
         dt=0.1 if frame_index else 0.0,
-        tracking_present=1,
-        hand_count=1,
+        tracking_present=tracking_present,
+        hand_count=hand_count,
         hand_id=hand_id,
         confidence=1.0,
         palm_x=palm_x,

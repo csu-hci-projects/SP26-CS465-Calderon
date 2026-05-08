@@ -228,10 +228,13 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> TCN v2 surface has started. Use the new v2 manifest/model/evaluation commands
-> to run old replay data as a regression suite for known failures, then collect a
-> targeted new continuous slice for V2 training/testing. Keep broad combo
-> collection and live desktop actions paused.
+> TCN v2 surface is implemented enough for replay smoke tests. The old replay
+> data confirms the surface is coherent but not yet a useful recognizer:
+> same-batch training on `sprint4-swipes-001` produced high frame accuracy, but
+> event decoding still matched only `0/16` at `0.35` thresholds and `1/16` with
+> permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`. Next,
+> improve V2 calibration/targets and collect a targeted continuous V2 slice
+> rather than sweeping thresholds or wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -245,8 +248,34 @@ Current TCN v2 implementation state:
 - `airdesk gesture evaluate-tcn-v2` maps stroke evidence through the existing
   replay event decoder and preserves intent/start/end evidence in candidate
   metadata. It is replay/evaluation tooling only.
+- V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
+  and intent evidence are visible even when the collapsed window display target
+  is `background`.
+- Offline V2 evaluation decodes a deduplicated all-row evidence stream, keeping
+  the prediction with the fullest causal context for each source/hand/timestamp.
+- No-hand windows are now represented explicitly as `__no_hand__` so old
+  tracking-drop/background rows do not accidentally load interleaved tracked-hand
+  rows during training.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
+
+Current TCN v2 old-data smoke:
+
+- `sprint4-swipes-001` label-assigned v2 manifest: 24 sources, 760 windows,
+  source-frame evidence counts `intentional_motion=208`, `stroke_left=104`,
+  `stroke_right=104`, `start=16`, `end=16`.
+- `sprint4-swipes-001` motion-gated v2 manifest is much sparser:
+  `intentional_motion=50`, `stroke_left=8`, `stroke_right=42`, `start=11`,
+  `end=11`; use it as a diagnostic view, not current training truth.
+- A 5-epoch quick model on the label-assigned swipes manifest trained cleanly
+  (`train_frame_accuracy=0.983`, `validation_frame_accuracy=0.983`), but event
+  replay at `activation/min_peak=0.35` decoded 0 candidates and matched `0/16`.
+- A permissive `0.30` replay pass on `sprint4-swipes-001` matched `1/16`, missed
+  `15`, produced `3` candidates and `2` false activations. Applying the same
+  model to `sprint4-chained-003` matched `0/10`.
+- Interpretation: the TCN v2 manifest/model/evaluation plumbing works, but the
+  first old-data model is underconfident and direction-confused. Treat this as
+  regression evidence for target/data design, not a quality result.
 
 Current CLI cleanup state:
 

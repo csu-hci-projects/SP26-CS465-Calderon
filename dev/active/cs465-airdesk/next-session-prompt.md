@@ -101,8 +101,14 @@ Important evidence:
 - The v2 targets are framewise decoder-facing evidence heads:
   `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`.
   Windows remain causal compute context, not semantic gesture labels.
-- The next slice should run old replay data through this surface as regression
-  coverage before collecting the new V2 data.
+- The first old-data v2 smoke is complete. It validated the surface but not the
+  recognizer: `sprint4-swipes-001` label-assigned evidence had healthy
+  source-frame counts, a 5-epoch model trained cleanly, but event replay matched
+  `0/16` at `0.35` thresholds and only `1/16` at permissive `0.30` thresholds;
+  `sprint4-chained-003` stayed `0/10`.
+- V2 manifest/evaluation cleanup from that smoke is in place: summaries include
+  `evidence_frame_counts`, no-hand windows use explicit `__no_hand__` stream ids,
+  and offline v2 evaluation decodes a deduplicated all-row causal-context stream.
 - A first behavior-preserving CLI cleanup pass has started. The public entrypoint
   remains `airdesk.cli:app`, but offline TCN commands moved to
   `src/airdesk/cli_tcn.py`, label/feature commands moved to
@@ -126,20 +132,24 @@ Next-session assignment:
    causal per-hand context windows, one shared model shape applied independently
    to each `hand_id`, and decoder-facing evidence outputs instead of one argmax
    gesture label per semantic window.
-5. Use old replay data as a regression suite, not final proof:
-   `sprint4-swipes-001`, `sprint4-chained-003`, and motion diagnostic JSON for
-   sign convention, weak-left/tracking-drop behavior, negative-motion false
-   activations, and repeated fires.
-6. After the TCN v2 regression check, plan or collect a small targeted
+5. Treat old replay data as regression coverage, not final proof. The first v2
+   smoke says the path is coherent but underconfident/direction-confused on old
+   data.
+6. Improve the next V2 target/calibration/data plan before collecting: repeated
+   events need enough positive frame evidence, direction heads need separation,
+   and negatives need intentional-motion rejection.
+7. Plan or collect a small targeted
    continuous V2 training/testing slice: repeated same-direction swipes,
    alternating swipes, weak/tiny lefts, natural desk-motion negatives, hand
    enters/leaves frame, near/far starts, and two visible hands with one resting.
-7. Keep broad combo collection paused until that targeted V2 slice has
+8. Keep broad combo collection paused until that targeted V2 slice has
    event-level replay evidence.
-8. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
-9. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
-10. Run `uv run ruff check .` and `uv run pytest`.
-11. Commit and push.
+9. Keep all dynamic swipe outputs in replay/diagnostic/preview surfaces only.
+10. Continue behavior-preserving CLI refactors only if they unblock the V2 work;
+    `src/airdesk/cli.py` still owns live tracking/runtime/preview paths.
+11. Update README/context/tasks/tracking-samples/next-session docs with whatever changes.
+12. Run `uv run ruff check .` and `uv run pytest`.
+13. Commit and push.
 
 Do not:
 

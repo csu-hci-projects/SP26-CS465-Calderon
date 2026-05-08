@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import asdict, dataclass, fields
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +84,7 @@ TCN_TARGET_MODES = ("event", "phase", "phase-stroke", "v2-evidence")
 TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
 DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE = 0.35
 DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY = 0.45
+NO_HAND_STREAM_ID = "__no_hand__"
 
 _INT_FIELDS = {
     "frame_index",
@@ -128,6 +130,7 @@ class TcnFeatureSource:
     end_time: float | None
     duration_seconds: float
     target_frame_counts: dict[str, int]
+    evidence_frame_counts: dict[str, int] = dataclass_field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -146,6 +149,10 @@ class TcnFeatureSource:
             target_frame_counts={
                 str(target): int(count)
                 for target, count in data.get("target_frame_counts", {}).items()
+            },
+            evidence_frame_counts={
+                str(target): int(count)
+                for target, count in data.get("evidence_frame_counts", {}).items()
             },
         )
 
@@ -357,6 +364,11 @@ def build_tcn_dataset_manifest(
                 end_time=rows[-1].timestamp if rows else None,
                 duration_seconds=_duration(rows),
                 target_frame_counts=_target_counts(target_by_row, resolved_targets),
+                evidence_frame_counts=(
+                    _evidence_counts(evidence_by_row, evidence_targets)
+                    if evidence_by_row is not None
+                    else {}
+                ),
             )
         )
         for stream_rows in _feature_streams(rows):
@@ -439,7 +451,9 @@ def feature_window_matrix(
 ) -> list[list[float]]:
     """Load numeric feature values for one manifest window."""
     rows = load_feature_rows_csv(Path(window.feature_path))[window.start_row : window.end_row]
-    if window.hand_id:
+    if window.hand_id == NO_HAND_STREAM_ID:
+        rows = [row for row in rows if row.tracking_present == 0]
+    elif window.hand_id:
         rows = [row for row in rows if row.hand_id == window.hand_id]
     return [[_numeric_feature_value(row, column) for column in feature_columns] for row in rows]
 
@@ -462,17 +476,23 @@ def summarize_tcn_manifest(manifest: TcnDatasetManifest) -> dict[str, Any]:
     """Return compact count totals for display and JSON exports."""
     window_counts = {target: 0 for target in manifest.targets}
     frame_counts = {target: 0 for target in manifest.targets}
+    evidence_frame_counts = {target: 0 for target in manifest.evidence_targets}
     for source in manifest.sources:
         for target, count in source.target_frame_counts.items():
             frame_counts[target] += count
+        for target, count in source.evidence_frame_counts.items():
+            evidence_frame_counts[target] += count
     for window in manifest.windows:
         window_counts[window.target] += 1
-    return {
+    summary = {
         "source_count": len(manifest.sources),
         "window_count": len(manifest.windows),
         "window_counts": window_counts,
         "target_frame_counts": frame_counts,
     }
+    if manifest.evidence_targets:
+        summary["evidence_frame_counts"] = evidence_frame_counts
+    return summary
 
 
 def _feature_row_from_csv(row: dict[str, str]) -> FrameFeatureRow:
@@ -776,7 +796,7 @@ def _windows_for_source(
                     sample_id=f"window-{sample_number:06d}",
                     feature_path=str(feature_path),
                     label_path=str(label_path) if label_path is not None else None,
-                    hand_id=rows[start_index].hand_id,
+                    hand_id=_stream_id_for_row(rows[start_index]),
                     start_row=indexed_rows[start_index][0],
                     end_row=indexed_rows[end_index - 1][0] + 1,
                     start_time=start_time,
@@ -802,9 +822,12 @@ def _feature_streams(rows: list[FrameFeatureRow]) -> list[list[tuple[int, FrameF
     """Split flat feature rows into independent hand/no-hand streams."""
     streams: dict[str, list[tuple[int, FrameFeatureRow]]] = {}
     for index, row in enumerate(rows):
-        stream_id = row.hand_id if row.tracking_present else "__no_hand__"
-        streams.setdefault(stream_id, []).append((index, row))
+        streams.setdefault(_stream_id_for_row(row), []).append((index, row))
     return [streams[key] for key in sorted(streams)]
+
+
+def _stream_id_for_row(row: FrameFeatureRow) -> str:
+    return row.hand_id if row.tracking_present else NO_HAND_STREAM_ID
 
 
 def _window_target(
@@ -825,6 +848,18 @@ def _target_counts(target_by_row: list[str], targets: tuple[str, ...]) -> dict[s
     counts = {target: 0 for target in targets}
     for target in target_by_row:
         counts[target if target in counts else "background"] += 1
+    return counts
+
+
+def _evidence_counts(
+    evidence_by_row: list[dict[str, float]],
+    evidence_targets: tuple[str, ...],
+) -> dict[str, int]:
+    counts = {target: 0 for target in evidence_targets}
+    for frame_evidence in evidence_by_row:
+        for target in evidence_targets:
+            if frame_evidence.get(target, 0.0) > 0:
+                counts[target] += 1
     return counts
 
 

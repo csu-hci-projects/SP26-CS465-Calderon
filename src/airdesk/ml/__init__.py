@@ -1,6 +1,7 @@
 """Optional machine-learning scaffolding for AirDesk."""
 
 from airdesk.ml.dataset import (
+    NO_HAND_STREAM_ID,
     TCN_FEATURE_COLUMNS,
     TCN_FEATURE_PRESETS,
     TCN_PHASE_TARGETS,
@@ -55,6 +56,7 @@ from airdesk.ml.train import (
 
 __all__ = [
     "TCN_FEATURE_COLUMNS",
+    "NO_HAND_STREAM_ID",
     "TCN_FEATURE_PRESETS",
     "TCN_PHASE_TARGETS",
     "TCN_STREAM_INVARIANT_FEATURE_COLUMNS",

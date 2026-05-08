@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from airdesk.ml.dataset import (
+    NO_HAND_STREAM_ID,
     TcnDatasetManifest,
     TcnWindowSample,
     feature_window_frame_targets,
@@ -800,7 +801,9 @@ def _window_rows(window: TcnWindowSample) -> list[Any]:
     window_rows = load_feature_rows_csv(Path(window.feature_path))[
         window.start_row : window.end_row
     ]
-    if window.hand_id:
+    if window.hand_id == NO_HAND_STREAM_ID:
+        window_rows = [row for row in window_rows if row.tracking_present == 0]
+    elif window.hand_id:
         window_rows = [row for row in window_rows if row.hand_id == window.hand_id]
     return window_rows
 

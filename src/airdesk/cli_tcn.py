@@ -111,11 +111,18 @@ def gesture_build_tcn_dataset(
     window_counts = " ".join(
         f"{target}={count}" for target, count in summary["window_counts"].items()
     )
+    evidence_counts = summary.get("evidence_frame_counts")
+    evidence_suffix = ""
+    if evidence_counts:
+        formatted_evidence = " ".join(
+            f"{target}={count}" for target, count in evidence_counts.items()
+        )
+        evidence_suffix = f" evidence_frames=({formatted_evidence})"
     typer.echo(
         f"wrote tcn_manifest={out} sources={summary['source_count']} "
         f"windows={summary['window_count']} preset={manifest.feature_preset} "
         f"target_mode={manifest.target_mode} target_assignment={manifest.target_assignment} "
-        f"{window_counts}"
+        f"{window_counts}{evidence_suffix}"
     )
 
 
