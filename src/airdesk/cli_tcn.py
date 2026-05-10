@@ -60,7 +60,7 @@ def gesture_build_tcn_dataset(
     ] = 0.35,
     feature_preset: Annotated[
         str,
-        typer.Option(help="Feature preset: legacy or stream-invariant."),
+        typer.Option(help="Feature preset: legacy, stream-invariant, or stream-invariant-v2."),
     ] = "legacy",
     target_mode: Annotated[
         str,

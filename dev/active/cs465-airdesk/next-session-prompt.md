@@ -182,14 +182,15 @@ longer looks like the only blocker, but the old-data source holdout now proves
 the same-source replay result was optimistic: `airdesk gesture holdout-tcn-v2`
 on `sprint4-swipes-001` trained on takes 001-006, tested on 007-008, and scored
 `2/4` held-out swipes with `5` false activations despite strong train/validation
-frame accuracy. Live wrist-twist failures fit that story: the stream-invariant
-model does not consume absolute `palm_x/y/z`, but wrist rotation can still move
-the projected palm center, normalized dx, peak x velocity, direction
-consistency, and finger-relative features enough to look swipe-like. The next
-high-value gate is a targeted held-out V2 slice with explicit wrist-twist /
-desk-motion negatives plus near/far and left/right frame positions, then
-negative-motion intent rejection and repeated-fire/boundary timing fixes from
-that evidence. Keep learned swipes preview/replay only.
+frame accuracy. The feature-contract audit is complete: new V2 manifests should
+use `--feature-preset stream-invariant-v2`, which excludes absolute palm
+position, raw image-space palm motion, `hand_scale`, `hand_count`, and unscaled
+finger/pinch geometry from classifier input while preserving those fields in
+logs/dashboard diagnostics. The next high-value gate is a targeted held-out V2
+slice with explicit wrist-twist / desk-motion negatives plus near/far and
+left/center/right frame positions as invariance checks, then negative-motion
+intent rejection and repeated-fire/boundary timing fixes from that evidence.
+Keep learned swipes preview/replay only.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
@@ -223,9 +224,10 @@ that evidence. Keep learned swipes preview/replay only.
 3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
 4. Do not record broad combo data. A targeted V2 slice is now justified only if
-   it is explicitly designed as train/test data with held-out sources and
+   it is explicitly designed as train/val/test data with held-out sources and
    includes wrist-twist/lightbulb negatives, desk motion, hand enters/leaves
-   frame, near/far starts, and left/right frame-position variants.
+   frame, near/far starts, and left/center/right frame-position variants as
+   invariance checks rather than labels.
 5. The targeted V2 recording slice should still be: repeated
    same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
    negatives, hand enters/leaves frame, near/far starts, and two visible hands

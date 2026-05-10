@@ -236,13 +236,32 @@ Current next step:
 > `airdesk gesture holdout-tcn-v2` source split is much weaker: on
 > `sprint4-swipes-001`, training on takes 001-006 and testing on 007-008 scored
 > `2/4` held-out swipes with `5` false activations. Caden's live wrist-twist
-> false positives fit this: the current stream-invariant model does not consume
-> absolute `palm_x/y/z`, but projected wrist rotation can still perturb normalized
-> dx, peak x velocity, direction consistency, hand scale, and finger-relative
-> motion. Do not collect broad combo data yet. The next gate is a targeted V2
-> train/test slice with explicit wrist-twist/desk-motion negatives, near/far
-> starts, left/right frame positions, and held-out files. Keep live actions
-> dry-run/disabled.
+> false positives fit this: the older schema-2 `stream-invariant` model did not
+> consume absolute `palm_x/y/z`, but projected wrist rotation could still
+> perturb raw image-space motion, hand scale, and unscaled finger-relative
+> motion. That audit is now complete: the new classifier preset for targeted V2
+> collection is `stream-invariant-v2`. It keeps diagnostic absolute/scale fields
+> in exported rows and live dashboard logs, but excludes them from model input.
+> Do not collect broad combo data yet. The next gate is a targeted V2 train/test
+> slice with explicit wrist-twist/desk-motion negatives, near/far and
+> left/center/right frame positions as invariance checks, and held-out files.
+> Keep live actions dry-run/disabled.
+
+Current V2 feature contract:
+
+- `stream-invariant-v2` is the default preset for new V2 classifier manifests.
+- It excludes absolute `palm_x`, `palm_y`, `palm_z`, raw `palm_vx` /
+  `palm_vy` / `palm_speed` / acceleration, raw `palm_window_dx`, raw
+  `palm_window_peak_abs_vx`, `hand_scale`, `hand_count`, and unscaled
+  finger/pinch distances or velocities.
+- It includes timing and quality/mask fields (`dt`, `tracking_present`,
+  `confidence`), hand-scale-normalized palm motion, hand-scale-normalized
+  trailing displacement/peak velocity, direction consistency, palm-centered
+  hand-scale-normalized index/pinch geometry, and simple finger-count shape
+  features.
+- The older `stream-invariant` preset remains available for compatibility with
+  old replay/regression work, but it should not be the default for the clean V2
+  collection pass because it still feeds raw image-space motion and scale.
 
 Current TCN v2 implementation state:
 
@@ -455,7 +474,7 @@ Caden's live `watch-tcn` test showed that `swipe_left` works better than `swipe_
 
 The first continuous-spotting implementation pass is now in place:
 
-- TCN manifests support `--feature-preset stream-invariant`, which excludes absolute `palm_x`, `palm_y`, and `palm_z`.
+- TCN manifests support `--feature-preset stream-invariant-v2`, which excludes absolute palm position, raw image-space motion, raw hand scale/count leakage, and unscaled finger/pinch geometry for new V2 classifier work. The older `stream-invariant` preset remains available for replay compatibility.
 - TCN manifests support `--target-mode phase`, with default targets `background`, `stroke_left`, `stroke_right`, and `recovery`.
 - Label files accept `recovery` / `reset` phases, and `airdesk label add-sequence` can create coarse ordered L/R stroke+recovery labels for chained sessions when exact timestamps are unavailable.
 - `airdesk gesture evaluate-tcn --event-decoder` and `airdesk gesture decode-candidates` add a replayable hysteresis/peak/cooldown decoder over probability or candidate streams.

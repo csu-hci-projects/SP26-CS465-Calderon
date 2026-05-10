@@ -261,7 +261,7 @@ Use `--target-assignment motion-gated` for two-hand chart manifests. It keeps th
 TCN v2 replay command shape:
 
 ```bash
-uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --feature-preset stream-invariant --target-mode v2-evidence --target-assignment motion-gated --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
+uv run airdesk gesture build-tcn-dataset --features-dir data/features/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --labels-dir data/labels/sprint4-gpu-swipes-003-004-two-hand-shared-tcn --out data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --feature-preset stream-invariant-v2 --target-mode v2-evidence --target-assignment motion-gated --window-seconds 0.8 --stride-seconds 0.2 --min-rows 4 --min-gesture-fraction 0.35
 uv run airdesk gesture train-tcn-v2 --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --out data/models/gestures/tcn-v2-003-004-two-hand.pt --epochs 25 --batch-size 32 --hidden-channels 32 --levels 3 --dropout 0.10 --positive-weight-cap 30 --boundary-positive-weight-multiplier 2.0 --focal-gamma 1.0 --validation-fraction 0.2 --seed 7
 uv run airdesk gesture evaluate-tcn-v2 --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --model data/models/gestures/tcn-v2-003-004-two-hand.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-v2-regression-summary.json --activation-threshold 0.35 --release-threshold 0.2 --min-peak-confidence 0.35 --cooldown-seconds 0.5 --early-match-tolerance-seconds 0.25
 uv run airdesk gesture diagnose-tcn-v2-events --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --model data/models/gestures/tcn-v2-003-004-two-hand.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-v2-regression-diagnostics.json --activation-threshold 0.35 --release-threshold 0.2 --min-peak-confidence 0.35 --cooldown-seconds 0.5 --early-match-tolerance-seconds 0.25
@@ -373,12 +373,28 @@ uv run airdesk label add-sequence data/labels/sprint4-chained-003/chained-struct
 
 This creates evenly spaced stroke/recovery phases and gesture events. It is intended for quick replay scoring and later weak-alignment experiments; refine timestamps manually before treating the labels as final training truth.
 
-Position/distance should not become the gesture identity. When collecting model data, deliberately vary setup after a few takes:
+Position/distance should not become the gesture identity. The current V2
+classifier preset is `stream-invariant-v2`, which excludes absolute palm
+position, raw image-space motion, `hand_scale`, `hand_count`, and unscaled
+finger/pinch distances from model input. Those fields should remain in
+dashboard/JSONL diagnostics, but they are not classifier features for the clean
+V2 slice.
+
+When collecting model data, deliberately vary setup after a few takes as an
+invariance check, not as a class label:
 
 - hand starts left/center/right in frame,
 - camera sees the hand close/far,
 - elbow/arm posture changes,
 - lighting and background remain normal rather than lab-perfect.
+
+The targeted held-out V2 slice should use source/session-level train/val/test
+splits, never random windows. Include clean left/right swipes, weak/tiny swipes,
+fast and slow swipes, repeated same-direction swipes, alternating swipes, hand
+entering/leaving frame, near/far and left/center/right frame-position
+invariance checks, wrist-twist/lightbulb negatives, normal desk motion,
+keyboard/phone/cup/scratch/headset motion, and takes with a resting second hand
+visible. Do not collect broad combo data in this pass.
 
 Do not wire any recognizer into live desktop actions based on these recordings alone. Use them to evaluate false activations, missed gestures, repeated fires, and latency in replay.
 

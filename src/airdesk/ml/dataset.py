@@ -81,10 +81,32 @@ TCN_STREAM_INVARIANT_FEATURE_COLUMNS = (
     "extended_fingers",
     "folded_fingers",
 )
+TCN_STREAM_INVARIANT_V2_FEATURE_COLUMNS = (
+    "dt",
+    "tracking_present",
+    "confidence",
+    "palm_vx_per_hand_scale",
+    "palm_vy_per_hand_scale",
+    "palm_speed_per_hand_scale",
+    "palm_ax_per_hand_scale",
+    "palm_ay_per_hand_scale",
+    "palm_window_dx_per_hand_scale",
+    "palm_window_peak_abs_vx_per_hand_scale",
+    "palm_window_direction_consistency",
+    "index_rel_x_per_hand_scale",
+    "index_rel_y_per_hand_scale",
+    "index_rel_vx_per_hand_scale",
+    "index_rel_vy_per_hand_scale",
+    "pinch_distance_per_hand_scale",
+    "pinch_velocity_per_hand_scale",
+    "extended_fingers",
+    "folded_fingers",
+)
 TCN_FEATURE_COLUMNS = TCN_LEGACY_FEATURE_COLUMNS
 TCN_FEATURE_PRESETS = {
     "legacy": TCN_LEGACY_FEATURE_COLUMNS,
     "stream-invariant": TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
+    "stream-invariant-v2": TCN_STREAM_INVARIANT_V2_FEATURE_COLUMNS,
 }
 TCN_TARGET_MODES = ("event", "phase", "phase-stroke", "v2-evidence")
 TCN_TARGET_ASSIGNMENTS = ("label", "motion-gated")
@@ -120,6 +142,18 @@ _FLOAT_FIELDS = {
     "pinch_distance",
     "pinch_velocity",
     "hand_scale",
+    "palm_vx_per_hand_scale",
+    "palm_vy_per_hand_scale",
+    "palm_speed_per_hand_scale",
+    "palm_ax_per_hand_scale",
+    "palm_ay_per_hand_scale",
+    "palm_window_peak_abs_vx_per_hand_scale",
+    "index_rel_x_per_hand_scale",
+    "index_rel_y_per_hand_scale",
+    "index_rel_vx_per_hand_scale",
+    "index_rel_vy_per_hand_scale",
+    "pinch_distance_per_hand_scale",
+    "pinch_velocity_per_hand_scale",
 }
 
 

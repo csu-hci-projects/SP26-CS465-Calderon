@@ -44,6 +44,18 @@ class FrameFeatureRow:
     folded_fingers: int
     phase: str
     event: str
+    palm_vx_per_hand_scale: float = 0.0
+    palm_vy_per_hand_scale: float = 0.0
+    palm_speed_per_hand_scale: float = 0.0
+    palm_ax_per_hand_scale: float = 0.0
+    palm_ay_per_hand_scale: float = 0.0
+    palm_window_peak_abs_vx_per_hand_scale: float = 0.0
+    index_rel_x_per_hand_scale: float = 0.0
+    index_rel_y_per_hand_scale: float = 0.0
+    index_rel_vx_per_hand_scale: float = 0.0
+    index_rel_vy_per_hand_scale: float = 0.0
+    pinch_distance_per_hand_scale: float = 0.0
+    pinch_velocity_per_hand_scale: float = 0.0
 
     def to_dict(self) -> dict[str, str | int | float]:
         return asdict(self)
@@ -190,6 +202,7 @@ def _row_for_frame(
     pinch_distance = _pinch_distance(hand)
     pinch_velocity = (pinch_distance - history.pinch_distance) / dt if dt > 0 else 0.0
     hand_scale = max(0.0, hand.bbox[2] - hand.bbox[0])
+    palm_speed = (palm_vx**2 + palm_vy**2) ** 0.5
     window_motion = _update_window_motion(
         history,
         timestamp=frame.timestamp,
@@ -223,7 +236,7 @@ def _row_for_frame(
         palm_z=palm_z,
         palm_vx=palm_vx,
         palm_vy=palm_vy,
-        palm_speed=(palm_vx**2 + palm_vy**2) ** 0.5,
+        palm_speed=palm_speed,
         palm_ax=palm_ax,
         palm_ay=palm_ay,
         palm_window_dx=window_motion[0],
@@ -241,6 +254,21 @@ def _row_for_frame(
         folded_fingers=folded,
         phase=phase,
         event=event,
+        palm_vx_per_hand_scale=_per_hand_scale(palm_vx, hand_scale),
+        palm_vy_per_hand_scale=_per_hand_scale(palm_vy, hand_scale),
+        palm_speed_per_hand_scale=_per_hand_scale(palm_speed, hand_scale),
+        palm_ax_per_hand_scale=_per_hand_scale(palm_ax, hand_scale),
+        palm_ay_per_hand_scale=_per_hand_scale(palm_ay, hand_scale),
+        palm_window_peak_abs_vx_per_hand_scale=_per_hand_scale(
+            window_motion[2],
+            hand_scale,
+        ),
+        index_rel_x_per_hand_scale=_per_hand_scale(index_rel_x, hand_scale),
+        index_rel_y_per_hand_scale=_per_hand_scale(index_rel_y, hand_scale),
+        index_rel_vx_per_hand_scale=_per_hand_scale(index_rel_vx, hand_scale),
+        index_rel_vy_per_hand_scale=_per_hand_scale(index_rel_vy, hand_scale),
+        pinch_distance_per_hand_scale=_per_hand_scale(pinch_distance, hand_scale),
+        pinch_velocity_per_hand_scale=_per_hand_scale(pinch_velocity, hand_scale),
     )
 
 
@@ -309,6 +337,10 @@ def _pinch_distance(hand: NormalizedHand) -> float:
     thumb = landmarks[THUMB_TIP]
     index = landmarks[INDEX_TIP]
     return dist((thumb.x, thumb.y, thumb.z), (index.x, index.y, index.z))
+
+
+def _per_hand_scale(value: float, hand_scale: float) -> float:
+    return value / hand_scale if hand_scale > 0 else 0.0
 
 
 def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:

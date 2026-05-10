@@ -135,6 +135,35 @@ Near-term features:
 
 Important: do not use raw dx sign as ground truth until mirrored-preview and camera-coordinate conventions are verified.
 
+### V2 Classifier Feature Contract
+
+The current collection-ready preset is `stream-invariant-v2`. It was added after
+auditing the older `stream-invariant` preset, which excluded absolute
+`palm_x/y/z` but still fed raw image-space motion, `hand_scale`, and unscaled
+finger/pinch geometry into the model.
+
+`stream-invariant-v2` excludes:
+
+- absolute palm position: `palm_x`, `palm_y`, `palm_z`;
+- raw projected palm motion: `palm_vx`, `palm_vy`, `palm_speed`, accelerations,
+  raw `palm_window_dx`, and raw `palm_window_peak_abs_vx`;
+- setup/scale leakage: `hand_scale` and `hand_count`;
+- unscaled finger/pinch distances and velocities.
+
+`stream-invariant-v2` includes:
+
+- `dt`, `tracking_present`, and tracker `confidence`;
+- hand-scale-normalized palm velocity, speed, acceleration, trailing
+  displacement, and trailing peak x velocity;
+- palm-window direction consistency;
+- palm-centered hand-scale-normalized index-tip and pinch geometry;
+- simple finger-count shape features.
+
+Keep absolute position, raw scale, raw motion, and hand count in exported rows,
+dashboard diagnostics, and JSONL logs. They are essential for debugging tracker
+artifacts and false activations, but they are not gesture identity inputs for
+the classifier unless a later evidence review explicitly reintroduces one.
+
 ### Motion Activity Proposal
 
 Before TCN v2, build a deterministic motion-event baseline from the features AirDesk already exports.
@@ -422,12 +451,12 @@ legacy TCN holdout. On `sprint4-swipes-001`, the schema-2 source holdout trained
 on takes 001-006 and tested on takes 007-008 scored `2/4` held-out swipes with
 `5` false activations, despite train frame accuracy around `0.986` and validation
 frame accuracy around `0.976`. Live wrist-twist false positives are plausible
-from the current feature geometry: the model does not use absolute `palm_x`,
-`palm_y`, or `palm_z` when trained with `stream-invariant`, but projected wrist
-rotation can still perturb normalized palm dx, peak horizontal velocity,
-direction consistency, hand scale, and finger-relative features. `watch-tcn-v2`
-now exposes those motion features in the dashboard and JSONL logs. Next data
-should be targeted and held out, not broad combo collection.
+from the older feature geometry: `stream-invariant` did not use absolute
+`palm_x`, `palm_y`, or `palm_z`, but projected wrist rotation could still
+perturb raw image-space motion, hand scale, and unscaled finger-relative
+features. `stream-invariant-v2` removes those fields from classifier input while
+keeping them visible in the dashboard and JSONL logs. Next data should be
+targeted and held out, not broad combo collection.
 
 ## Evaluation Metrics
 

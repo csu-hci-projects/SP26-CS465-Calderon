@@ -152,9 +152,10 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Replace the cramped `watch-tcn-v2` camera-only preview with a resizable no-action live dashboard that shows webcam landmarks, per-hand evidence bars, decoded-gesture history, emit/peak delay, and tracker timing
 - [x] Add source-level `airdesk gesture holdout-tcn-v2` and run it on `sprint4-swipes-001`; first schema-2 holdout scored 2/4 held-out swipes with 5 false activations, confirming same-source replay was optimistic
 - [x] Add live TCN v2 dashboard/JSONL motion diagnostics for position, hand scale, normalized dx, peak velocity, and direction consistency so wrist-twist/desk-motion false positives are inspectable
+- [x] Audit and tighten the V2 feature preset so the clean collection pass uses `stream-invariant-v2` instead of raw image-space motion/scale features
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay and source holdout still fire on normal desk motion
 - [ ] Tighten TCN v2 repeated-fire/boundary timing after schema-2 chained replay still has 3 repeated fires
-- [ ] Plan and collect a targeted continuous V2 data slice with true held-out files and explicit wrist-twist/lightbulb, hand repositioning, near/far, and left/right frame-position negatives
+- [ ] Plan and collect a targeted continuous V2 data slice with true held-out files and explicit wrist-twist/lightbulb, hand repositioning, near/far and left/center/right frame-position invariance checks, weak/tiny swipes, fast/slow swipes, repeated same-direction swipes, alternating swipes, hand enters/leaves frame, normal desk/keyboard/phone/cup/scratch/headset motion, and a resting second hand visible
 - [ ] Add the next replay-only negative-motion/intent rejection check only if V2 needs it as an explicit proposal gate
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary
 - [ ] Tighten active-hand weak labels and timestamp alignment using 003+004 before collecting more broad combo data

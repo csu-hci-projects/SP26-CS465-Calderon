@@ -31,6 +31,7 @@ from airdesk.labels import (
 from airdesk.ml import (
     NO_HAND_STREAM_ID,
     TCN_STREAM_INVARIANT_FEATURE_COLUMNS,
+    TCN_STREAM_INVARIANT_V2_FEATURE_COLUMNS,
     TCN_V2_EVIDENCE_TARGETS,
     CausalTcnEvidencePrediction,
     CausalTcnLivePredictor,
@@ -557,6 +558,57 @@ def test_build_tcn_manifest_supports_stream_invariant_phase_targets(tmp_path: Pa
     assert manifest.feature_preset == "stream-invariant"
     assert manifest.target_mode == "phase"
     assert manifest.windows[0].target == "stroke_left"
+
+
+def test_stream_invariant_v2_feature_preset_excludes_raw_position_and_scale_leaks(
+    tmp_path: Path,
+) -> None:
+    features = tmp_path / "chained.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="stroke_left"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_left"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="stroke_left"),
+        ],
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.5,
+        feature_preset="stream-invariant-v2",
+        target_mode="phase",
+    )
+    forbidden_columns = {
+        "palm_x",
+        "palm_y",
+        "palm_z",
+        "palm_vx",
+        "palm_vy",
+        "palm_speed",
+        "palm_ax",
+        "palm_ay",
+        "palm_window_dx",
+        "palm_window_peak_abs_vx",
+        "index_rel_x",
+        "index_rel_y",
+        "index_rel_vx",
+        "index_rel_vy",
+        "pinch_distance",
+        "pinch_velocity",
+        "hand_scale",
+        "hand_count",
+    }
+
+    assert manifest.feature_preset == "stream-invariant-v2"
+    assert manifest.feature_columns == TCN_STREAM_INVARIANT_V2_FEATURE_COLUMNS
+    assert forbidden_columns.isdisjoint(manifest.feature_columns)
+    assert "palm_window_dx_per_hand_scale" in manifest.feature_columns
+    assert "palm_window_peak_abs_vx_per_hand_scale" in manifest.feature_columns
+    assert "pinch_distance_per_hand_scale" in manifest.feature_columns
 
 
 def test_build_tcn_manifest_phase_stroke_targets_treat_recovery_as_background(
@@ -1706,10 +1758,20 @@ def _row(
     hand_count: int = 1,
     palm_window_dx_per_hand_scale: float | None = None,
 ) -> FrameFeatureRow:
+    dt = 0.1 if frame_index else 0.0
+    palm_vx = 1.0 if frame_index else 0.0
+    palm_vy = 0.0
+    palm_speed = 1.0 if frame_index else 0.0
+    palm_ax = 0.0
+    palm_ay = 0.0
+    palm_window_peak_abs_vx = 1.0 if frame_index else 0.0
+    hand_scale = 0.2
+    pinch_distance = 0.1
+    pinch_velocity = 0.0
     return FrameFeatureRow(
         frame_index=frame_index,
         timestamp=timestamp,
-        dt=0.1 if frame_index else 0.0,
+        dt=dt,
         tracking_present=tracking_present,
         hand_count=hand_count,
         hand_id=hand_id,
@@ -1717,28 +1779,46 @@ def _row(
         palm_x=palm_x,
         palm_y=0.5,
         palm_z=0.0,
-        palm_vx=1.0 if frame_index else 0.0,
-        palm_vy=0.0,
-        palm_speed=1.0 if frame_index else 0.0,
-        palm_ax=0.0,
-        palm_ay=0.0,
+        palm_vx=palm_vx,
+        palm_vy=palm_vy,
+        palm_speed=palm_speed,
+        palm_ax=palm_ax,
+        palm_ay=palm_ay,
         palm_window_dx=0.1 * frame_index,
         palm_window_dx_per_hand_scale=(
             0.5 * frame_index
             if palm_window_dx_per_hand_scale is None
             else palm_window_dx_per_hand_scale
         ),
-        palm_window_peak_abs_vx=1.0 if frame_index else 0.0,
+        palm_window_peak_abs_vx=palm_window_peak_abs_vx,
         palm_window_direction_consistency=1.0 if frame_index else 0.0,
         index_rel_x=0.0,
         index_rel_y=0.0,
         index_rel_vx=0.0,
         index_rel_vy=0.0,
-        pinch_distance=0.1,
-        pinch_velocity=0.0,
-        hand_scale=0.2,
+        pinch_distance=pinch_distance,
+        pinch_velocity=pinch_velocity,
+        hand_scale=hand_scale,
         extended_fingers=4,
         folded_fingers=0,
         phase=phase,
         event=event,
+        palm_vx_per_hand_scale=palm_vx / hand_scale if hand_scale else 0.0,
+        palm_vy_per_hand_scale=palm_vy / hand_scale if hand_scale else 0.0,
+        palm_speed_per_hand_scale=palm_speed / hand_scale if hand_scale else 0.0,
+        palm_ax_per_hand_scale=palm_ax / hand_scale if hand_scale else 0.0,
+        palm_ay_per_hand_scale=palm_ay / hand_scale if hand_scale else 0.0,
+        palm_window_peak_abs_vx_per_hand_scale=(
+            palm_window_peak_abs_vx / hand_scale if hand_scale else 0.0
+        ),
+        index_rel_x_per_hand_scale=0.0,
+        index_rel_y_per_hand_scale=0.0,
+        index_rel_vx_per_hand_scale=0.0,
+        index_rel_vy_per_hand_scale=0.0,
+        pinch_distance_per_hand_scale=(
+            pinch_distance / hand_scale if hand_scale else 0.0
+        ),
+        pinch_velocity_per_hand_scale=(
+            pinch_velocity / hand_scale if hand_scale else 0.0
+        ),
     )
