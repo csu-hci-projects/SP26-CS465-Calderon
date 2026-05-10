@@ -387,6 +387,20 @@ boundary-backed activation boost and `end` evidence into release/background
 pressure instead of using only stroke-derived scores. The next proof point is a
 replay check on old regression data, not live action wiring.
 
+Status update after the schema-2 replay check: the stronger TCN v2 checkpoint
+is a real improvement over the first underconfident smoke. On
+`sprint4-swipes-001`, the 25-epoch schema-2 model matched `9/16` at the old
+`0.35/0.2/0.35` decoder settings; `diagnose-tcn-v2-events` showed the 7
+"misses" were strong same-gesture peaks just before hand-labeled event starts.
+The v2 evaluation path now supports `--early-match-tolerance-seconds`; with
+`0.25`, isolated swipes score `16/16` with `5` false activations, all from
+normal-desk-motion negatives. Applying the same model to
+`sprint4-chained-003` scored `8/10` with `0` false activations but `3` repeated
+fires and high mean latency. Interpretation: do not rewrite the TCN architecture
+again right now, and do not collect broad combo data. The next gate is
+negative-motion intent rejection plus repeated-fire/boundary timing, then a
+targeted V2 continuous slice.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -409,8 +423,8 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Use the TCN v2 surface on old replay data as regression coverage.
-5. Plan or collect the targeted continuous V2 slice above.
+4. Use TCN v2 diagnostics to tighten negative-motion false activations and repeated fires.
+5. Plan or collect the targeted continuous V2 slice above only after that gate is clean enough.
 6. Keep live desktop actions disabled.
 
 If the next agent finds the plan too broad, it should narrow TCN v2 to the

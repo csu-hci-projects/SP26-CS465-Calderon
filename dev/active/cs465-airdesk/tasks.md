@@ -145,7 +145,10 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Add V2 manifest/evaluation cleanup from the regression smoke: evidence-frame summaries, explicit no-hand stream windows, and deduped all-row causal-context event evaluation
 - [x] Improve TCN v2 calibration/target balance after old-data underconfidence and direction confusion
 - [x] Review and improve TCN architecture/training before collecting V2 data: receptive field, residual/dilated blocks, normalization/dropout, class/evidence imbalance, loss weighting, calibration, checkpoint metadata, inference batching/speed, and decoder contract
-- [ ] Replay-check the stronger TCN v2 architecture on old regression data before targeted V2 collection
+- [x] Replay-check the stronger TCN v2 architecture on old regression data before targeted V2 collection
+- [x] Add TCN v2 decoded-event diagnostics and early-match evaluation support for causal peaks
+- [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay still fires on 5/8 negative recordings
+- [ ] Tighten TCN v2 repeated-fire/boundary timing after schema-2 chained replay still has 3 repeated fires
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented
 - [ ] Add the next replay-only negative-motion/intent rejection check only if V2 needs it as an explicit proposal gate
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary

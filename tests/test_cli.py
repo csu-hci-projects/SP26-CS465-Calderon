@@ -224,6 +224,7 @@ def test_evaluate_tcn_v2_help_exposes_decoder_controls() -> None:
     assert result.exit_code == 0
     assert "--manifest" in result.stdout
     assert "--activation-threshold" in result.stdout
+    assert "--early-match-tolerance-seconds" in result.stdout
     assert "--min-peak-confidence" in result.stdout
 
 
@@ -237,6 +238,20 @@ def test_diagnose_tcn_events_help_exposes_decoder_controls() -> None:
     assert result.exit_code == 0
     assert "--manifest" in result.stdout
     assert "--activation-threshold" in result.stdout
+    assert "--min-peak-confidence" in result.stdout
+
+
+def test_diagnose_tcn_v2_events_help_exposes_decoder_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "diagnose-tcn-v2-events", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--activation-threshold" in result.stdout
+    assert "--early-match-tolerance-seconds" in result.stdout
     assert "--min-peak-confidence" in result.stdout
 
 

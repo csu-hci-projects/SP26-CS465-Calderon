@@ -307,7 +307,10 @@ schema-2 residual dilated causal TCN with normalization/dropout, weighted/focal
 evidence loss, sparse-boundary weighting, calibration metadata, and batched
 prediction. `src/airdesk/analysis/tcn_v2.py` maps `start` and `end` evidence
 into decoder activation/release behavior, while desktop actions remain outside
-the learned recognizer.
+the learned recognizer. The same analysis boundary now owns
+`diagnose-tcn-v2-events` and early-match evaluation support for causal peaks
+that fire just before a hand-labeled event start; this keeps replay evidence
+honest without changing live action safety.
 
 ## Modes
 

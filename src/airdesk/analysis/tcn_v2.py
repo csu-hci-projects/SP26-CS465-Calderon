@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from airdesk.analysis.evaluation import GestureEvaluation, evaluate_candidates
+from airdesk.analysis.evaluation import (
+    GestureEvaluation,
+    diagnose_candidate_events,
+    evaluate_candidates,
+    holdout_totals,
+)
 from airdesk.gestures.decoder import DecoderFrame, EventDecoder, EventDecoderConfig
 from airdesk.labels import load_label_file
 from airdesk.ml import (
@@ -21,6 +26,7 @@ def evaluate_tcn_v2_manifest(
     model_path: Path,
     event_decoder_config: EventDecoderConfig,
     match_tolerance_seconds: float = 0.5,
+    early_match_tolerance_seconds: float = 0.0,
 ) -> tuple[GestureEvaluation, ...]:
     """Evaluate TCN v2 decoder-facing evidence against labeled manifest sources."""
     manifest = load_tcn_dataset_manifest(manifest_path)
@@ -55,9 +61,80 @@ def evaluate_tcn_v2_manifest(
                 recognizer="tcn_v2_event_decoder",
                 candidates=candidates,
                 match_tolerance_seconds=match_tolerance_seconds,
+                early_match_tolerance_seconds=early_match_tolerance_seconds,
             )
         )
     return tuple(evaluations)
+
+
+def diagnose_tcn_v2_manifest_events(
+    *,
+    manifest_path: Path,
+    model_path: Path,
+    event_decoder_config: EventDecoderConfig,
+    match_tolerance_seconds: float = 0.5,
+    early_match_tolerance_seconds: float = 0.0,
+) -> dict[str, object]:
+    """Write detailed TCN v2 decoded-event diagnostics for replay review."""
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    predictions = dedupe_tcn_v2_predictions(
+        predict_causal_tcn_v2_manifest(
+            model_path=model_path,
+            manifest_path=manifest_path,
+            emit_all_rows=True,
+        )
+    )
+    predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
+    for prediction in predictions:
+        if prediction.label_path is None:
+            continue
+        predictions_by_source.setdefault(
+            (prediction.feature_path, prediction.label_path),
+            [],
+        ).append(prediction)
+
+    evaluations: list[GestureEvaluation] = []
+    diagnostics: list[dict[str, object]] = []
+    for source in manifest.sources:
+        if source.label_path is None:
+            continue
+        labels = load_label_file(Path(source.label_path))
+        source_predictions = predictions_by_source.get((source.feature_path, source.label_path), [])
+        candidates = decode_tcn_v2_predictions(source_predictions, event_decoder_config)
+        evaluation = evaluate_candidates(
+            recording_path=Path(source.feature_path),
+            label_path=Path(source.label_path),
+            labels=labels,
+            recognizer="tcn_v2_event_decoder",
+            candidates=candidates,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+        )
+        evaluations.append(evaluation)
+        diagnostics.append(
+            {
+                "recording": source.feature_path,
+                "labels": source.label_path,
+                **diagnose_candidate_events(
+                    labels=labels,
+                    candidates=candidates,
+                    match_tolerance_seconds=match_tolerance_seconds,
+                    early_match_tolerance_seconds=early_match_tolerance_seconds,
+                ),
+            }
+        )
+
+    return {
+        "recognizer": "tcn_v2_event_decoder",
+        "manifest": str(manifest_path),
+        "model": str(model_path),
+        "match_tolerance_seconds": match_tolerance_seconds,
+        "early_match_tolerance_seconds": early_match_tolerance_seconds,
+        "event_decoder": event_decoder_config.to_dict(),
+        "summary": holdout_totals(tuple(evaluations)),
+        "evaluations": [evaluation.to_dict() for evaluation in evaluations],
+        "sources": diagnostics,
+    }
 
 
 def decode_tcn_v2_predictions(

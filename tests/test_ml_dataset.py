@@ -9,9 +9,11 @@ import pytest
 
 from airdesk.analysis import (
     diagnose_candidate_events,
+    diagnose_tcn_v2_manifest_events,
     evaluate_tcn_manifest,
     evaluate_tcn_v2_manifest,
 )
+from airdesk.analysis.evaluation import evaluate_candidates
 from airdesk.analysis.tcn_v2 import (
     decode_tcn_v2_predictions,
     dedupe_tcn_v2_predictions,
@@ -300,6 +302,55 @@ def test_diagnose_candidate_events_lists_matches_misses_false_and_repeats() -> N
     assert false_activation["candidate"]["name"] == "swipe_right"
     nearest = false_activation["nearest_same_gesture_event"]
     assert nearest["seconds_from_event_end"] == pytest.approx(0.8)
+
+
+def test_event_evaluation_can_count_causal_early_detection_as_match() -> None:
+    labels = GestureLabelFile(
+        schema_version=1,
+        created_at=1.0,
+        session=SessionMetadata(
+            recording_path="recording.jsonl",
+            start_timestamp=1.0,
+            end_timestamp=2.0,
+        ),
+        event_labels=(
+            GestureEventLabel(
+                label_id="event-001",
+                label_type="gesture",
+                gesture="swipe_left",
+                start_time=1.0,
+                end_time=1.2,
+            ),
+        ),
+    )
+    candidates = [GestureCandidate(name="swipe_left", confidence=0.9, timestamp=0.92)]
+
+    strict = evaluate_candidates(
+        recording_path=Path("recording.csv"),
+        label_path=Path("labels.json"),
+        labels=labels,
+        recognizer="test",
+        candidates=candidates,
+    )
+    early_ok = evaluate_candidates(
+        recording_path=Path("recording.csv"),
+        label_path=Path("labels.json"),
+        labels=labels,
+        recognizer="test",
+        candidates=candidates,
+        early_match_tolerance_seconds=0.1,
+    )
+    diagnostics = diagnose_candidate_events(
+        labels=labels,
+        candidates=candidates,
+        early_match_tolerance_seconds=0.1,
+    )
+
+    assert strict.matched_events == 0
+    assert strict.false_activations == 1
+    assert early_ok.matched_events == 1
+    assert early_ok.false_activations == 0
+    assert len(diagnostics["matches"]) == 1
 
 
 def test_refine_motion_aligned_label_file_shifts_chart_event_to_motion_peak(
@@ -1354,6 +1405,158 @@ def test_tcn_v2_decoder_can_activate_on_boundary_backed_stroke() -> None:
     assert candidates[0].name == "swipe_left"
     assert candidates[0].timestamp == pytest.approx(1.0)
     assert candidates[0].metadata["decoder_scores"]["swipe_left"] == pytest.approx(0.6)
+
+
+def test_tcn_v2_event_diagnostics_explain_decoded_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    features = features_dir / "continuous.csv"
+    label_path = labels_dir / "continuous.labels.json"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="background"),
+            _row(timestamp=1.05, frame_index=1, event="swipe_left", phase="stroke_left"),
+            _row(timestamp=1.1, frame_index=2, event="", phase="background"),
+            _row(timestamp=1.5, frame_index=3, event="", phase="background"),
+            _row(timestamp=1.6, frame_index=4, event="", phase="background"),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.6,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="swipe_left",
+                    start_time=1.0,
+                    end_time=1.1,
+                ),
+            ),
+            phase_labels=(),
+        ),
+        label_path,
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.1,
+        min_rows=2,
+        min_gesture_fraction=0.25,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+
+    def fake_predict_causal_tcn_v2_manifest(**_kwargs: object) -> list[CausalTcnEvidencePrediction]:
+        return [
+            CausalTcnEvidencePrediction(
+                sample_id="window-001",
+                feature_path=str(features),
+                label_path=str(label_path),
+                hand_id="hand-0",
+                timestamp=1.05,
+                window_start=0.9,
+                window_end=1.05,
+                evidence={
+                    "intentional_motion": 1.0,
+                    "stroke_left": 1.0,
+                    "stroke_right": 0.0,
+                    "start": 1.0,
+                    "end": 0.0,
+                },
+            ),
+            CausalTcnEvidencePrediction(
+                sample_id="window-002",
+                feature_path=str(features),
+                label_path=str(label_path),
+                hand_id="hand-0",
+                timestamp=1.1,
+                window_start=1.0,
+                window_end=1.1,
+                evidence={
+                    "intentional_motion": 0.0,
+                    "stroke_left": 0.0,
+                    "stroke_right": 0.0,
+                    "start": 0.0,
+                    "end": 1.0,
+                },
+            ),
+            CausalTcnEvidencePrediction(
+                sample_id="window-003",
+                feature_path=str(features),
+                label_path=str(label_path),
+                hand_id="hand-0",
+                timestamp=1.5,
+                window_start=1.4,
+                window_end=1.5,
+                evidence={
+                    "intentional_motion": 1.0,
+                    "stroke_left": 0.0,
+                    "stroke_right": 1.0,
+                    "start": 1.0,
+                    "end": 0.0,
+                },
+            ),
+            CausalTcnEvidencePrediction(
+                sample_id="window-004",
+                feature_path=str(features),
+                label_path=str(label_path),
+                hand_id="hand-0",
+                timestamp=1.6,
+                window_start=1.5,
+                window_end=1.6,
+                evidence={
+                    "intentional_motion": 0.0,
+                    "stroke_left": 0.0,
+                    "stroke_right": 0.0,
+                    "start": 0.0,
+                    "end": 1.0,
+                },
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "airdesk.analysis.tcn_v2.predict_causal_tcn_v2_manifest",
+        fake_predict_causal_tcn_v2_manifest,
+    )
+
+    payload = diagnose_tcn_v2_manifest_events(
+        manifest_path=manifest_path,
+        model_path=tmp_path / "model.pt",
+        match_tolerance_seconds=0.0,
+        event_decoder_config=EventDecoderConfig(
+            activation_threshold=0.5,
+            release_threshold=0.2,
+            min_peak_confidence=0.5,
+            recovery_seconds=0.0,
+            cooldown_seconds=0.0,
+            min_event_separation_seconds=0.0,
+        ),
+    )
+
+    assert payload["summary"]["matched_events"] == 1
+    assert payload["summary"]["false_activations"] == 1
+    source = payload["sources"][0]
+    assert len(source["matches"]) == 1
+    assert len(source["false_activations"]) == 1
+    false_candidate = source["false_activations"][0]["candidate"]
+    assert false_candidate["name"] == "swipe_right"
+    assert false_candidate["metadata"]["raw_evidence"]["stroke_right"] == 1.0
 
 
 def test_tcn_v2_prediction_loads_schema_v1_checkpoints_when_torch_is_installed(

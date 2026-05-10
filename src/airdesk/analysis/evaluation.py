@@ -352,6 +352,7 @@ def evaluate_tcn_v2_manifest(
     model_path: Path,
     event_decoder_config: EventDecoderConfig,
     match_tolerance_seconds: float = 0.5,
+    early_match_tolerance_seconds: float = 0.0,
 ) -> tuple[GestureEvaluation, ...]:
     """Compatibility wrapper for the TCN v2 evaluation module."""
     from airdesk.analysis.tcn_v2 import evaluate_tcn_v2_manifest as _evaluate
@@ -361,6 +362,7 @@ def evaluate_tcn_v2_manifest(
         model_path=model_path,
         event_decoder_config=event_decoder_config,
         match_tolerance_seconds=match_tolerance_seconds,
+        early_match_tolerance_seconds=early_match_tolerance_seconds,
     )
 
 
@@ -419,8 +421,11 @@ def evaluate_candidates(
     recognizer: str,
     candidates: list[GestureCandidate],
     match_tolerance_seconds: float = 0.0,
+    early_match_tolerance_seconds: float = 0.0,
 ) -> GestureEvaluation:
     """Evaluate a candidate stream against gesture event labels."""
+    if early_match_tolerance_seconds < 0:
+        raise ValueError("early_match_tolerance_seconds must be non-negative")
     intended = [event for event in labels.event_labels if event.label_type == "gesture"]
     matched_events = 0
     repeated_fires = 0
@@ -438,7 +443,12 @@ def evaluate_candidates(
             (index, candidate)
             for index, candidate in enumerate(candidates)
             if candidate.name == event.gesture
-            and event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
+            and _candidate_matches_event(
+                candidate,
+                event,
+                match_tolerance_seconds=match_tolerance_seconds,
+                early_match_tolerance_seconds=early_match_tolerance_seconds,
+            )
         ]
         if not event_candidates:
             bucket["missed"] += 1
@@ -456,7 +466,12 @@ def evaluate_candidates(
     for index, candidate in enumerate(candidates):
         if index in matched_candidate_ids:
             continue
-        if _inside_any_event(candidate, intended, match_tolerance_seconds=match_tolerance_seconds):
+        if _inside_any_event(
+            candidate,
+            intended,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+        ):
             continue
         false_activations += 1
         bucket = per_gesture.setdefault(
@@ -486,8 +501,11 @@ def diagnose_candidate_events(
     labels: GestureLabelFile,
     candidates: list[GestureCandidate],
     match_tolerance_seconds: float = 0.0,
+    early_match_tolerance_seconds: float = 0.0,
 ) -> dict[str, object]:
     """Explain which intended events matched, missed, repeated, or fired falsely."""
+    if early_match_tolerance_seconds < 0:
+        raise ValueError("early_match_tolerance_seconds must be non-negative")
     intended = [event for event in labels.event_labels if event.label_type == "gesture"]
     matched_candidate_ids: set[int] = set()
     matches: list[dict[str, object]] = []
@@ -499,7 +517,12 @@ def diagnose_candidate_events(
             (index, candidate)
             for index, candidate in enumerate(candidates)
             if candidate.name == event.gesture
-            and event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
+            and _candidate_matches_event(
+                candidate,
+                event,
+                match_tolerance_seconds=match_tolerance_seconds,
+                early_match_tolerance_seconds=early_match_tolerance_seconds,
+            )
         ]
         if not event_candidates:
             missed.append(
@@ -542,7 +565,12 @@ def diagnose_candidate_events(
     for index, candidate in enumerate(candidates):
         if index in matched_candidate_ids:
             continue
-        if _inside_any_event(candidate, intended, match_tolerance_seconds=match_tolerance_seconds):
+        if _inside_any_event(
+            candidate,
+            intended,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+        ):
             continue
         false_activations.append(
             {
@@ -806,10 +834,30 @@ def _inside_any_event(
     events: list[GestureEventLabel],
     *,
     match_tolerance_seconds: float,
+    early_match_tolerance_seconds: float = 0.0,
 ) -> bool:
     return any(
-        event.start_time <= candidate.timestamp <= event.end_time + match_tolerance_seconds
+        _candidate_matches_event(
+            candidate,
+            event,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+        )
         for event in events
+    )
+
+
+def _candidate_matches_event(
+    candidate: GestureCandidate,
+    event: GestureEventLabel,
+    *,
+    match_tolerance_seconds: float,
+    early_match_tolerance_seconds: float = 0.0,
+) -> bool:
+    return (
+        event.start_time - early_match_tolerance_seconds
+        <= candidate.timestamp
+        <= event.end_time + match_tolerance_seconds
     )
 
 

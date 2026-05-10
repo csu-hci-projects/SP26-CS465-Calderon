@@ -10,6 +10,7 @@ import typer
 
 from airdesk.analysis import (
     diagnose_tcn_manifest_events,
+    diagnose_tcn_v2_manifest_events,
     evaluate_tcn_manifest,
     evaluate_tcn_v2_manifest,
     holdout_totals,
@@ -347,6 +348,12 @@ def gesture_evaluate_tcn_v2(
         float,
         typer.Option(help="Tolerance after an event interval for event matching."),
     ] = 0.5,
+    early_match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(
+            help="Tolerance before an event interval for causal early detections.",
+        ),
+    ] = 0.0,
     activation_threshold: Annotated[
         float,
         typer.Option(help="Event decoder activation threshold over stroke evidence."),
@@ -377,6 +384,7 @@ def gesture_evaluate_tcn_v2(
             manifest_path=manifest,
             model_path=model,
             match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
             event_decoder_config=decoder_config,
         )
     except (MissingMlDependencyError, ValueError) as exc:
@@ -388,6 +396,7 @@ def gesture_evaluate_tcn_v2(
         "manifest": str(manifest),
         "model": str(model),
         "match_tolerance_seconds": match_tolerance_seconds,
+        "early_match_tolerance_seconds": early_match_tolerance_seconds,
         "event_decoder": decoder_config.to_dict(),
         "summary": summary,
         "evaluations": [evaluation.to_dict() for evaluation in evaluations],
@@ -472,6 +481,77 @@ def gesture_diagnose_tcn_events(
     summary = payload["summary"]
     typer.echo(
         f"tcn_event_diagnostics recordings={summary['recordings']} "
+        f"intended={summary['intended_events']} matched={summary['matched_events']} "
+        f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']}"
+    )
+    typer.echo(f"wrote diagnostics={out}")
+
+
+def gesture_diagnose_tcn_v2_events(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 evidence manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 checkpoint path."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output detailed diagnostics JSON path.")],
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for event matching."),
+    ] = 0.5,
+    early_match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(
+            help="Tolerance before an event interval for causal early detections.",
+        ),
+    ] = 0.0,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder activation threshold over stroke evidence."),
+    ] = 0.35,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold over stroke evidence."),
+    ] = 0.2,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak stroke confidence."),
+    ] = 0.35,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
+    ] = 0.5,
+) -> None:
+    """Write per-event decoded TCN v2 evidence diagnostics."""
+    decoder_config = EventDecoderConfig(
+        activation_threshold=activation_threshold,
+        release_threshold=release_threshold,
+        min_peak_confidence=min_peak_confidence,
+        min_event_separation_seconds=cooldown_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    try:
+        payload = diagnose_tcn_v2_manifest_events(
+            manifest_path=manifest,
+            model_path=model,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+            event_decoder_config=decoder_config,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    summary = payload["summary"]
+    typer.echo(
+        f"tcn_v2_event_diagnostics recordings={summary['recordings']} "
         f"intended={summary['intended_events']} matched={summary['matched_events']} "
         f"missed={summary['missed_events']} candidates={summary['candidate_count']} "
         f"false_activations={summary['false_activations']} "
@@ -808,5 +888,6 @@ def register_tcn_commands(gesture_app: typer.Typer) -> None:
     gesture_app.command("evaluate-tcn")(gesture_evaluate_tcn)
     gesture_app.command("evaluate-tcn-v2")(gesture_evaluate_tcn_v2)
     gesture_app.command("diagnose-tcn-events")(gesture_diagnose_tcn_events)
+    gesture_app.command("diagnose-tcn-v2-events")(gesture_diagnose_tcn_v2_events)
     gesture_app.command("holdout-tcn")(gesture_holdout_tcn)
     gesture_app.command("diagnose-features")(gesture_diagnose_features)

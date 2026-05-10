@@ -95,9 +95,9 @@ Important evidence:
 - Motion-peak auto-refinement worsened held-out TCN performance and should be used only for diagnostics/manual review.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Keep live desktop actions disabled.
-- TCN v2 is now implemented as an initial replay/evaluation surface:
-  `build-tcn-dataset --target-mode v2-evidence`, `train-tcn-v2`, and
-  `evaluate-tcn-v2`.
+- TCN v2 is now implemented as a replay/evaluation surface:
+  `build-tcn-dataset --target-mode v2-evidence`, `train-tcn-v2`,
+  `evaluate-tcn-v2`, and `diagnose-tcn-v2-events`.
 - The v2 targets are framewise decoder-facing evidence heads:
   `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`.
   Windows remain causal compute context, not semantic gesture labels.
@@ -128,7 +128,22 @@ Important evidence:
 - `evaluate-tcn-v2` now uses boundary heads in the decoder contract: `start`
   evidence can boost a moderate stroke into activation, while `end` evidence
   suppresses stroke scores and raises background/release pressure. Boundary
-  heads are no longer metadata-only.
+  heads are no longer metadata-only. V2 evaluation/diagnostics also support
+  `--early-match-tolerance-seconds` so causal peaks just before a hand-labeled
+  event start are not counted as both a miss and a false activation.
+- The stronger schema-2 v2 replay check is complete. Current-code
+  `sprint4-swipes-001` evidence counts are `intentional_motion=187`,
+  `stroke_left=88`, `stroke_right=99`, `start=16`, `end=16`. A 25-epoch
+  schema-2 model reached `train_frame_accuracy=0.990` and
+  `validation_frame_accuracy=0.985`; metadata stored calibration thresholds
+  `intentional_motion=0.85`, `stroke_left=0.90`, `stroke_right=0.90`,
+  `start=0.80`, and `end=0.75`, with weak validation `start` F1 (`0.316`).
+  At `activation=0.35`, `release=0.2`, `min_peak=0.35`, isolated replay scored
+  `9/16` without early tolerance, but diagnostics showed all 7 misses peaked
+  0.02-0.22 s before label start. With `--early-match-tolerance-seconds 0.25`,
+  isolated swipes scored `16/16` with 5 false activations, all normal desk
+  negatives. The same model scored `8/10` on `sprint4-chained-003` with
+  0 false activations, 3 repeated fires, and about 1.75 s mean latency.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
@@ -151,27 +166,25 @@ Important evidence:
 
 Next-session assignment:
 
-Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. Caden is explicitly saying not to be overly protective of
-legacy scaffold code: AirDesk is still pre-training, so this is the right time
-to rewrite or replace weak TCN/model/training/evaluation internals if the
-architecture case is strong. The recording, runtime/live-action, replay/offline
-gesture diagnostic, live tracking/watch extraction, and TCN v2 target/train/
-evaluate boundary chunks are complete, so targeted V2 recording is close but
-still deferred until the recognizer architecture is worth training against.
+Continue from the schema-2 replay evidence. The TCN architecture itself no
+longer looks like the immediate blocker; the next high-value pre-collection gate
+is negative-motion intent rejection plus repeated-fire/boundary timing. Targeted
+V2 recording is close, but still deferred until those replay failures are either
+fixed or explicitly accepted as the reason for targeted data.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - replay-check the stronger TCN v2 architecture on old regression data and
-     compare against the previous underconfident old-data smoke;
-   - inspect the new per-head calibration thresholds and head metrics before
-     deciding whether targeted V2 data collection is ready;
-   - rewrite early TCN scaffolding if it is the cleanest way to avoid training a
-     weak architecture; keep public CLI names stable unless there is an
-     intentional bug fix or documented migration reason;
+   - inspect `diagnose-tcn-v2-events` outputs for the 5 isolated negative false
+     activations and decide whether decoder/intent gating can remove them
+     without losing true swipes;
+   - inspect the `sprint4-chained-003` repeated fires and decide whether the
+     decoder needs stronger end/start valley handling before targeted data;
+   - if a code fix is clear, implement it with tests and rerun the old replay
+     summaries; if not, document that targeted V2 data should explicitly cover
+     those failure modes;
    - split `tests/test_cli.py` into focused modules only if doing so preserves
      useful public CLI/safety coverage;
    - audit shared TCN helper naming/imports now that v2 code has its own module;

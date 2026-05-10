@@ -228,26 +228,19 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> TCN v2 surface is implemented enough for replay smoke tests. The old replay
-> data confirms the surface is coherent but not yet a useful recognizer:
-> same-batch training on `sprint4-swipes-001` produced high frame accuracy, but
-> event decoding still matched only `0/16` at `0.35` thresholds and `1/16` with
-> permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`.
-> Before recording the targeted V2 slice, continue the staff-level
-> review/refactor pass more aggressively. The recording/collection/chart split
-> is complete, and the runtime/live-action boundary is now isolated in
-> `src/airdesk/cli_runtime.py` with dry-run and guarded-execute tests.
-> The live tracking/watch diagnostic split is now complete:
-> `src/airdesk/cli_live_commands.py` owns `watch-tcn`, `watch-dtw`, `track`,
-> `tune`, `view`, and `benchmark`, while `src/airdesk/cli.py` is down to about
-> 60 LOC of app wiring plus `doctor` / `analyze`. Do the next cleanup in
-> behavior-preserving chunks, with tests, before collecting data. The TCN v2
-> train/evaluate boundary is now split into focused modules, and the first
-> pre-training architecture cleanup is complete: v2 uses a residual dilated
-> causal TCN, weighted/focal BCE, calibration metadata, schema-versioned
-> checkpoints, batched prediction, and start/end-aware decoder scoring. Keep
-> live actions dry-run/disabled. The next step is to replay-check this stronger
-> contract before deciding whether the targeted V2 collection slice is ready.
+> The stronger schema-2 TCN v2 contract has now been replay-checked on old data.
+> This is meaningful progress over the first 5-epoch smoke: at the old
+> `0.35/0.2/0.35` decoder settings, `sprint4-swipes-001` matched `9/16`, and
+> `sprint4-chained-003` matched `8/10` with `0` false activations but `3`
+> repeated fires. New `diagnose-tcn-v2-events` diagnostics showed the isolated
+> swipes "misses" were actually strong causal peaks slightly before the
+> hand-labeled start. With `--early-match-tolerance-seconds 0.25`, isolated
+> swipes score `16/16` with `5` false activations, all from negative/background
+> recordings. Chained replay remains `8/10` with `3` repeated fires and high
+> latency. Do not collect broad combo data yet. The next gate is to tighten
+> negative-motion intent rejection and repeated-fire/boundary timing, then
+> decide whether a targeted V2 slice is justified. Keep live actions
+> dry-run/disabled.
 
 Current TCN v2 implementation state:
 
@@ -273,7 +266,12 @@ Current TCN v2 implementation state:
   event decoder, but `start` and `end` are no longer passive metadata: `start`
   can boost a boundary-backed stroke into activation, and `end` suppresses
   stroke scores / raises background for release. It is still replay/evaluation
-  tooling only.
+  tooling only. It supports `--early-match-tolerance-seconds` for causal peaks
+  that fire slightly before hand-labeled event starts.
+- `airdesk gesture diagnose-tcn-v2-events` now writes the detailed v2 replay
+  diagnostics that the summary lacks: matches, misses, false activations,
+  repeated fires, nearest candidate/event timing, decoder scores, and raw
+  evidence heads.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.
@@ -312,11 +310,12 @@ Current TCN v2 implementation state:
   architecture on old replay data and then decide whether the targeted V2 slice
   is ready to collect.
 
-Current TCN v2 old-data smoke:
+Current TCN v2 old-data regression:
 
-- `sprint4-swipes-001` label-assigned v2 manifest: 24 sources, 760 windows,
-  source-frame evidence counts `intentional_motion=208`, `stroke_left=104`,
-  `stroke_right=104`, `start=16`, `end=16`.
+- Current-code `sprint4-swipes-001` label-assigned v2 manifest:
+  24 sources, 760 windows, source-frame evidence counts
+  `intentional_motion=187`, `stroke_left=88`, `stroke_right=99`, `start=16`,
+  `end=16`.
 - `sprint4-swipes-001` motion-gated v2 manifest is much sparser:
   `intentional_motion=50`, `stroke_left=8`, `stroke_right=42`, `start=11`,
   `end=11`; use it as a diagnostic view, not current training truth.
@@ -326,9 +325,29 @@ Current TCN v2 old-data smoke:
 - A permissive `0.30` replay pass on `sprint4-swipes-001` matched `1/16`, missed
   `15`, produced `3` candidates and `2` false activations. Applying the same
   model to `sprint4-chained-003` matched `0/10`.
-- Interpretation: the TCN v2 manifest/model/evaluation plumbing works, but the
-  first old-data model is underconfident and direction-confused. Treat this as
-  regression evidence for target/data design, not a quality result.
+- The 25-epoch schema-2 replay model on the current manifest reached
+  `train_frame_accuracy=0.990` and `validation_frame_accuracy=0.985`. Checkpoint
+  metadata reports schema `2`, a 29-frame / about 0.94-second receptive field,
+  weighted/focal BCE, validation calibration thresholds
+  `intentional_motion=0.85`, `stroke_left=0.90`, `stroke_right=0.90`,
+  `start=0.80`, `end=0.75`, and weak validation `start` F1 (`0.316`).
+- At `activation=0.35`, `release=0.2`, `min_peak=0.35`, and no early-match
+  tolerance, schema-2 replay matched `9/16` on `sprint4-swipes-001`, missed `7`,
+  produced `22` candidates, `13` false activations, and `0` repeated fires.
+  Diagnostics showed all 7 misses had strong same-gesture candidates just before
+  label start (`-0.02` to `-0.22` seconds).
+- With `--early-match-tolerance-seconds 0.25`, the same isolated replay scores
+  `16/16`, `0` missed, `22` candidates, `5` false activations, `0` repeated
+  fires, and about `0.065 s` mean latency. The remaining false activations are
+  all in normal-desk-motion negative recordings.
+- The same swipes-trained model on `sprint4-chained-003` scores `8/10`, `0`
+  false activations, `3` repeated fires, and about `1.75 s` mean latency; the
+  two misses have nearest same-gesture candidates roughly `0.93 s` and `1.50 s`
+  before the coarse label starts, so a small early-match tolerance does not
+  explain them away.
+- Interpretation: the architecture cleanup fixed the old underconfidence enough
+  to justify targeted V2 collection soon, but not before addressing negative
+  background false activations and repeated/early fires in continuous streams.
 
 Current CLI cleanup state:
 
