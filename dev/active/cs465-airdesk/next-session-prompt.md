@@ -146,11 +146,15 @@ Important evidence:
   0 false activations, 3 repeated fires, and about 1.75 s mean latency.
 - `airdesk gesture watch-tcn-v2` is now available for a no-action live/replay
   schema-2 v2 feel-test. It loads `causal_tcn_v2_evidence` checkpoints, runs the
-  shared model per visible hand stream, shows intent/stroke/start/end evidence in
-  the HUD, decodes candidates through the same start/end-aware decoder, avoids
-  flushing open live events before release evidence, and can write
-  prediction/candidate JSONL with `--events-out`. It does not call runtime policy
-  or action targets.
+  shared model per visible hand stream, and defaults to a resizable dashboard
+  with webcam landmarks, per-hand evidence bars, decoded-gesture history,
+  emit/peak delay, prediction/candidate counts, and tracker timing. The old
+  compact overlay remains available with `--preview-layout camera`, and
+  `--camera-buffer-size` defaults to `1` to reduce camera backlog where OpenCV
+  honors it. The command decodes candidates through the same start/end-aware
+  decoder, avoids flushing open live events before release evidence, can write
+  prediction/candidate JSONL with `--events-out`, and does not call runtime
+  policy or action targets.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
@@ -175,9 +179,11 @@ Next-session assignment:
 
 Continue from the schema-2 replay evidence. The TCN architecture itself no
 longer looks like the immediate blocker; the next high-value pre-collection gate
-is negative-motion intent rejection plus repeated-fire/boundary timing. Targeted
-V2 recording is close, but still deferred until those replay failures are either
-fixed or explicitly accepted as the reason for targeted data.
+is negative-motion intent rejection plus repeated-fire/boundary timing, using
+the new `watch-tcn-v2` live dashboard and JSONL logs when live feel diverges
+from replay. Targeted V2 recording is close, but still deferred until those
+replay/live failures are either fixed or explicitly accepted as the reason for
+targeted data.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.

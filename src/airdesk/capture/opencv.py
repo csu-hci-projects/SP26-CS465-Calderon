@@ -22,6 +22,7 @@ class CameraSettings:
     height: int | None = None
     fps: float | None = None
     fourcc: str | None = None
+    buffer_size: int | None = None
 
     def to_dict(self) -> dict[str, float | int | str | None]:
         return {
@@ -29,6 +30,7 @@ class CameraSettings:
             "height": self.height,
             "fps": self.fps,
             "fourcc": self.fourcc,
+            "buffer_size": self.buffer_size,
         }
 
 
@@ -208,6 +210,8 @@ def camera_modes(device: str = "/dev/video0") -> str:
 
 
 def _apply_capture_settings(capture: Any, cv2: Any, settings: CameraSettings) -> None:
+    if settings.buffer_size is not None and hasattr(cv2, "CAP_PROP_BUFFERSIZE"):
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, settings.buffer_size)
     if settings.fourcc:
         fourcc = settings.fourcc.upper()
         if len(fourcc) != 4:

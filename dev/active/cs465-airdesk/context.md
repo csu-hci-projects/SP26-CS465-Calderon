@@ -278,14 +278,18 @@ Current TCN v2 implementation state:
   evidence heads.
 - `airdesk gesture watch-tcn-v2` is now the safe live/replay preview for schema-2
   evidence checkpoints. It loads `causal_tcn_v2_evidence` models, applies one
-  shared checkpoint independently to each visible hand stream, shows
-  `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`
-  evidence in the preview HUD, decodes candidates through the same start/end-aware
-  event decoder, and can write live prediction/candidate JSONL via `--events-out`.
-  It flashes a large preview banner for decoded swipes, uses compact HUD text so
-  the fields fit at 640px, and terminal candidate lines show both emit time and
-  peak time because live decoding waits for release/recovery evidence. It does
-  not call runtime policy or action targets.
+  shared checkpoint independently to each visible hand stream, and now defaults
+  to `--preview-layout dashboard`: a resizable OpenCV dashboard with the webcam
+  view, landmark overlay, per-hand evidence bars, decoded-gesture history,
+  emit-vs-peak delay, prediction/candidate counts, and tracker timing summaries.
+  The old compact camera overlay remains available with `--preview-layout camera`.
+  `--camera-buffer-size` defaults to `1` on this command to reduce stale-frame
+  backlog where OpenCV honors the setting. The command decodes candidates through
+  the same start/end-aware event decoder and can write live prediction/candidate
+  JSONL via `--events-out`. Terminal candidate lines still show both emit time
+  and peak time because live decoding waits for release/recovery evidence, but
+  the dashboard is now the primary live feedback surface. It does not call
+  runtime policy or action targets.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.

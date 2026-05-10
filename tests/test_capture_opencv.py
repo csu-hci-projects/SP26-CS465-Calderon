@@ -30,3 +30,7 @@ def test_format_probe_result_includes_core_camera_facts() -> None:
         format_probe_result(result) == "/dev/video0: opened frame=yes requested=640x480@30.00/MJPG "
         "size=1280x720 fps=30.00 backend=opencv"
     )
+
+
+def test_camera_settings_can_request_small_capture_buffer() -> None:
+    assert CameraSettings(buffer_size=1).to_dict()["buffer_size"] == 1

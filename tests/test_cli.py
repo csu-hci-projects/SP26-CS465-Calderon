@@ -15,6 +15,7 @@ from airdesk.cli_live import (
     _format_live_tcn_v2_candidate,
     _format_live_tcn_v2_preview_predictions,
     _format_tracker_timing,
+    _live_tcn_v2_dashboard_snapshot,
     _live_tcn_v2_preview_status,
     _show_live_tcn_prediction,
 )
@@ -291,6 +292,9 @@ def test_watch_tcn_v2_help_exposes_live_evidence_controls() -> None:
     assert "--min-peak-confidence" in result.stdout
     assert "--evidence-threshold" in result.stdout
     assert "--events-out" in result.stdout
+    assert "--preview-layout" in result.stdout
+    assert "--preview-width" in result.stdout
+    assert "--camera-buffer-size" in result.stdout
     assert "--profile-timing" in result.stdout
 
 
@@ -426,6 +430,63 @@ def test_live_tcn_v2_candidate_line_distinguishes_emit_and_peak_time() -> None:
     )
 
     assert line == "t=  0.600s peak=  0.200s hand=hand-0 decoded=swipe_right confidence=0.720"
+
+
+def test_live_tcn_v2_dashboard_snapshot_contains_structured_evidence() -> None:
+    snapshot = _live_tcn_v2_dashboard_snapshot(
+        {
+            "status": "TCNv2 s=1 r=20",
+            "stream_count": 1,
+            "row_count": 20,
+            "prediction_count": 3,
+            "candidate_count": 1,
+            "latest_relative_time": 12.5,
+            "alert": "hand-0 swipe_right 0.72",
+            "alert_until": 9999999999.0,
+            "recent_candidates": [
+                {
+                    "name": "swipe_right",
+                    "hand_id": "hand-0",
+                    "confidence": 0.72,
+                    "peak": 12.0,
+                    "emitted": 12.5,
+                    "delay": 0.5,
+                }
+            ],
+            "predictions": {
+                "hand-0": CausalTcnV2LivePrediction(
+                    hand_id="hand-0",
+                    start_time=11.7,
+                    end_time=12.5,
+                    evidence={
+                        "intentional_motion": 0.80,
+                        "stroke_left": 0.10,
+                        "stroke_right": 0.72,
+                        "start": 0.25,
+                        "end": 0.05,
+                    },
+                ),
+            },
+        },
+        first_timestamp=10.0,
+    )
+
+    assert snapshot["alert"] == "hand-0 swipe_right 0.72"
+    assert snapshot["summary_lines"][:2] == [
+        "t=12.5s streams=1 rows=20",
+        "predictions=3 candidates=1",
+    ]
+    assert snapshot["hands"] == [
+        {
+            "hand_id": "hand-0",
+            "left": 0.1,
+            "right": 0.72,
+            "intent": 0.8,
+            "start": 0.25,
+            "end": 0.05,
+        }
+    ]
+    assert snapshot["recent_candidates"][0]["delay"] == 0.5
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:

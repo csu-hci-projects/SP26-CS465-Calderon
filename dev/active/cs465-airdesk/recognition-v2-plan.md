@@ -404,13 +404,16 @@ targeted V2 continuous slice.
 Status update after the live-safety review: schema-2 v2 now has a separate
 no-action preview command, `airdesk gesture watch-tcn-v2`. It loads
 `causal_tcn_v2_evidence` checkpoints, runs the shared model per visible
-`hand_id` stream, shows intent/stroke/start/end evidence in the HUD, decodes
+`hand_id` stream, defaults to a resizable dashboard with webcam landmarks,
+per-hand intent/stroke/start/end evidence bars, decoded-gesture history,
+emit-vs-peak delay, prediction/candidate counts, and tracker timing, decodes
 candidate swipes with the same start/end-aware event decoder, and can write
-prediction/candidate JSONL through `--events-out`. The live decoder does not
-flush open events before release evidence, so the preview is closer to continuous
-runtime behavior than repeatedly decoding a truncated replay prefix. This does
-not change the live-action stance: learned swipes still do not dispatch desktop
-actions.
+prediction/candidate JSONL through `--events-out`. The old camera-only compact
+overlay remains available with `--preview-layout camera`. The live decoder does
+not flush open events before release evidence, so the preview is closer to
+continuous runtime behavior than repeatedly decoding a truncated replay prefix.
+This does not change the live-action stance: learned swipes still do not
+dispatch desktop actions.
 
 ## Evaluation Metrics
 
@@ -434,7 +437,7 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Use `watch-tcn-v2` for a no-action live feel-test and log predictions/candidates.
+4. Use the `watch-tcn-v2` dashboard for a no-action live feel-test and log predictions/candidates.
 5. Use TCN v2 diagnostics to tighten negative-motion false activations and repeated fires if the live/replay evidence still demands it.
 6. Plan or collect the targeted continuous V2 slice above only after that gate is clean enough.
 7. Keep live desktop actions disabled.

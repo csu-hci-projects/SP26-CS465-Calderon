@@ -24,6 +24,7 @@ from airdesk.cli_live import (
     _live_dtw_preview_status,
     _live_feature_streams,
     _live_tcn_preview_status,
+    _live_tcn_v2_dashboard_snapshot,
     _live_tcn_v2_preview_status,
     _show_live_tcn_prediction,
 )
@@ -300,6 +301,22 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         ] = None,
         show: Annotated[bool, typer.Option(help="Show an OpenCV live preview.")] = True,
         mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
+        preview_layout: Annotated[
+            str,
+            typer.Option(help="Preview layout: dashboard or camera."),
+        ] = "dashboard",
+        preview_width: Annotated[
+            int,
+            typer.Option(help="Dashboard preview canvas width in pixels."),
+        ] = 1180,
+        preview_height: Annotated[
+            int,
+            typer.Option(help="Dashboard preview canvas height in pixels."),
+        ] = 720,
+        camera_buffer_size: Annotated[
+            int,
+            typer.Option(help="Requested OpenCV camera buffer size; 0 leaves backend default."),
+        ] = 1,
         min_rows: Annotated[
             int,
             typer.Option(help="Minimum feature rows before the first TCN v2 prediction."),
@@ -357,6 +374,15 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         if cooldown_seconds < 0:
             typer.echo("cooldown-seconds must be non-negative", err=True)
             raise typer.Exit(code=1)
+        if preview_layout not in {"dashboard", "camera"}:
+            typer.echo("preview-layout must be 'dashboard' or 'camera'", err=True)
+            raise typer.Exit(code=1)
+        if preview_width <= 0 or preview_height <= 0:
+            typer.echo("preview dimensions must be positive", err=True)
+            raise typer.Exit(code=1)
+        if camera_buffer_size < 0:
+            typer.echo("camera-buffer-size must be non-negative", err=True)
+            raise typer.Exit(code=1)
         decoder_config = EventDecoderConfig(
             activation_threshold=activation_threshold,
             release_threshold=release_threshold,
@@ -375,7 +401,13 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             device=device,
             max_frames=max_frames,
             show=show,
-            camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+            camera_settings=CameraSettings(
+                width=width,
+                height=height,
+                fps=fps,
+                fourcc=fourcc,
+                buffer_size=camera_buffer_size or None,
+            ),
             model_path=hand_model_path,
             auto_download_model=auto_download_model,
             max_num_hands=max_num_hands,
@@ -384,6 +416,9 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             min_tracking_confidence=min_tracking_confidence,
             delegate=hand_delegate,
             preview_mirror=mirror,
+            preview_layout=preview_layout,
+            preview_canvas_width=preview_width,
+            preview_canvas_height=preview_height,
             preview_gestures=False,
         )
         stream = FeatureRowStream()
@@ -401,6 +436,10 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             "show_motion": show_motion,
             "stream_count": 0,
             "row_count": 0,
+            "prediction_count": 0,
+            "candidate_count": 0,
+            "latest_relative_time": None,
+            "recent_candidates": [],
         }
         session_id = str(uuid4())
         event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
@@ -417,6 +456,12 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
 
         if hasattr(tracker, "preview_status_provider"):
             tracker.preview_status_provider = lambda: _live_tcn_v2_preview_status(state)  # type: ignore[attr-defined]
+        if hasattr(tracker, "preview_dashboard_provider"):
+            tracker.preview_dashboard_provider = lambda: _live_tcn_v2_dashboard_snapshot(  # type: ignore[attr-defined]
+                state,
+                first_timestamp=first_timestamp,
+                timing_samples=getattr(tracker, "timing_samples", []),
+            )
 
         _write_tcn_v2_live_event(
             event_writer,
@@ -432,6 +477,8 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                 "window_seconds": predictor.window_seconds,
                 "stride_seconds": predictor.stride_seconds,
                 "event_decoder": decoder_config.to_dict(),
+                "preview_layout": preview_layout,
+                "camera_buffer_size": camera_buffer_size or None,
                 "dry_run_only": True,
             },
         )
@@ -445,6 +492,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             tracker.start()
             for frame in tracker.frames():
                 first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
+                state["latest_relative_time"] = frame.timestamp - first_timestamp
                 rows.extend(stream.append_rows(frame))
                 cutoff = frame.timestamp - predictor.window_seconds
                 rows = [item for item in rows if item.timestamp >= cutoff]
@@ -472,6 +520,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                     prediction_ms = (monotonic() - prediction_started_at) * 1000
                     decoder_scores = tcn_v2_decoder_scores(prediction.evidence)
                     prediction_count += 1
+                    state["prediction_count"] = prediction_count
                     latest_predictions[hand_id] = prediction
                     state["status"] = _format_live_tcn_v2_preview_predictions(state)
                     decoder_frames.append(
@@ -531,9 +580,30 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                             continue
                         emitted_candidates.add(key)
                         candidate_count += 1
+                        state["candidate_count"] = candidate_count
                         hand_label = candidate.hand_id or "hand"
                         state["alert"] = f"{hand_label} {candidate.name} {candidate.confidence:.2f}"
                         state["alert_until"] = monotonic() + 1.8
+                        recent_candidates = list(state.get("recent_candidates", []))
+                        recent_candidates.append(
+                            {
+                                "name": candidate.name,
+                                "hand_id": candidate.hand_id or "hand",
+                                "confidence": candidate.confidence,
+                                "peak": (
+                                    candidate.timestamp - first_timestamp
+                                    if first_timestamp is not None
+                                    else candidate.timestamp
+                                ),
+                                "emitted": (
+                                    prediction.end_time - first_timestamp
+                                    if first_timestamp is not None
+                                    else prediction.end_time
+                                ),
+                                "delay": max(0.0, prediction.end_time - candidate.timestamp),
+                            }
+                        )
+                        state["recent_candidates"] = recent_candidates[-8:]
                         _write_tcn_v2_live_event(
                             event_writer,
                             event_type="tcn_v2_live_candidate",
@@ -574,6 +644,10 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             )
             if event_writer is not None:
                 event_writer.close()
+            if profile_timing:
+                timing_text = _format_tracker_timing(tracker)
+                if timing_text:
+                    typer.echo(timing_text)
             tracker.stop()
 
     @gesture_app.command("watch-dtw")

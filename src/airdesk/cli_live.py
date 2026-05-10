@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from statistics import fmean
 from time import monotonic
+from typing import Any
 
 from airdesk.features import FrameFeatureRow, group_feature_rows_by_stream
 from airdesk.ml import CausalTcnLivePrediction, CausalTcnV2LivePrediction
@@ -222,6 +223,96 @@ def _live_tcn_v2_preview_status(state: dict[str, object]) -> str:
     if alert and monotonic() <= alert_until:
         return f"{status} | GESTURE {alert}"
     return status
+
+
+def _live_tcn_v2_dashboard_snapshot(
+    state: dict[str, object],
+    *,
+    first_timestamp: float | None,
+    timing_samples: list[Any] | None = None,
+) -> dict[str, object]:
+    """Build structured status for the larger live TCN v2 dashboard."""
+    stream_count = int(state.get("stream_count", 0))
+    row_count = int(state.get("row_count", 0))
+    prediction_count = int(state.get("prediction_count", 0))
+    candidate_count = int(state.get("candidate_count", 0))
+    status = str(state.get("status", "warming up"))
+    relative_time = state.get("latest_relative_time")
+    relative_text = (
+        "t=warming"
+        if not isinstance(relative_time, float)
+        else f"t={relative_time:.1f}s"
+    )
+    summary_lines = [
+        f"{relative_text} streams={stream_count} rows={row_count}",
+        f"predictions={prediction_count} candidates={candidate_count}",
+        status,
+    ]
+    hands = _live_tcn_v2_dashboard_hands(state)
+    alert = ""
+    if str(state.get("alert", "")) and monotonic() <= float(state.get("alert_until", 0.0)):
+        alert = str(state["alert"])
+    return {
+        "title": "AirDesk TCN v2 live dashboard",
+        "subtitle": "actions disabled | q/esc quits | terminal log is secondary",
+        "summary_lines": summary_lines,
+        "hands": hands,
+        "recent_candidates": list(state.get("recent_candidates", [])),
+        "alert": alert,
+        "first_timestamp": first_timestamp,
+        "timing": _live_timing_dashboard_summary(timing_samples or []),
+    }
+
+
+def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, object]]:
+    predictions = state.get("predictions", {})
+    rows_by_hand = state.get("rows_by_hand", {})
+    if not isinstance(predictions, dict):
+        return []
+    hands: list[dict[str, object]] = []
+    for hand_id, prediction in sorted(predictions.items()):
+        if not isinstance(prediction, CausalTcnV2LivePrediction):
+            continue
+        evidence = prediction.evidence
+        hand: dict[str, object] = {
+            "hand_id": hand_id,
+            "left": evidence.get("stroke_left", 0.0),
+            "right": evidence.get("stroke_right", 0.0),
+            "intent": evidence.get("intentional_motion", 0.0),
+            "start": evidence.get("start", 0.0),
+            "end": evidence.get("end", 0.0),
+        }
+        if isinstance(rows_by_hand, dict):
+            row = rows_by_hand.get(hand_id)
+            dx = getattr(row, "palm_window_dx_per_hand_scale", None)
+            if isinstance(dx, float):
+                hand["dx"] = dx
+        hands.append(hand)
+    return hands
+
+
+def _live_timing_dashboard_summary(timing_samples: list[Any]) -> dict[str, str]:
+    if not timing_samples:
+        return {}
+    total = _sample_values(timing_samples, "total_ms")
+    inference = _sample_values(timing_samples, "inference_ms")
+    preview = _sample_values(timing_samples, "preview_draw_ms")
+    parts: list[str] = []
+    if total:
+        parts.append(f"loop {fmean(total):.1f}/{_percentile(total, 0.95):.1f}ms")
+    if inference:
+        parts.append(f"mp {fmean(inference):.1f}ms")
+    if preview:
+        parts.append(f"ui {fmean(preview):.1f}ms")
+    return {"line": " | ".join(parts[-3:])}
+
+
+def _sample_values(samples: list[Any], attr: str) -> list[float]:
+    return [
+        float(value)
+        for sample in samples[-90:]
+        if (value := getattr(sample, attr, None)) is not None
+    ]
 
 
 def _live_dtw_preview_status(state: dict[str, object]) -> str:

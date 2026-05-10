@@ -149,6 +149,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Add TCN v2 decoded-event diagnostics and early-match evaluation support for causal peaks
 - [x] Add no-action live/replay `watch-tcn-v2` preview for schema-2 evidence checkpoints before any desktop action wiring
 - [x] Fix `watch-tcn-v2` live feedback so compact HUD text fits and decoded swipes flash in the preview instead of only appearing in terminal output
+- [x] Replace the cramped `watch-tcn-v2` camera-only preview with a resizable no-action live dashboard that shows webcam landmarks, per-hand evidence bars, decoded-gesture history, emit/peak delay, and tracker timing
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay still fires on 5/8 negative recordings
 - [ ] Tighten TCN v2 repeated-fire/boundary timing after schema-2 chained replay still has 3 repeated fires
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented

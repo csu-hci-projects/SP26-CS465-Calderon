@@ -12,6 +12,7 @@ from urllib.request import urlretrieve
 
 from airdesk.capture.opencv import CameraSettings, OpenCVCaptureBackend
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
+from airdesk.overlay.live_dashboard import LiveDashboardRenderer
 from airdesk.state.types import (
     FrameMetadata,
     HandLandmarks,
@@ -83,10 +84,14 @@ class MediaPipeHandTrackerBackend:
     delegate: str = DEFAULT_HAND_LANDMARKER_DELEGATE
     show: bool = False
     preview_mirror: bool = True
+    preview_layout: str = "camera"
+    preview_canvas_width: int = 1180
+    preview_canvas_height: int = 720
     preview_gestures: bool = True
     preview_extended_threshold: float = 0.08
     preview_pinch_threshold: float = 0.06
     preview_status_provider: Callable[[], str] | None = None
+    preview_dashboard_provider: Callable[[], dict[str, Any] | None] | None = None
     preview_chart_provider: Callable[[], dict[str, Any] | None] | None = None
     preview_key_handler: Callable[[int], bool] | None = None
     name: str = "mediapipe"
@@ -135,6 +140,14 @@ class MediaPipeHandTrackerBackend:
             max_frames=self.max_frames,
         )
         self._capture.start()
+        if self.show:
+            self._cv2.namedWindow(PREVIEW_WINDOW_NAME, self._cv2.WINDOW_NORMAL)
+            if self.preview_layout == "dashboard":
+                self._cv2.resizeWindow(
+                    PREVIEW_WINDOW_NAME,
+                    int(self.preview_canvas_width),
+                    int(self.preview_canvas_height),
+                )
 
     def stop(self) -> None:
         if self._capture is not None:
@@ -213,6 +226,9 @@ class MediaPipeHandTrackerBackend:
             self.stop()
 
     def _draw_debug_image(self, image: Any, hands: tuple[NormalizedHand, ...]) -> bool:
+        if self.preview_layout == "dashboard":
+            return self._draw_dashboard_image(image, hands)
+
         assert self._cv2 is not None
         display_image = self._cv2.flip(image, 1) if self.preview_mirror else image
         height, width = display_image.shape[:2]
@@ -234,6 +250,47 @@ class MediaPipeHandTrackerBackend:
             self._draw_alert_banner(display_image, self.preview_status_provider())
         self._draw_gesture_strip(display_image, candidates)
         self._cv2.imshow(PREVIEW_WINDOW_NAME, display_image)
+        key = self._cv2.waitKey(1) & 0xFF
+        if self.preview_key_handler is not None and key not in (255, -1):
+            self.preview_key_handler(key)
+        return key not in (27, ord("q"))
+
+    def _draw_dashboard_image(self, image: Any, hands: tuple[NormalizedHand, ...]) -> bool:
+        assert self._cv2 is not None
+        dashboard = (
+            self.preview_dashboard_provider()
+            if self.preview_dashboard_provider is not None
+            else {}
+        ) or {}
+        status = self.preview_status_provider() if self.preview_status_provider is not None else ""
+        candidates = self._preview_candidates(
+            hands,
+            width=image.shape[1],
+            height=image.shape[0],
+        )
+        renderer = LiveDashboardRenderer(
+            cv2=self._cv2,
+            mirror=self.preview_mirror,
+            canvas_width=self.preview_canvas_width,
+            canvas_height=self.preview_canvas_height,
+        )
+        canvas = renderer.render(
+            image=image,
+            hands=hands,
+            dashboard=dashboard,
+            status=status,
+            candidates=candidates,
+            draw_hand_overlay=lambda target, hand, width, height, names: self._draw_hand_overlay(
+                target,
+                hand,
+                width=width,
+                height=height,
+                candidate_names=names,
+            ),
+            draw_alert_banner=self._draw_alert_banner,
+        )
+
+        self._cv2.imshow(PREVIEW_WINDOW_NAME, canvas)
         key = self._cv2.waitKey(1) & 0xFF
         if self.preview_key_handler is not None and key not in (255, -1):
             self.preview_key_handler(key)
