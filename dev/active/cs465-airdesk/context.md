@@ -282,7 +282,10 @@ Current TCN v2 implementation state:
   `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`
   evidence in the preview HUD, decodes candidates through the same start/end-aware
   event decoder, and can write live prediction/candidate JSONL via `--events-out`.
-  It does not call runtime policy or action targets.
+  It flashes a large preview banner for decoded swipes, uses compact HUD text so
+  the fields fit at 640px, and terminal candidate lines show both emit time and
+  peak time because live decoding waits for release/recovery evidence. It does
+  not call runtime policy or action targets.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.

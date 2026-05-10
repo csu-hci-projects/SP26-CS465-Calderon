@@ -533,18 +533,27 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         candidate_count += 1
                         hand_label = candidate.hand_id or "hand"
                         state["alert"] = f"{hand_label} {candidate.name} {candidate.confidence:.2f}"
-                        state["alert_until"] = monotonic() + 1.25
+                        state["alert_until"] = monotonic() + 1.8
                         _write_tcn_v2_live_event(
                             event_writer,
                             event_type="tcn_v2_live_candidate",
                             timestamp=utc_timestamp(),
                             session_id=session_id,
-                            payload={"candidate": candidate.to_dict()},
+                            payload={
+                                "candidate": candidate.to_dict(),
+                                "emitted_at": prediction.end_time,
+                                "relative_emitted_at_seconds": (
+                                    prediction.end_time - first_timestamp
+                                    if first_timestamp is not None
+                                    else prediction.end_time
+                                ),
+                            },
                         )
                         typer.echo(
                             _format_live_tcn_v2_candidate(
                                 candidate,
                                 first_timestamp=first_timestamp,
+                                emitted_at=prediction.end_time,
                             )
                         )
                     next_prediction_time_by_hand[hand_id] = (

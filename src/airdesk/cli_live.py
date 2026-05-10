@@ -78,12 +78,14 @@ def _format_live_tcn_v2_preview_predictions(state: dict[str, object]) -> str:
     predictions = state.get("predictions", {})
     rows_by_hand = state.get("rows_by_hand", {})
     if not isinstance(predictions, dict) or not predictions:
-        return f"TCN v2 streams={stream_count} rows={row_count} warming"
-    parts = [f"TCN v2 streams={stream_count} rows={row_count}"]
+        return f"TCNv2 s={stream_count} r={row_count} warming"
+    parts = [f"TCNv2 s={stream_count} r={row_count}"]
     for hand_id, prediction in sorted(predictions.items()):
         if not isinstance(prediction, CausalTcnV2LivePrediction):
             continue
         evidence = prediction.evidence
+        left = evidence.get("stroke_left", 0.0)
+        right = evidence.get("stroke_right", 0.0)
         motion = ""
         if show_motion and isinstance(rows_by_hand, dict):
             row = rows_by_hand.get(hand_id)
@@ -91,9 +93,9 @@ def _format_live_tcn_v2_preview_predictions(state: dict[str, object]) -> str:
             if isinstance(dx, float):
                 motion = f" dx={dx:.2f}"
         parts.append(
-            f"{hand_id}:intent={evidence.get('intentional_motion', 0.0):.2f} "
-            f"L={evidence.get('stroke_left', 0.0):.2f} "
-            f"R={evidence.get('stroke_right', 0.0):.2f} "
+            f"{hand_id}:L={left:.2f} "
+            f"R={right:.2f} "
+            f"I={evidence.get('intentional_motion', 0.0):.2f} "
             f"S={evidence.get('start', 0.0):.2f} "
             f"E={evidence.get('end', 0.0):.2f}{motion}"
         )
@@ -135,13 +137,18 @@ def _format_live_tcn_v2_candidate(
     candidate: GestureCandidate,
     *,
     first_timestamp: float | None,
+    emitted_at: float | None = None,
 ) -> str:
-    relative = candidate.timestamp
+    peak_relative = candidate.timestamp
     if first_timestamp is not None:
-        relative = candidate.timestamp - first_timestamp
+        peak_relative = candidate.timestamp - first_timestamp
+    emitted_relative = emitted_at
+    if emitted_relative is not None and first_timestamp is not None:
+        emitted_relative = emitted_relative - first_timestamp
+    emitted = f"t={emitted_relative:7.3f}s " if emitted_relative is not None else ""
     hand = f" hand={candidate.hand_id}" if candidate.hand_id else ""
     return (
-        f"t={relative:7.3f}s{hand} decoded={candidate.name} "
+        f"{emitted}peak={peak_relative:7.3f}s{hand} decoded={candidate.name} "
         f"confidence={candidate.confidence:.3f}"
     )
 
@@ -213,7 +220,7 @@ def _live_tcn_v2_preview_status(state: dict[str, object]) -> str:
     alert_until = float(state.get("alert_until", 0.0))
     alert = str(state.get("alert", ""))
     if alert and monotonic() <= alert_until:
-        return f"{status} | DECODED {alert}"
+        return f"{status} | GESTURE {alert}"
     return status
 
 

@@ -12,8 +12,10 @@ from airdesk.actions.hyprland import GuardedHyprlandActionTarget
 from airdesk.cli import app
 from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
+    _format_live_tcn_v2_candidate,
     _format_live_tcn_v2_preview_predictions,
     _format_tracker_timing,
+    _live_tcn_v2_preview_status,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_recording import (
@@ -37,6 +39,7 @@ from airdesk.profiles.models import ActionBinding, Profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
+    GestureCandidate,
     HandLandmarks,
     Landmark,
     NormalizedHand,
@@ -398,9 +401,31 @@ def test_live_tcn_v2_preview_status_lists_evidence_stably() -> None:
     )
 
     assert status == (
-        "TCN v2 streams=2 rows=15 | hand-0:intent=0.20 L=0.04 R=0.05 S=0.02 E=0.90 | "
-        "hand-1:intent=0.80 L=0.10 R=0.72 S=0.25 E=0.05"
+        "TCNv2 s=2 r=15 | hand-0:L=0.04 R=0.05 I=0.20 S=0.02 E=0.90 | "
+        "hand-1:L=0.10 R=0.72 I=0.80 S=0.25 E=0.05"
     )
+
+
+def test_live_tcn_v2_preview_status_uses_gesture_banner_marker() -> None:
+    status = _live_tcn_v2_preview_status(
+        {
+            "status": "TCNv2 s=1 r=20",
+            "alert": "hand-0 swipe_right 0.72",
+            "alert_until": 9999999999.0,
+        }
+    )
+
+    assert status == "TCNv2 s=1 r=20 | GESTURE hand-0 swipe_right 0.72"
+
+
+def test_live_tcn_v2_candidate_line_distinguishes_emit_and_peak_time() -> None:
+    line = _format_live_tcn_v2_candidate(
+        GestureCandidate(name="swipe_right", confidence=0.72, timestamp=10.2, hand_id="hand-0"),
+        first_timestamp=10.0,
+        emitted_at=10.6,
+    )
+
+    assert line == "t=  0.600s peak=  0.200s hand=hand-0 decoded=swipe_right confidence=0.720"
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:
