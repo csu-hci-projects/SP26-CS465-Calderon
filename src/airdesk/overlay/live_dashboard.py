@@ -202,7 +202,7 @@ class LiveDashboardRenderer:
         for hand in list(dashboard.get("hands", []))[:2]:
             if not isinstance(hand, dict):
                 continue
-            card_height = 154
+            card_height = 190
             if card_y + card_height > y + height - 74:
                 break
             self._draw_hand_card(
@@ -272,6 +272,34 @@ class LiveDashboardRenderer:
                 color=color,
             )
             meter_y += 20
+        features = hand.get("features", {})
+        if isinstance(features, dict):
+            motion_lines = self._motion_feature_lines(features)
+            feature_y = meter_y + 6
+            for line in motion_lines[:2]:
+                self._put_text_fit(
+                    image=image,
+                    text=line,
+                    x=x + 12,
+                    y=feature_y,
+                    max_width=width - 24,
+                    scale=0.34,
+                    color=(160, 174, 194),
+                    thickness=1,
+                )
+                feature_y += 18
+
+    def _motion_feature_lines(self, features: dict[str, Any]) -> tuple[str, ...]:
+        def value(name: str) -> float:
+            return float(features.get(name, 0.0))
+
+        return (
+            f"pos={value('palm_x'):.2f},{value('palm_y'):.2f} scale={value('hand_scale'):.2f}",
+            (
+                f"dx={value('dx_scale'):.2f} raw={value('dx_raw'):.2f} "
+                f"vx={value('peak_vx'):.2f} c={value('consistency'):.2f}"
+            ),
+        )
 
     def _draw_meter(
         self,

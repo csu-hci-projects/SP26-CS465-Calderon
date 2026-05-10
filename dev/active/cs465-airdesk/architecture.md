@@ -314,10 +314,14 @@ honest without changing live action safety. `airdesk gesture watch-tcn-v2` is
 the corresponding no-action live preview: it loads schema-2 evidence checkpoints,
 runs the shared model per visible hand stream, defaults to a resizable dashboard
 with webcam landmarks, evidence bars, decoded-gesture history, emit/peak delay,
-and timing summaries, decodes candidates through the same event decoder without
-flushing open live events before release evidence, and can write
-prediction/candidate JSONL for later review. It still bypasses runtime policy
-and action targets.
+timing summaries, and motion-feature diagnostics, decodes candidates through the
+same event decoder without flushing open live events before release evidence, and
+can write prediction/candidate JSONL for later review. `airdesk gesture
+holdout-tcn-v2` now provides the matching source-level train/test check for v2
+so strong same-source replay cannot be mistaken for generalization. The first
+schema-2 holdout on `sprint4-swipes-001` scored `2/4` held-out swipes with `5`
+false activations, so this remains preview/replay infrastructure rather than an
+action recognizer. It still bypasses runtime policy and action targets.
 
 ## Modes
 

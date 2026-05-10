@@ -228,23 +228,21 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> The stronger schema-2 TCN v2 contract has now been replay-checked on old data.
-> This is meaningful progress over the first 5-epoch smoke: at the old
-> `0.35/0.2/0.35` decoder settings, `sprint4-swipes-001` matched `9/16`, and
-> `sprint4-chained-003` matched `8/10` with `0` false activations but `3`
-> repeated fires. New `diagnose-tcn-v2-events` diagnostics showed the isolated
-> swipes "misses" were actually strong causal peaks slightly before the
-> hand-labeled start. With `--early-match-tolerance-seconds 0.25`, isolated
-> swipes score `16/16` with `5` false activations, all from negative/background
-> recordings. Chained replay remains `8/10` with `3` repeated fires and high
-> latency. Caden also identified a likely data issue: some "negative" desk-motion
-> recordings may contain unconscious swipe practice while looking at upcoming
-> training combos, so the 5 isolated negative false activations may be partly
-> contaminated negatives rather than pure idle false positives. Do not collect
-> broad combo data yet. The next gate is to live-preview the v2 evidence model
-> without actions, tighten negative-motion intent rejection/repeated-fire timing
-> only if the live/replay evidence still demands it, then decide whether a
-> targeted V2 slice is justified. Keep live actions dry-run/disabled.
+> The stronger schema-2 TCN v2 contract has now been replay-checked on old data,
+> live-tested, and source-holdout checked. Same-source replay was meaningfully
+> better than the first smoke: with `--early-match-tolerance-seconds 0.25`,
+> isolated swipes scored `16/16` with `5` false activations, and
+> `sprint4-chained-003` scored `8/10` with `3` repeated fires. But the new
+> `airdesk gesture holdout-tcn-v2` source split is much weaker: on
+> `sprint4-swipes-001`, training on takes 001-006 and testing on 007-008 scored
+> `2/4` held-out swipes with `5` false activations. Caden's live wrist-twist
+> false positives fit this: the current stream-invariant model does not consume
+> absolute `palm_x/y/z`, but projected wrist rotation can still perturb normalized
+> dx, peak x velocity, direction consistency, hand scale, and finger-relative
+> motion. Do not collect broad combo data yet. The next gate is a targeted V2
+> train/test slice with explicit wrist-twist/desk-motion negatives, near/far
+> starts, left/right frame positions, and held-out files. Keep live actions
+> dry-run/disabled.
 
 Current TCN v2 implementation state:
 
@@ -281,15 +279,19 @@ Current TCN v2 implementation state:
   shared checkpoint independently to each visible hand stream, and now defaults
   to `--preview-layout dashboard`: a resizable OpenCV dashboard with the webcam
   view, landmark overlay, per-hand evidence bars, decoded-gesture history,
-  emit-vs-peak delay, prediction/candidate counts, and tracker timing summaries.
+  emit-vs-peak delay, prediction/candidate counts, tracker timing summaries, and
+  the motion features driving each score (`pos`, hand scale, normalized dx, peak
+  x velocity, and direction consistency).
   The old compact camera overlay remains available with `--preview-layout camera`.
   `--camera-buffer-size` defaults to `1` on this command to reduce stale-frame
   backlog where OpenCV honors the setting. The command decodes candidates through
   the same start/end-aware event decoder and can write live prediction/candidate
-  JSONL via `--events-out`. Terminal candidate lines still show both emit time
-  and peak time because live decoding waits for release/recovery evidence, but
-  the dashboard is now the primary live feedback surface. It does not call
-  runtime policy or action targets.
+  JSONL via `--events-out`; prediction events include the same motion-feature
+  diagnostics and candidate events include top-level peak/emit/delay fields.
+  Terminal candidate lines still show both emit time and peak time because live
+  decoding waits for release/recovery evidence, but the dashboard is now the
+  primary live feedback surface. It does not call runtime policy or action
+  targets.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.
@@ -359,14 +361,25 @@ Current TCN v2 old-data regression:
   `16/16`, `0` missed, `22` candidates, `5` false activations, `0` repeated
   fires, and about `0.065 s` mean latency. The remaining false activations are
   all in normal-desk-motion negative recordings.
+- Source-level `airdesk gesture holdout-tcn-v2` now exists for the same
+  filename-ordered split used by DTW/legacy TCN holdout. On `sprint4-swipes-001`,
+  the schema-2 holdout trained on 18 files and tested on 6 files:
+  `intended=4`, `matched=2`, `missed=2`, `candidates=7`,
+  `false_activations=5`, `repeated_fires=0`, `mean_latency=0.214`.
+  The held-out test files were takes 007-008 for left, right, and
+  normal-desk-motion negatives. This confirms the strong same-source replay
+  number was optimistic and not live-quality proof.
 - The same swipes-trained model on `sprint4-chained-003` scores `8/10`, `0`
   false activations, `3` repeated fires, and about `1.75 s` mean latency; the
   two misses have nearest same-gesture candidates roughly `0.93 s` and `1.50 s`
   before the coarse label starts, so a small early-match tolerance does not
   explain them away.
-- Interpretation: the architecture cleanup fixed the old underconfidence enough
-  to justify targeted V2 collection soon, but not before addressing negative
-  background false activations and repeated/early fires in continuous streams.
+- Interpretation: the architecture cleanup fixed underconfidence enough to make
+  the evidence useful, but current old-data/live behavior is not good enough for
+  action wiring. Targeted V2 collection is now justified only as a held-out
+  train/test slice focused on twist/desk-motion negatives, weak/short swipes,
+  near/far starts, left/right frame positions, tracking drops, and repeated
+  swipes.
 
 Current CLI cleanup state:
 

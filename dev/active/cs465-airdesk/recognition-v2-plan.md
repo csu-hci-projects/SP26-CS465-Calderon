@@ -415,6 +415,20 @@ continuous runtime behavior than repeatedly decoding a truncated replay prefix.
 This does not change the live-action stance: learned swipes still do not
 dispatch desktop actions.
 
+Status update after the first live feel-test and source-holdout check: same-source
+old replay is not enough evidence. The new `airdesk gesture holdout-tcn-v2`
+command trains/evaluates v2 on the same filename-ordered split shape as DTW and
+legacy TCN holdout. On `sprint4-swipes-001`, the schema-2 source holdout trained
+on takes 001-006 and tested on takes 007-008 scored `2/4` held-out swipes with
+`5` false activations, despite train frame accuracy around `0.986` and validation
+frame accuracy around `0.976`. Live wrist-twist false positives are plausible
+from the current feature geometry: the model does not use absolute `palm_x`,
+`palm_y`, or `palm_z` when trained with `stream-invariant`, but projected wrist
+rotation can still perturb normalized palm dx, peak horizontal velocity,
+direction consistency, hand scale, and finger-relative features. `watch-tcn-v2`
+now exposes those motion features in the dashboard and JSONL logs. Next data
+should be targeted and held out, not broad combo collection.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -437,9 +451,9 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Use the `watch-tcn-v2` dashboard for a no-action live feel-test and log predictions/candidates.
-5. Use TCN v2 diagnostics to tighten negative-motion false activations and repeated fires if the live/replay evidence still demands it.
-6. Plan or collect the targeted continuous V2 slice above only after that gate is clean enough.
+4. Use the `watch-tcn-v2` dashboard for no-action live feel-tests and log predictions/candidates plus motion features.
+5. Use `holdout-tcn-v2` and TCN v2 diagnostics to keep train/test claims honest before changing thresholds.
+6. Plan or collect the targeted continuous V2 slice above only as a held-out train/test slice with explicit wrist-twist and desk-motion negatives.
 7. Keep live desktop actions disabled.
 
 If the next agent finds the plan too broad, it should narrow TCN v2 to the

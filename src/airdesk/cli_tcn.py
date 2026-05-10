@@ -766,6 +766,219 @@ def gesture_holdout_tcn(
     typer.echo(f"wrote holdout={out}")
 
 
+def gesture_holdout_tcn_v2(
+    features_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Feature CSV directory."),
+    ],
+    labels_dir: Annotated[
+        Path,
+        typer.Option(exists=True, file_okay=False, readable=True, help="Label directory."),
+    ],
+    out: Annotated[Path, typer.Option(help="Output JSON summary path.")],
+    model_out: Annotated[Path, typer.Option(help="Output TCN v2 checkpoint path.")],
+    train_manifest_out: Annotated[
+        Path | None,
+        typer.Option(help="Optional output path for the train manifest."),
+    ] = None,
+    test_manifest_out: Annotated[
+        Path | None,
+        typer.Option(help="Optional output path for the held-out test manifest."),
+    ] = None,
+    train_per_gesture: Annotated[int, typer.Option(help="Training files per gesture.")] = 6,
+    test_per_gesture: Annotated[int, typer.Option(help="Held-out test files per gesture.")] = 2,
+    train_negatives: Annotated[int, typer.Option(help="Training negative/background files.")] = 6,
+    test_negatives: Annotated[int, typer.Option(help="Held-out negative/background files.")] = 2,
+    window_seconds: Annotated[float, typer.Option(help="Sliding window duration.")] = 0.8,
+    stride_seconds: Annotated[float, typer.Option(help="Sliding window stride.")] = 0.2,
+    min_rows: Annotated[int, typer.Option(help="Minimum rows per window.")] = 4,
+    min_gesture_fraction: Annotated[
+        float,
+        typer.Option(help="Minimum in-window gesture-frame fraction for display targets."),
+    ] = 0.35,
+    feature_preset: Annotated[
+        str,
+        typer.Option(help="Feature preset: legacy or stream-invariant."),
+    ] = "stream-invariant",
+    target_assignment: Annotated[
+        str,
+        typer.Option(help="Target assignment: label or motion-gated."),
+    ] = "label",
+    motion_gate_min_dx_per_hand_scale: Annotated[
+        float,
+        typer.Option(
+            help=(
+                "For motion-gated targets, minimum absolute trailing palm dx normalized by "
+                "hand scale."
+            ),
+        ),
+    ] = 0.35,
+    motion_gate_min_direction_consistency: Annotated[
+        float,
+        typer.Option(
+            help="For motion-gated targets, minimum same-direction motion consistency.",
+        ),
+    ] = 0.45,
+    epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
+    learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
+    batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
+    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 32,
+    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 3,
+    kernel_size: Annotated[int, typer.Option(help="Causal convolution kernel size.")] = 3,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.10,
+    validation_fraction: Annotated[
+        float,
+        typer.Option(help="Deterministic validation split fraction within train windows."),
+    ] = 0.2,
+    seed: Annotated[int, typer.Option(help="Deterministic training seed.")] = 7,
+    positive_weight_cap: Annotated[
+        float,
+        typer.Option(help="Maximum BCE positive-class weight per evidence head."),
+    ] = 30.0,
+    boundary_positive_weight_multiplier: Annotated[
+        float,
+        typer.Option(help="Extra positive-weight multiplier for sparse start/end heads."),
+    ] = 2.0,
+    focal_gamma: Annotated[
+        float,
+        typer.Option(help="Focal loss gamma for hard evidence frames; 0 disables focal scaling."),
+    ] = 1.0,
+    match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance after an event interval for event matching."),
+    ] = 0.5,
+    early_match_tolerance_seconds: Annotated[
+        float,
+        typer.Option(help="Tolerance before an event interval for causal early detections."),
+    ] = 0.0,
+    activation_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder activation threshold over stroke evidence."),
+    ] = 0.35,
+    release_threshold: Annotated[
+        float,
+        typer.Option(help="Event decoder release threshold over stroke evidence."),
+    ] = 0.2,
+    min_peak_confidence: Annotated[
+        float,
+        typer.Option(help="Event decoder minimum peak stroke confidence."),
+    ] = 0.35,
+    cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
+    ] = 0.5,
+) -> None:
+    """Train/evaluate TCN v2 on a deterministic filename-ordered holdout split."""
+    train_features, test_features = _split_tcn_feature_holdout(
+        features_dir=features_dir,
+        labels_dir=labels_dir,
+        train_per_gesture=train_per_gesture,
+        test_per_gesture=test_per_gesture,
+        train_negatives=train_negatives,
+        test_negatives=test_negatives,
+    )
+    train_manifest_path = train_manifest_out or out.with_name(f"{out.stem}-train-manifest.json")
+    test_manifest_path = test_manifest_out or out.with_name(f"{out.stem}-test-manifest.json")
+    train_manifest = build_tcn_dataset_manifest(
+        train_features,
+        labels_dir=labels_dir,
+        window_seconds=window_seconds,
+        stride_seconds=stride_seconds,
+        min_rows=min_rows,
+        min_gesture_fraction=min_gesture_fraction,
+        feature_preset=feature_preset,
+        target_mode="v2-evidence",
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+    )
+    test_manifest = build_tcn_dataset_manifest(
+        test_features,
+        labels_dir=labels_dir,
+        window_seconds=window_seconds,
+        stride_seconds=stride_seconds,
+        min_rows=min_rows,
+        min_gesture_fraction=min_gesture_fraction,
+        feature_preset=feature_preset,
+        target_mode="v2-evidence",
+        target_assignment=target_assignment,
+        motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+        motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+    )
+    save_tcn_dataset_manifest(train_manifest, train_manifest_path)
+    save_tcn_dataset_manifest(test_manifest, test_manifest_path)
+    config = CausalTcnV2TrainingConfig(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        hidden_channels=hidden_channels,
+        levels=levels,
+        kernel_size=kernel_size,
+        dropout=dropout,
+        validation_fraction=validation_fraction,
+        seed=seed,
+        positive_weight_cap=positive_weight_cap,
+        boundary_positive_weight_multiplier=boundary_positive_weight_multiplier,
+        focal_gamma=focal_gamma,
+    )
+    decoder_config = EventDecoderConfig(
+        activation_threshold=activation_threshold,
+        release_threshold=release_threshold,
+        min_peak_confidence=min_peak_confidence,
+        min_event_separation_seconds=cooldown_seconds,
+        cooldown_seconds=cooldown_seconds,
+    )
+    try:
+        train_result = train_causal_tcn_v2(
+            manifest_path=train_manifest_path,
+            out_path=model_out,
+            config=config,
+        )
+        evaluations = evaluate_tcn_v2_manifest(
+            manifest_path=test_manifest_path,
+            model_path=model_out,
+            match_tolerance_seconds=match_tolerance_seconds,
+            early_match_tolerance_seconds=early_match_tolerance_seconds,
+            event_decoder_config=decoder_config,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    summary = holdout_totals(evaluations)
+    payload = {
+        "recognizer": "tcn_v2_event_decoder",
+        "model_path": str(model_out),
+        "split": {
+            "train_manifest": str(train_manifest_path),
+            "test_manifest": str(test_manifest_path),
+            "train_features": [str(path) for path in train_features],
+            "test_features": [str(path) for path in test_features],
+        },
+        "training": train_result.to_dict(),
+        "event_decoder": decoder_config.to_dict(),
+        "match_tolerance_seconds": match_tolerance_seconds,
+        "early_match_tolerance_seconds": early_match_tolerance_seconds,
+        "summary": summary,
+        "evaluations": [evaluation.to_dict() for evaluation in evaluations],
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    latency = summary["mean_latency_seconds"]
+    formatted_latency = round(latency, 4) if isinstance(latency, float) else "unknown"
+    typer.echo(
+        f"recognizer=tcn_v2_event_decoder train={len(train_features)} "
+        f"test={len(test_features)} intended={summary['intended_events']} "
+        f"matched={summary['matched_events']} missed={summary['missed_events']} "
+        f"candidates={summary['candidate_count']} "
+        f"false_activations={summary['false_activations']} "
+        f"repeated_fires={summary['repeated_fires']} mean_latency={formatted_latency}"
+    )
+    typer.echo(f"wrote holdout={out}")
+
+
 def gesture_diagnose_features(
     features_dir: Annotated[
         Path,
@@ -890,4 +1103,5 @@ def register_tcn_commands(gesture_app: typer.Typer) -> None:
     gesture_app.command("diagnose-tcn-events")(gesture_diagnose_tcn_events)
     gesture_app.command("diagnose-tcn-v2-events")(gesture_diagnose_tcn_v2_events)
     gesture_app.command("holdout-tcn")(gesture_holdout_tcn)
+    gesture_app.command("holdout-tcn-v2")(gesture_holdout_tcn_v2)
     gesture_app.command("diagnose-features")(gesture_diagnose_features)

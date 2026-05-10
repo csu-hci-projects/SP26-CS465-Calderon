@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+import airdesk.cli_tcn as cli_tcn
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import GuardedHyprlandActionTarget
+from airdesk.analysis import GestureEvaluation
 from airdesk.cli import app
 from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
@@ -35,7 +37,11 @@ from airdesk.labels import (
     load_label_file,
     save_label_file,
 )
-from airdesk.ml import CausalTcnLivePrediction, CausalTcnV2LivePrediction
+from airdesk.ml import (
+    CausalTcnLivePrediction,
+    CausalTcnTrainingResult,
+    CausalTcnV2LivePrediction,
+)
 from airdesk.profiles.models import ActionBinding, Profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
@@ -467,6 +473,40 @@ def test_live_tcn_v2_dashboard_snapshot_contains_structured_evidence() -> None:
                     },
                 ),
             },
+            "rows_by_hand": {
+                "hand-0": FrameFeatureRow(
+                    frame_index=12,
+                    timestamp=12.5,
+                    dt=0.1,
+                    tracking_present=1,
+                    hand_count=1,
+                    hand_id="hand-0",
+                    confidence=0.99,
+                    palm_x=0.62,
+                    palm_y=0.44,
+                    palm_z=0.0,
+                    palm_vx=0.15,
+                    palm_vy=0.02,
+                    palm_speed=0.151,
+                    palm_ax=0.0,
+                    palm_ay=0.0,
+                    palm_window_dx=0.04,
+                    palm_window_dx_per_hand_scale=0.20,
+                    palm_window_peak_abs_vx=0.34,
+                    palm_window_direction_consistency=0.75,
+                    index_rel_x=0.0,
+                    index_rel_y=0.0,
+                    index_rel_vx=0.0,
+                    index_rel_vy=0.0,
+                    pinch_distance=0.1,
+                    pinch_velocity=0.0,
+                    hand_scale=0.2,
+                    extended_fingers=4,
+                    folded_fingers=0,
+                    phase="",
+                    event="",
+                ),
+            },
         },
         first_timestamp=10.0,
     )
@@ -484,6 +524,17 @@ def test_live_tcn_v2_dashboard_snapshot_contains_structured_evidence() -> None:
             "intent": 0.8,
             "start": 0.25,
             "end": 0.05,
+            "features": {
+                "palm_x": 0.62,
+                "palm_y": 0.44,
+                "hand_scale": 0.2,
+                "dx_raw": 0.04,
+                "dx_scale": 0.2,
+                "peak_vx": 0.34,
+                "consistency": 0.75,
+                "speed": 0.151,
+            },
+            "dx": 0.2,
         }
     ]
     assert snapshot["recent_candidates"][0]["delay"] == 0.5
@@ -528,6 +579,21 @@ def test_holdout_tcn_help_exposes_split_and_training_controls() -> None:
     assert "--features-dir" in result.stdout
     assert "--train-per-gesture" in result.stdout
     assert "--model-out" in result.stdout
+
+
+def test_holdout_tcn_v2_help_exposes_split_and_decoder_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "holdout-tcn-v2", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--features-dir" in result.stdout
+    assert "--train-per-gesture" in result.stdout
+    assert "--model-out" in result.stdout
+    assert "--early-match-tolerance-seconds" in result.stdout
+    assert "--activation-threshold" in result.stdout
 
 
 def test_diagnose_features_help_exposes_holdout_split_controls() -> None:
@@ -1167,6 +1233,101 @@ def test_gesture_diagnose_features_cli_writes_report(tmp_path: Path) -> None:
     assert "wrote diagnostics=" in result.stdout
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["aggregates"]["test:swipe_left"]["count"] == 1
+
+
+def test_gesture_holdout_tcn_v2_cli_writes_split_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    features_dir = tmp_path / "features"
+    labels_dir = tmp_path / "labels"
+    features_dir.mkdir()
+    labels_dir.mkdir()
+    for stem, gesture in (
+        ("swipe-left-positive-001", "swipe_left"),
+        ("swipe-left-positive-002", "swipe_left"),
+        ("swipe-right-positive-001", "swipe_right"),
+        ("swipe-right-positive-002", "swipe_right"),
+        ("normal-desk-motion-negative-001", None),
+        ("normal-desk-motion-negative-002", None),
+    ):
+        _write_feature_csv(
+            features_dir / f"{stem}.csv",
+            events=("", gesture or "", gesture or "", ""),
+        )
+        _write_feature_label(labels_dir / f"{stem}.labels.json", gesture=gesture)
+
+    def fake_train_tcn_v2(**kwargs: object) -> CausalTcnTrainingResult:
+        Path(kwargs["out_path"]).write_bytes(b"fake checkpoint")
+        return CausalTcnTrainingResult(
+            model_path=str(kwargs["out_path"]),
+            samples=6,
+            train_samples=5,
+            validation_samples=1,
+            epochs=1,
+            final_train_loss=0.1,
+            train_accuracy=0.9,
+            validation_accuracy=0.8,
+            targets=("intentional_motion", "stroke_left", "stroke_right", "start", "end"),
+            feature_columns=("palm_window_dx_per_hand_scale",),
+        )
+
+    def fake_evaluate_tcn_v2_manifest(**kwargs: object) -> tuple[GestureEvaluation, ...]:
+        manifest_payload = json.loads(Path(kwargs["manifest_path"]).read_text(encoding="utf-8"))
+        assert manifest_payload["target_mode"] == "v2-evidence"
+        assert manifest_payload["feature_preset"] == "stream-invariant"
+        return (
+            GestureEvaluation(
+                recording="held-out.csv",
+                labels="held-out.labels.json",
+                recognizer="tcn_v2_event_decoder",
+                intended_events=1,
+                matched_events=1,
+                missed_events=0,
+                candidate_count=1,
+                false_activations=0,
+                repeated_fires=0,
+                latencies_seconds=(0.2,),
+            ),
+        )
+
+    monkeypatch.setattr(cli_tcn, "train_causal_tcn_v2", fake_train_tcn_v2)
+    monkeypatch.setattr(cli_tcn, "evaluate_tcn_v2_manifest", fake_evaluate_tcn_v2_manifest)
+
+    output = tmp_path / "holdout.json"
+    model = tmp_path / "model.pt"
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "holdout-tcn-v2",
+            "--features-dir",
+            str(features_dir),
+            "--labels-dir",
+            str(labels_dir),
+            "--out",
+            str(output),
+            "--model-out",
+            str(model),
+            "--train-per-gesture",
+            "1",
+            "--test-per-gesture",
+            "1",
+            "--train-negatives",
+            "1",
+            "--test-negatives",
+            "1",
+            "--epochs",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=tcn_v2_event_decoder train=3 test=3 intended=1 matched=1" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["split"]["train_manifest"].endswith("holdout-train-manifest.json")
+    assert payload["summary"]["matched_events"] == 1
+    assert model.exists()
 
 
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:

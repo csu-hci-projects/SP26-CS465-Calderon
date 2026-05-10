@@ -284,11 +284,32 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
         }
         if isinstance(rows_by_hand, dict):
             row = rows_by_hand.get(hand_id)
-            dx = getattr(row, "palm_window_dx_per_hand_scale", None)
-            if isinstance(dx, float):
-                hand["dx"] = dx
+            features = _live_tcn_v2_row_motion_features(row)
+            if features:
+                hand["features"] = features
+                hand["dx"] = features["dx_scale"]
         hands.append(hand)
     return hands
+
+
+def _live_tcn_v2_row_motion_features(row: object) -> dict[str, float]:
+    """Return compact motion features that explain live TCN v2 evidence spikes."""
+    feature_names = (
+        ("palm_x", "palm_x"),
+        ("palm_y", "palm_y"),
+        ("hand_scale", "hand_scale"),
+        ("dx_raw", "palm_window_dx"),
+        ("dx_scale", "palm_window_dx_per_hand_scale"),
+        ("peak_vx", "palm_window_peak_abs_vx"),
+        ("consistency", "palm_window_direction_consistency"),
+        ("speed", "palm_speed"),
+    )
+    features: dict[str, float] = {}
+    for output_name, attr in feature_names:
+        value = getattr(row, attr, None)
+        if isinstance(value, int | float):
+            features[output_name] = float(value)
+    return features
 
 
 def _live_timing_dashboard_summary(timing_samples: list[Any]) -> dict[str, str]:

@@ -177,22 +177,35 @@ Important evidence:
 
 Next-session assignment:
 
-Continue from the schema-2 replay evidence. The TCN architecture itself no
-longer looks like the immediate blocker; the next high-value pre-collection gate
-is negative-motion intent rejection plus repeated-fire/boundary timing, using
-the new `watch-tcn-v2` live dashboard and JSONL logs when live feel diverges
-from replay. Targeted V2 recording is close, but still deferred until those
-replay/live failures are either fixed or explicitly accepted as the reason for
-targeted data.
+Continue from the schema-2 replay/live mismatch. The TCN architecture itself no
+longer looks like the only blocker, but the old-data source holdout now proves
+the same-source replay result was optimistic: `airdesk gesture holdout-tcn-v2`
+on `sprint4-swipes-001` trained on takes 001-006, tested on 007-008, and scored
+`2/4` held-out swipes with `5` false activations despite strong train/validation
+frame accuracy. Live wrist-twist failures fit that story: the stream-invariant
+model does not consume absolute `palm_x/y/z`, but wrist rotation can still move
+the projected palm center, normalized dx, peak x velocity, direction
+consistency, and finger-relative features enough to look swipe-like. The next
+high-value gate is a targeted held-out V2 slice with explicit wrist-twist /
+desk-motion negatives plus near/far and left/right frame positions, then
+negative-motion intent rejection and repeated-fire/boundary timing fixes from
+that evidence. Keep learned swipes preview/replay only.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - inspect `diagnose-tcn-v2-events` outputs for the 5 isolated negative false
-     activations and decide whether decoder/intent gating can remove them
-     without losing true swipes;
+   - inspect `data/evaluations/sprint4-swipes-001-tcn-v2/schema2-holdout-summary.json`
+     and `schema2-holdout-diagnostics.json` before trusting old same-source
+     replay numbers;
+   - use the updated `watch-tcn-v2` dashboard/JSONL motion diagnostics to log
+     wrist-twist, hand repositioning, and normal desk-motion false activations;
+   - decide whether targeted V2 recording is now justified, with a real source
+     holdout and explicit twist/negative-motion labels;
+   - if code is changed before collection, focus on decoder/intent gating that
+     removes negative-motion false activations without losing true held-out
+     swipes;
    - inspect the `sprint4-chained-003` repeated fires and decide whether the
      decoder needs stronger end/start valley handling before targeted data;
    - if a code fix is clear, implement it with tests and rerun the old replay
@@ -209,9 +222,10 @@ targeted data.
      decoder output.
 3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
-4. Do not record the new V2 data in this cleanup session unless tests pass, the
-   TCN architecture/training/evaluation surface is clean enough to trust, and
-   Caden explicitly decides to switch from cleanup into collection.
+4. Do not record broad combo data. A targeted V2 slice is now justified only if
+   it is explicitly designed as train/test data with held-out sources and
+   includes wrist-twist/lightbulb negatives, desk motion, hand enters/leaves
+   frame, near/far starts, and left/right frame-position variants.
 5. The targeted V2 recording slice should still be: repeated
    same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
    negatives, hand enters/leaves frame, near/far starts, and two visible hands

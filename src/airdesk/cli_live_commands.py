@@ -26,6 +26,7 @@ from airdesk.cli_live import (
     _live_tcn_preview_status,
     _live_tcn_v2_dashboard_snapshot,
     _live_tcn_v2_preview_status,
+    _live_tcn_v2_row_motion_features,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_tracking import _make_tracker
@@ -543,6 +544,9 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         payload={
                             "prediction": prediction.to_dict(),
                             "decoder_scores": decoder_scores,
+                            "features": _live_tcn_v2_row_motion_features(
+                                latest_rows_by_hand.get(hand_id)
+                            ),
                             "relative_time_seconds": (
                                 prediction.end_time - first_timestamp
                                 if first_timestamp is not None
@@ -611,7 +615,17 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                             session_id=session_id,
                             payload={
                                 "candidate": candidate.to_dict(),
+                                "name": candidate.name,
+                                "hand_id": candidate.hand_id,
+                                "confidence": candidate.confidence,
+                                "peak_at": candidate.timestamp,
                                 "emitted_at": prediction.end_time,
+                                "delay": max(0.0, prediction.end_time - candidate.timestamp),
+                                "relative_peak_seconds": (
+                                    candidate.timestamp - first_timestamp
+                                    if first_timestamp is not None
+                                    else candidate.timestamp
+                                ),
                                 "relative_emitted_at_seconds": (
                                     prediction.end_time - first_timestamp
                                     if first_timestamp is not None
