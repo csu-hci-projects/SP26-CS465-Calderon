@@ -122,6 +122,30 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 `watch-dtw` uses a live-optimized latest-window scan. Offline DTW evaluation still scans all candidate windows, but live preview only scores windows ending at the newest usable hand frame so it does not repeatedly rescan the whole rolling buffer.
 `watch-tcn-v2` is still no-action preview only; use the dashboard and JSONL logs to inspect evidence bars, emit-vs-peak delay, and motion features such as position, hand scale, normalized dx, peak x velocity, and direction consistency. If a wrist-twist/lightbulb motion fires as a swipe, record that as a targeted V2 negative rather than sweeping thresholds.
 
+## Public Dataset Conversion Smoke
+
+The first public-data experiment should use IPN Hand as a training aid for
+atomic left/right swipe evidence. Download the IPN MP4 videos and
+`annotation_ipnGesture/` files into ignored local storage such as
+`data/public/ipn/`, then run a bounded smoke before converting the full split:
+
+```bash
+uv run airdesk public-data ipn-convert \
+  --videos-dir data/public/ipn/videos \
+  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --out-dir data/public/ipn/airdesk-smoke \
+  --split train \
+  --limit 1 \
+  --frame-limit 120 \
+  --manifest-out data/public/ipn/airdesk-smoke/tcn-v2-ipn-smoke-manifest.json \
+  --mapping-out data/public/ipn/airdesk-smoke/ipn-airdesk-mapping.csv
+```
+
+Inspect the generated recording, label JSON, feature CSV, and mapping CSV before
+running a full conversion. The first importer maps only IPN `G05` / `G06` to
+AirDesk `swipe_left` / `swipe_right`; other IPN gestures are treated as
+background/negative evidence for the current TCN v2 heads.
+
 Short smoke evidence from 2026-05-06 on `/dev/video0` at `640x480 @ 30 FPS MJPG`:
 
 - CPU delegate on Intel/Mesa EGL: MediaPipe inference mean about `16.84 ms`, p95 about `22.39 ms`.

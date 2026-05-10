@@ -523,6 +523,20 @@ features. `stream-invariant-v2` removes those fields from classifier input while
 keeping them visible in the dashboard and JSONL logs. Next data should be
 targeted and held out, not broad combo collection.
 
+### Public Dataset Training Aid
+
+The public dataset survey is in `public-dataset-survey.md`. Use IPN Hand as the
+first public-data experiment because it is continuous and contains natural
+non-gesture motion. The importer exposed as `airdesk public-data ipn-convert`
+turns downloaded IPN videos into normal AirDesk replay recordings, labels, CSV
+features, and optional `stream-invariant-v2` / `v2-evidence` manifests.
+
+For the first IPN model, keep the output heads unchanged:
+`intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`.
+Map only IPN `G05` / `G06` to AirDesk `swipe_left` / `swipe_right`; leave other
+IPN gesture classes as background/negative until AirDesk adds explicit heads for
+click/select or push. Do not train combo labels from public data.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:

@@ -78,6 +78,20 @@ def test_cli_help_works() -> None:
     assert "AirDesk spatial input prototype CLI" in result.stdout
 
 
+def test_public_data_ipn_convert_help_exposes_import_options() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["public-data", "ipn-convert", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--annotations-dir" in result.stdout
+    assert "--videos-dir" in result.stdout
+    assert "--manifest-out" in result.stdout
+    assert "--hand-delegate" in result.stdout
+
+
 def test_tune_help_exposes_threshold_options() -> None:
     result = CliRunner().invoke(app, ["tune", "--help"], env={"COLUMNS": "200"})
 

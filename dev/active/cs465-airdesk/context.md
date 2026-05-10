@@ -516,6 +516,36 @@ Updated stance:
 
 See `dynamic-gesture-research.md` for the deeper research notes and source anchors.
 
+## Public Dataset Pivot
+
+The public-dataset survey is now recorded in
+`public-dataset-survey.md`. Recommendation: start with IPN Hand, not Jester, for
+the first public-data TCN v2 experiment. IPN is continuous, webcam/RGB based,
+CC BY 4.0, includes natural non-gesture hand motion, and maps directly to the
+current AirDesk atomic left/right swipe heads through `G05` / `G06`. Jester is
+larger and useful later for clip-level pretraining, but it is less aligned with
+AirDesk's immediate boundary/continuous-spotting problem.
+
+The first local-data-only importer is available:
+
+```bash
+uv run airdesk public-data ipn-convert \
+  --videos-dir data/public/ipn/videos \
+  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --out-dir data/public/ipn/airdesk \
+  --split train \
+  --limit 1 \
+  --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json \
+  --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
+```
+
+It runs downloaded IPN MP4s through MediaPipe, writes AirDesk replay JSONL,
+exports feature CSVs, maps only IPN `G05` / `G06` into `swipe_left` /
+`swipe_right` labels, and can build a `stream-invariant-v2` / `v2-evidence`
+manifest. Other IPN classes remain background/negative examples for the first
+left/right atomic pass. Keep raw public datasets and generated artifacts in
+ignored `data/public/`.
+
 ## Current Roadmap
 
 ### Sprint 3: Pilot-Safe Live Command Mode

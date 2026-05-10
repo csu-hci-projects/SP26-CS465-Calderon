@@ -29,7 +29,8 @@ Before doing anything:
    - `dev/active/cs465-airdesk/tasks.md`
    - `dev/active/cs465-airdesk/context-reset-prompt.md`
    - `dev/active/cs465-airdesk/handoff-prompt.md`
-   - `dev/active/cs465-airdesk/dynamic-gesture-research.md`
+- `dev/active/cs465-airdesk/dynamic-gesture-research.md`
+- `dev/active/cs465-airdesk/public-dataset-survey.md`
    - `dev/active/cs465-airdesk/research-notes.md`
    - `dev/active/cs465-airdesk/sprint-4.md`
    - `dev/active/cs465-airdesk/sprint-5.md`
@@ -175,6 +176,39 @@ Important evidence:
   construction lives in `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is
   now about 60 LOC of app wiring plus `doctor` / `analyze`.
 
+Latest public-dataset update:
+
+The primary-source survey is now in
+`dev/active/cs465-airdesk/public-dataset-survey.md`. Recommendation: start with
+IPN Hand because it is continuous, RGB-webcam based, CC BY 4.0, includes natural
+non-gesture hand motion, and has direct left/right gesture classes. Jester is
+still useful later for large clip-level pretraining but is less aligned with
+AirDesk's boundary/continuous-spotting problem. EgoGesture and ChaLearn ConGD
+are continuous alternatives, but EgoGesture is egocentric RGB-D and requires an
+agreement, while ChaLearn is broad RGB-D challenge data with less direct desktop
+gesture mapping. IPN HandS may be valuable if its refined skeleton annotations
+are available locally, but verify access before building around it.
+
+Implemented importer:
+
+```bash
+uv run airdesk public-data ipn-convert \
+  --videos-dir data/public/ipn/videos \
+  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --out-dir data/public/ipn/airdesk \
+  --split train \
+  --limit 1 \
+  --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json \
+  --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
+```
+
+It runs downloaded IPN MP4 videos through MediaPipe, writes AirDesk replay JSONL,
+maps only IPN `G05` / `G06` to atomic `swipe_left` / `swipe_right` labels,
+exports normal `FrameFeatureRow` CSVs, and can build a `stream-invariant-v2`
+`v2-evidence` manifest. Other IPN classes stay background/negative for the first
+left/right TCN pass. Raw public dataset downloads and generated artifacts should
+stay ignored under `data/public/`.
+
 Next-session assignment:
 
 Continue from the new public-dataset / atomic-gesture planning pivot. The
@@ -201,29 +235,21 @@ Architectural stance:
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. Start with a public dataset survey. Use primary sources where possible.
-   Compare IPN Hand, Jester, and any better continuous/dynamic hand datasets you
-   find. Record license/access status, gesture classes, whether the data is
-   continuous or clip-level, number of subjects/samples, RGB vs landmarks, and
-   whether classes map to AirDesk atomic gestures such as left/right swipe,
-   click/select, push, or background/no-gesture.
-3. Make a concrete recommendation. Current expectation: IPN Hand first because
-   it is continuous and has natural non-gesture motion; Jester may be useful for
-   later large-scale clip pretraining but is less directly aligned.
-4. If IPN is still the best bet, implement the smallest importer/converter:
-   public video -> MediaPipe tracking frames -> AirDesk feature CSV rows ->
-   labels/manifest using `stream-invariant-v2`. Keep raw downloaded data out of
-   Git.
-5. Train an IPN-only TCN v2 atomic model and evaluate it in replay/live-preview
+2. If Caden has downloaded IPN locally, run the one-video smoke converter first,
+   preferably with `--frame-limit 120`, then inspect the generated recording,
+   labels, features, mapping CSV, and manifest.
+3. If the smoke is clean, convert the selected IPN train/validation videos into
+   ignored `data/public/ipn/airdesk/` artifacts.
+4. Train an IPN-only TCN v2 atomic model and evaluate it in replay/live-preview
    form before mixing it with AirDesk data.
-6. Then compare AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or
+5. Then compare AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or
    hybrid training on the AirDesk source-held-out V2 recordings.
-7. Preserve current behavior unless a bug is found and fixed intentionally. Keep
+6. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
-8. Update README/context/tasks/tracking-samples/next-session docs with whatever
+7. Update README/context/tasks/tracking-samples/next-session docs with whatever
    changes.
-9. Run `uv run ruff check .` and `uv run pytest`.
-10. Commit meaningful chunks and push to `origin/main`.
+8. Run `uv run ruff check .` and `uv run pytest`.
+9. Commit meaningful chunks and push to `origin/main`.
 
 Do not:
 
