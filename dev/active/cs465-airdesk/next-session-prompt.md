@@ -117,7 +117,8 @@ Important evidence:
   tracked intentional evidence inside each labeled event interval.
 - CLI cleanup has continued without changing the public entrypoint. The public
   entrypoint remains `airdesk.cli:app`; offline TCN commands live in
-  `src/airdesk/cli_tcn.py`, label/feature commands live in
+  `src/airdesk/cli_tcn.py`, replay/offline gesture diagnostics live in
+  `src/airdesk/cli_gesture_replay.py`, label/feature commands live in
   `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands live in
   `src/airdesk/cli_system.py`, shared CLI helpers live in
   `src/airdesk/cli_support.py`, live preview/status formatting helpers live in
@@ -125,22 +126,22 @@ Important evidence:
   `src/airdesk/cli_recording.py`, runtime/live-action commands and guarded
   execution policy live in `src/airdesk/cli_runtime.py`, and shared tracker
   construction lives in `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is
-  now about 1,585 LOC and still owns live tracking diagnostics plus older
-  gesture evaluation command bodies.
+  now about 837 LOC and still owns live tracking/watch diagnostics.
 
 Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. The recording and runtime/live-action extraction chunks are
-complete, so treat targeted V2 recording as deferred until the remaining
-diagnostic/evaluation structure is easier to trust.
+architecture work. The recording, runtime/live-action, and replay/offline
+gesture diagnostic extraction chunks are complete, so treat targeted V2
+recording as deferred until the remaining live diagnostic or TCN v2 structure is
+easier to trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - split the remaining live diagnostic/evaluation command bodies out of
+   - split the remaining live tracking/watch diagnostics out of
      `src/airdesk/cli.py`;
    - keep the public `airdesk.cli:app` entrypoint stable and preserve command
      names/options/help output;

@@ -237,11 +237,11 @@ Current next step:
 > review/refactor pass more aggressively. The recording/collection/chart split
 > is complete, and the runtime/live-action boundary is now isolated in
 > `src/airdesk/cli_runtime.py` with dry-run and guarded-execute tests.
-> `src/airdesk/cli.py` is down to about 1,585 LOC and still owns live tracking
-> diagnostics plus older gesture evaluation command bodies. Do the next cleanup
-> in behavior-preserving chunks, with tests, before collecting data. Then
-> improve V2 calibration/targets and collect the targeted continuous data rather
-> than sweeping thresholds or wiring live actions.
+> `src/airdesk/cli.py` is down to about 837 LOC and now mainly owns app wiring
+> plus live tracking/watch diagnostics. Do the next cleanup in
+> behavior-preserving chunks, with tests, before collecting data. Then improve V2
+> calibration/targets and collect the targeted continuous data rather than
+> sweeping thresholds or wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -293,6 +293,10 @@ Current CLI cleanup state:
 
 - The public entrypoint remains `airdesk.cli:app`.
 - Offline TCN/model/evaluation commands now live in `src/airdesk/cli_tcn.py`.
+- Replay/offline gesture diagnostic commands now live in
+  `src/airdesk/cli_gesture_replay.py`: rule/DTW/motion evaluation, DTW
+  calibration/holdout, `spot-dtw`, `spot-motion`, `evaluate-motion`,
+  `decode-candidates`, `score-sequence`, and diagnostic chart-label refinement.
 - Label and feature-export commands now live in `src/airdesk/cli_labeling.py`.
 - Camera, Hyprland dry-run, and profile validation commands now live in
   `src/airdesk/cli_system.py`.
@@ -309,10 +313,11 @@ Current CLI cleanup state:
   `src/airdesk/feature_streams.py` and are re-exported through
   `src/airdesk/features/`; DTW, motion, TCN dataset building, and live TCN
   preview use the same grouping contract.
-- `src/airdesk/cli.py` still owns live tracking diagnostic loops and several
-  gesture evaluation command bodies. Continue refactoring those in
-  behavior-preserving chunks; keep the public `airdesk.cli:app` entrypoint
-  stable and test CLI behavior as each boundary moves.
+- `src/airdesk/cli.py` still owns live tracking diagnostic loops:
+  `watch-tcn`, `watch-dtw`, `track`, `tune`, `view`, and `benchmark`. Continue
+  refactoring those in behavior-preserving chunks; keep the public
+  `airdesk.cli:app` entrypoint stable and test CLI behavior as each boundary
+  moves.
 
 Next review/refactor emphasis:
 
@@ -323,14 +328,20 @@ Next review/refactor emphasis:
   runtime command registration, action-target selection, cursor execution, and
   preview pause controls; CLI tests cover default dry-run, explicit guarded
   execute, unsafe dispatcher refusal, and cursor dry-run event logging.
+- The replay/offline gesture diagnostics chunk is complete: `cli_gesture_replay.py`
+  owns old rule/DTW/motion evaluation and candidate/sequence utilities, while
+  command names/help remain stable under `airdesk gesture ...`.
+- A dead-code scan with `vulture` found no confirmed removable production code
+  in this pass; its high-confidence hits were required keyword names in runner
+  protocols/test doubles (`check`, `capture_output`) and were left intact.
 - Continue prioritizing real bugs, dead code, oversized files/functions,
   duplicated logic, unclear package ownership, missing tests, and anything that
   could make the targeted V2 recording session ambiguous or fragile.
 - Caden explicitly wants the next context to push harder on structure and do
   what is right/best rather than stopping after cosmetic extraction. The next
-  best cleanup chunk is to split the remaining live diagnostic/evaluation
-  command bodies out of `cli.py`, or to isolate TCN v2 evidence/dataset/eval
-  concerns if that path looks more tangled during review.
+  best cleanup chunk is to split live tracking/watch diagnostics out of
+  `cli.py`, or to isolate TCN v2 evidence/dataset/eval concerns if that path
+  looks more tangled during review.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and
