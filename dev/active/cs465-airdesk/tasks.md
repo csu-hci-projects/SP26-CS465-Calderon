@@ -2,7 +2,7 @@
 
 Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
 
-Current context-reset task: continue the staff-level review/refactor pass before recording new V2 data. Caden wants the next session to be more aggressive about doing the right architectural cleanup, not just cosmetic extraction. Look for bugs, dead code, oversized files/functions, weak boundaries, and missing tests; keep behavior stable, dry-run/live-action safety intact, and leave the repo ready for targeted V2 collection.
+Current context-reset task: continue the staff-level review/refactor pass before recording new V2 data. Caden wants the next session to be more aggressive about doing the right architectural cleanup, not just cosmetic extraction. This is still pre-training, so do not protect weak legacy TCN code just because it exists: if a cleaner model/training/evaluation architecture makes sense, rewrite it now while the cost is low. Look for bugs, dead code, oversized files/functions, weak boundaries, missing tests, TCN architecture weaknesses, training/loss/calibration issues, and inference-speed problems; keep dry-run/live-action safety intact and leave the repo ready for targeted V2 collection.
 
 ## Phase 0: Project Setup
 
@@ -144,6 +144,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Use old motion/DTW/TCN replay data as a first V2 regression smoke for known failures
 - [x] Add V2 manifest/evaluation cleanup from the regression smoke: evidence-frame summaries, explicit no-hand stream windows, and deduped all-row causal-context event evaluation
 - [ ] Improve TCN v2 calibration/target balance after old-data underconfidence and direction confusion
+- [ ] Review and improve TCN architecture/training before collecting V2 data: receptive field, residual/dilated blocks, normalization/dropout, class/evidence imbalance, loss weighting, calibration, checkpoint metadata, inference batching/speed, and decoder contract
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented
 - [ ] Add the next replay-only negative-motion/intent rejection check only if V2 needs it as an explicit proposal gate
 - [ ] Revisit broader `airdesk/recognition/` package split only after the baseline proves the boundary

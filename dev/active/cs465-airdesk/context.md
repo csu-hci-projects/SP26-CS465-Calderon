@@ -242,10 +242,13 @@ Current next step:
 > `tune`, `view`, and `benchmark`, while `src/airdesk/cli.py` is down to about
 > 60 LOC of app wiring plus `doctor` / `analyze`. Do the next cleanup in
 > behavior-preserving chunks, with tests, before collecting data. The TCN v2
-> train/evaluate boundary is now split into focused modules; finish any
-> remaining small maintainability blockers, then improve V2 calibration/targets
-> and collect the targeted continuous data rather than sweeping thresholds or
-> wiring live actions.
+> train/evaluate boundary is now split into focused modules. Caden explicitly
+> wants the next pass to be less protective of legacy code: AirDesk is still
+> pre-training, so if the TCN model shape, training loop, loss, calibration,
+> checkpoint contract, or evaluation boundary should be rewritten, do it now
+> rather than carrying weak architecture into the V2 dataset. Keep live actions
+> dry-run/disabled, but be willing to change internals aggressively when the
+> architecture case is strong.
 
 Current TCN v2 implementation state:
 
@@ -288,6 +291,14 @@ Current TCN v2 implementation state:
   `airdesk.ml` and `airdesk.analysis`.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
+- Next TCN review should look beyond file boundaries. Audit the actual model and
+  training choices: causal receptive field versus gesture duration, lack of
+  residual/skip connections, target imbalance for sparse `start` / `end`
+  evidence, BCE loss weighting/focal-style alternatives, calibration of
+  evidence heads, threshold selection, per-hand inference batching, checkpoint
+  metadata/versioning, and whether the decoder should consume explicit
+  boundary heads instead of only stroke-derived scores. Rewrite early code if it
+  is the cleanest way to avoid training the wrong architecture.
 
 Current TCN v2 old-data smoke:
 
@@ -363,10 +374,11 @@ Next review/refactor emphasis:
 - Caden explicitly wants the next context to push harder on structure and do
   what is right/best rather than stopping after cosmetic extraction. With the
   CLI command surfaces split and TCN v2 target/train/evaluate concerns isolated,
-  the next best cleanup chunk is likely a focused maintainability pass on the
-  largest remaining test surface (`tests/test_cli.py`) or a smaller production
-  audit around shared TCN helper naming/dead code before switching into
-  collection.
+  the next best chunk should be a TCN architecture/training review and
+  improvement pass before collection. If the model/training/evaluation contract
+  needs a larger rewrite, prefer doing it now over preserving early scaffold
+  code. Focused test cleanup can happen in the same lane if it removes friction
+  without distracting from the recognizer architecture.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and

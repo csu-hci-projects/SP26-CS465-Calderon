@@ -140,16 +140,27 @@ Important evidence:
 Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. The recording, runtime/live-action, replay/offline gesture
-diagnostic, live tracking/watch extraction, and TCN v2 target/train/evaluate
-boundary chunks are complete, so targeted V2 recording is close but still
-deferred until the remaining small maintainability blockers are checked.
+architecture work. Caden is explicitly saying not to be overly protective of
+legacy scaffold code: AirDesk is still pre-training, so this is the right time
+to rewrite or replace weak TCN/model/training/evaluation internals if the
+architecture case is strong. The recording, runtime/live-action, replay/offline
+gesture diagnostic, live tracking/watch extraction, and TCN v2 target/train/
+evaluate boundary chunks are complete, so targeted V2 recording is close but
+still deferred until the recognizer architecture is worth training against.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
+   - audit and improve the TCN v2 architecture/training path before data
+     collection: causal receptive field, residual/dilated block design,
+     normalization/dropout, sparse boundary-head loss weighting, evidence-head
+     calibration, threshold selection, checkpoint metadata/versioning,
+     per-hand inference batching/speed, and decoder use of start/end evidence;
+   - rewrite early TCN scaffolding if it is the cleanest way to avoid training a
+     weak architecture; keep public CLI names stable unless there is an
+     intentional bug fix or documented migration reason;
    - split `tests/test_cli.py` into focused modules only if doing so preserves
      useful public CLI/safety coverage;
    - audit shared TCN helper naming/imports now that v2 code has its own module;
@@ -162,8 +173,8 @@ deferred until the remaining small maintainability blockers are checked.
 3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
 4. Do not record the new V2 data in this cleanup session unless tests pass, the
-   refactor is complete enough to trust, and Caden explicitly decides to switch
-   from cleanup into collection.
+   TCN architecture/training/evaluation surface is clean enough to trust, and
+   Caden explicitly decides to switch from cleanup into collection.
 5. The targeted V2 recording slice should still be: repeated
    same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
    negatives, hand enters/leaves frame, near/far starts, and two visible hands
