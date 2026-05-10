@@ -22,7 +22,10 @@ def public_data_ipn_convert(
             exists=True,
             file_okay=False,
             readable=True,
-            help="IPN annotation directory containing classIndAll.txt and split lists.",
+            help=(
+                "IPN annotation directory containing either GitHub annotation_ipnGesture "
+                "files or official Drive annotation files."
+            ),
         ),
     ],
     out_dir: Annotated[

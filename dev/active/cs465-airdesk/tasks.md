@@ -155,6 +155,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Audit and tighten the V2 feature preset so the clean collection pass uses `stream-invariant-v2` instead of raw image-space motion/scale features
 - [x] Survey public dynamic/continuous hand-gesture datasets before committing to IPN only
 - [x] Prototype an IPN Hand importer that runs videos through MediaPipe and exports AirDesk `FrameFeatureRow` CSVs with `stream-invariant-v2` features
+- [x] Download IPN Hand official annotations/video archives into ignored `data/public/ipn/`, extract 200 videos, and smoke the official annotation converter path
 - [ ] Train an IPN-only TCN v2 atomic gesture model and evaluate how it feels before hybridizing datasets
 - [ ] Compare AirDesk-only, public-pretrained/fine-tuned, and hybrid training on AirDesk source-held-out recordings
 - [ ] Add a command-grammar layer for combos over atomic emitted events instead of training every combo as its own TCN class

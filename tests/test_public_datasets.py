@@ -7,9 +7,11 @@ from airdesk.labels import validate_label_file
 from airdesk.public_datasets.ipn import (
     IPN_AIRDESK_ATOMIC_MAP,
     _ipn_label_file_for_recording,
+    class_file_for_ipn_annotations,
     find_ipn_video_path,
     load_ipn_class_index,
     load_ipn_split_segments,
+    split_file_for_ipn_annotations,
     write_ipn_mapping_csv,
 )
 from airdesk.recording.jsonl import JsonlRecordingWriter
@@ -33,6 +35,28 @@ def test_load_ipn_split_segments_maps_class_labels(tmp_path: Path) -> None:
     assert [segment.label for segment in segments] == ["G05", "G06"]
     assert all(segment.maps_to_airdesk for segment in segments)
     assert IPN_AIRDESK_ATOMIC_MAP["G05"] == ("swipe_left", "stroke_left")
+
+
+def test_load_ipn_official_drive_annotations(tmp_path: Path) -> None:
+    class_path = tmp_path / "classIdx.txt"
+    class_path.write_text("id,label\n1,D0X\n8,G05\n9,G06\n", encoding="utf-8")
+    split_path = tmp_path / "Annot_TrainList.txt"
+    split_path.write_text(
+        "1CM1_4_R_#229,D0X,1,1,17,17\n"
+        "1CM1_4_R_#229,G05,8,503,544,42\n"
+        "1CM1_4_R_#229,G06,9,2351,2391,41\n",
+        encoding="utf-8",
+    )
+
+    classes = load_ipn_class_index(class_path)
+    segments = load_ipn_split_segments(split_path, class_index=classes)
+
+    assert class_file_for_ipn_annotations(tmp_path) == class_path
+    assert split_file_for_ipn_annotations(tmp_path, "train") == split_path
+    assert [segment.label for segment in segments] == ["D0X", "G05", "G06"]
+    assert [segment.class_index for segment in segments] == [1, 8, 9]
+    assert [segment.start_frame for segment in segments] == [1, 503, 2351]
+    assert [segment.end_frame for segment in segments] == [17, 544, 2391]
 
 
 def test_ipn_label_file_maps_only_atomic_left_right_swipes(tmp_path: Path) -> None:

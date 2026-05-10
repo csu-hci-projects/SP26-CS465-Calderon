@@ -50,12 +50,15 @@ IPN_AIRDESK_ATOMIC_MAP = {
 }
 
 _IPN_SPLIT_FILES = {
-    "train": "trainlistall.txt",
-    "training": "trainlistall.txt",
-    "val": "vallistall.txt",
-    "valid": "vallistall.txt",
-    "validation": "vallistall.txt",
+    "train": ("trainlistall.txt", "Annot_TrainList.txt"),
+    "training": ("trainlistall.txt", "Annot_TrainList.txt"),
+    "val": ("vallistall.txt", "Annot_TestList.txt"),
+    "valid": ("vallistall.txt", "Annot_TestList.txt"),
+    "validation": ("vallistall.txt", "Annot_TestList.txt"),
+    "test": ("testlistall.txt", "Annot_TestList.txt"),
 }
+
+_IPN_CLASS_FILES = ("classIndAll.txt", "classIdx.txt")
 
 _VIDEO_SUFFIXES = (".mp4", ".avi", ".mov", ".mkv")
 
@@ -90,19 +93,41 @@ class IpnConversionResult:
 
 
 def load_ipn_class_index(path: Path) -> dict[int, str]:
-    """Load an IPN ``classInd*.txt`` file as ``class_index -> class_code``."""
+    """Load an IPN class-index file as ``class_index -> class_code``."""
     class_index: dict[int, str] = {}
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        parts = stripped.split()
-        if len(parts) != 2:
-            raise ValueError(f"{path}:{line_number}: expected '<index> <label>'")
-        class_index[int(parts[0])] = parts[1]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    csv_format = any("," in line for line in lines if line.strip())
+    if csv_format:
+        for line_number, row in enumerate(csv.reader(lines), start=1):
+            if not row:
+                continue
+            if row[0].strip().lower() in {"id", "index"}:
+                continue
+            if len(row) < 2:
+                raise ValueError(f"{path}:{line_number}: expected '<index>,<label>'")
+            class_index[int(row[0].strip())] = row[1].strip()
+    else:
+        for line_number, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split()
+            if len(parts) != 2:
+                raise ValueError(f"{path}:{line_number}: expected '<index> <label>'")
+            class_index[int(parts[0])] = parts[1]
     if not class_index:
         raise ValueError(f"{path}: no IPN classes found")
     return class_index
+
+
+def class_file_for_ipn_annotations(annotations_dir: Path) -> Path:
+    """Return the available IPN class-index file for an annotation directory."""
+    for filename in _IPN_CLASS_FILES:
+        path = annotations_dir / filename
+        if path.exists():
+            return path
+    options = ", ".join(_IPN_CLASS_FILES)
+    raise FileNotFoundError(f"missing IPN class-index file under {annotations_dir}: {options}")
 
 
 def load_ipn_split_segments(
@@ -115,7 +140,38 @@ def load_ipn_split_segments(
     resolved_class_index = class_index or {}
     segments: list[IpnSegment] = []
     resolved_subset = subset or _subset_from_split_path(path)
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    csv_format = any("," in line for line in lines if line.strip())
+    if csv_format:
+        row_iterable = csv.reader(lines)
+        for line_number, row in enumerate(row_iterable, start=1):
+            if not row:
+                continue
+            if row[0].strip().lower() in {"video", "video_id", "id"}:
+                continue
+            if len(row) < 5:
+                raise ValueError(
+                    f"{path}:{line_number}: expected '<video>,<label>,<class>,<start>,<end>,...'"
+                )
+            video_id = _video_id_from_ipn_path(row[0])
+            label = row[1].strip()
+            class_number = int(row[2].strip())
+            start_frame = int(row[3].strip())
+            end_frame = int(row[4].strip())
+            _append_ipn_segment(
+                segments,
+                path=path,
+                line_number=line_number,
+                video_id=video_id,
+                class_number=class_number,
+                label=label or resolved_class_index.get(class_number, str(class_number)),
+                start_frame=start_frame,
+                end_frame=end_frame,
+                subset=resolved_subset,
+            )
+        return segments
+
+    for line_number, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped:
             continue
@@ -129,17 +185,16 @@ def load_ipn_split_segments(
         label = resolved_class_index.get(class_number, str(class_number))
         start_frame = int(parts[2])
         end_frame = int(parts[3])
-        if start_frame <= 0 or end_frame < start_frame:
-            raise ValueError(f"{path}:{line_number}: invalid frame interval")
-        segments.append(
-            IpnSegment(
-                video_id=video_id,
-                class_index=class_number,
-                label=label,
-                start_frame=start_frame,
-                end_frame=end_frame,
-                subset=resolved_subset,
-            )
+        _append_ipn_segment(
+            segments,
+            path=path,
+            line_number=line_number,
+            video_id=video_id,
+            class_number=class_number,
+            label=label,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            subset=resolved_subset,
         )
     return segments
 
@@ -147,14 +202,16 @@ def load_ipn_split_segments(
 def split_file_for_ipn_annotations(annotations_dir: Path, split: str) -> Path:
     """Return the standard IPN annotation-list path for a split name."""
     try:
-        filename = _IPN_SPLIT_FILES[split.strip().lower()]
+        filenames = _IPN_SPLIT_FILES[split.strip().lower()]
     except KeyError as exc:
         options = ", ".join(sorted(_IPN_SPLIT_FILES))
         raise ValueError(f"unsupported IPN split={split!r}; use one of: {options}") from exc
-    path = annotations_dir / filename
-    if not path.exists():
-        raise FileNotFoundError(f"missing IPN annotation split file: {path}")
-    return path
+    for filename in filenames:
+        path = annotations_dir / filename
+        if path.exists():
+            return path
+    formatted = ", ".join(str(annotations_dir / filename) for filename in filenames)
+    raise FileNotFoundError(f"missing IPN annotation split file; tried: {formatted}")
 
 
 def find_ipn_video_path(videos_dir: Path, video_id: str) -> Path:
@@ -194,7 +251,7 @@ def convert_ipn_videos(
     frame_limit: int | None = None,
 ) -> IpnConversionResult:
     """Convert selected IPN videos into AirDesk recordings, labels, and features."""
-    class_index = load_ipn_class_index(annotations_dir / "classIndAll.txt")
+    class_index = load_ipn_class_index(class_file_for_ipn_annotations(annotations_dir))
     split_path = split_file_for_ipn_annotations(annotations_dir, split)
     segments = load_ipn_split_segments(split_path, class_index=class_index, subset=split)
     segments_by_video = _group_segments_by_video(segments)
@@ -466,6 +523,32 @@ def _group_segments_by_video(segments: list[IpnSegment]) -> dict[str, list[IpnSe
     for segment in segments:
         grouped[segment.video_id].append(segment)
     return dict(grouped)
+
+
+def _append_ipn_segment(
+    segments: list[IpnSegment],
+    *,
+    path: Path,
+    line_number: int,
+    video_id: str,
+    class_number: int,
+    label: str,
+    start_frame: int,
+    end_frame: int,
+    subset: str,
+) -> None:
+    if start_frame <= 0 or end_frame < start_frame:
+        raise ValueError(f"{path}:{line_number}: invalid frame interval")
+    segments.append(
+        IpnSegment(
+            video_id=video_id,
+            class_index=class_number,
+            label=label,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            subset=subset,
+        )
+    )
 
 
 def _frame_to_time(frame_number: int, fps: float) -> float:

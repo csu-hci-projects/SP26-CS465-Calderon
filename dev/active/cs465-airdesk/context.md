@@ -531,7 +531,7 @@ The first local-data-only importer is available:
 ```bash
 uv run airdesk public-data ipn-convert \
   --videos-dir data/public/ipn/videos \
-  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --annotations-dir data/public/ipn/annotations-download \
   --out-dir data/public/ipn/airdesk \
   --split train \
   --limit 1 \
@@ -545,6 +545,13 @@ exports feature CSVs, maps only IPN `G05` / `G06` into `swipe_left` /
 manifest. Other IPN classes remain background/negative examples for the first
 left/right atomic pass. Keep raw public datasets and generated artifacts in
 ignored `data/public/`.
+
+2026-05-10 local acquisition update: the official IPN Hand Drive annotations
+and all five video archives are now present under ignored `data/public/ipn/`.
+Extraction produced 200 `.avi` videos in `data/public/ipn/videos/`, and a
+bounded one-video smoke conversion succeeded with 26 segments, 2 mapped atomic
+left/right swipe segments, 1 replay recording, 1 feature CSV, and a
+`stream-invariant-v2` / `v2-evidence` smoke manifest.
 
 ## Current Roadmap
 

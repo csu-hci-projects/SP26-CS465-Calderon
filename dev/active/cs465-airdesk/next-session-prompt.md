@@ -194,7 +194,7 @@ Implemented importer:
 ```bash
 uv run airdesk public-data ipn-convert \
   --videos-dir data/public/ipn/videos \
-  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --annotations-dir data/public/ipn/annotations-download \
   --out-dir data/public/ipn/airdesk \
   --split train \
   --limit 1 \
@@ -208,6 +208,12 @@ exports normal `FrameFeatureRow` CSVs, and can build a `stream-invariant-v2`
 `v2-evidence` manifest. Other IPN classes stay background/negative for the first
 left/right TCN pass. Raw public dataset downloads and generated artifacts should
 stay ignored under `data/public/`.
+
+2026-05-10 update: official IPN Hand annotations and all five video archives are
+downloaded under ignored `data/public/ipn/`; extraction produced 200 `.avi`
+files in `data/public/ipn/videos/`. The importer now supports the official Drive
+annotation filenames directly, and a one-video 120-frame smoke conversion
+succeeded.
 
 Next-session assignment:
 
@@ -235,10 +241,9 @@ Architectural stance:
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. If Caden has downloaded IPN locally, run the one-video smoke converter first,
-   preferably with `--frame-limit 120`, then inspect the generated recording,
-   labels, features, mapping CSV, and manifest.
-3. If the smoke is clean, convert the selected IPN train/validation videos into
+2. Inspect the generated IPN smoke recording, labels, features, mapping CSV, and
+   manifest under `data/public/ipn/airdesk-smoke/`.
+3. Convert the selected IPN train/validation videos into
    ignored `data/public/ipn/airdesk/` artifacts.
 4. Train an IPN-only TCN v2 atomic model and evaluate it in replay/live-preview
    form before mixing it with AirDesk data.

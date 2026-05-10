@@ -61,13 +61,19 @@ The first importer is intentionally small and local-data-only:
 ```bash
 uv run airdesk public-data ipn-convert \
   --videos-dir data/public/ipn/videos \
-  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --annotations-dir data/public/ipn/annotations-download \
   --out-dir data/public/ipn/airdesk \
   --split train \
   --limit 1 \
   --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json \
   --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 ```
+
+As of 2026-05-10, the official IPN Hand Drive annotations and all five video
+archives have been downloaded into ignored local storage under
+`data/public/ipn/`; extraction produced 200 `.avi` files under
+`data/public/ipn/videos/`. A one-video, 120-frame smoke conversion succeeded
+against the official annotation filenames.
 
 Outputs:
 

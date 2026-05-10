@@ -126,13 +126,13 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 
 The first public-data experiment should use IPN Hand as a training aid for
 atomic left/right swipe evidence. Download the IPN MP4 videos and
-`annotation_ipnGesture/` files into ignored local storage such as
+annotation files into ignored local storage such as
 `data/public/ipn/`, then run a bounded smoke before converting the full split:
 
 ```bash
 uv run airdesk public-data ipn-convert \
   --videos-dir data/public/ipn/videos \
-  --annotations-dir data/public/ipn/annotation_ipnGesture \
+  --annotations-dir data/public/ipn/annotations-download \
   --out-dir data/public/ipn/airdesk-smoke \
   --split train \
   --limit 1 \

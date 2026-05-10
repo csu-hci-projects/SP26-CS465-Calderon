@@ -304,13 +304,17 @@ Do not wire DTW, motion, or TCN swipes into live desktop actions yet.
 
 Recommended next chunk:
 
-1. If Caden has downloaded IPN Hand locally, run a one-video converter smoke:
-   `uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotation_ipnGesture --out-dir data/public/ipn/airdesk-smoke --split train --limit 1 --frame-limit 120 --manifest-out data/public/ipn/airdesk-smoke/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk-smoke/ipn-airdesk-mapping.csv`.
-2. Inspect the smoke artifacts, then convert the selected IPN train/validation
+1. IPN Hand is downloaded locally under ignored `data/public/ipn/`, with
+   official annotations in `data/public/ipn/annotations-download/`, archives in
+   `data/public/ipn/video-archives/`, and 200 extracted `.avi` videos in
+   `data/public/ipn/videos/`.
+2. A one-video smoke conversion has already succeeded:
+   `uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk-smoke --split train --limit 1 --frame-limit 120 --manifest-out data/public/ipn/airdesk-smoke/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk-smoke/ipn-airdesk-mapping.csv`.
+3. Inspect the smoke artifacts, then convert the selected IPN train/validation
    videos into ignored `data/public/ipn/airdesk/` outputs.
-3. Train an IPN-only TCN v2 atomic model and evaluate replay/live-preview feel
+4. Train an IPN-only TCN v2 atomic model and evaluate replay/live-preview feel
    before mixing IPN with AirDesk V2 recordings.
-4. Use `holdout-tcn-v2` and `diagnose-tcn-v2-events` before trusting any
+5. Use `holdout-tcn-v2` and `diagnose-tcn-v2-events` before trusting any
    same-source replay score; the first schema-2 source holdout is `2/4` with `5`
    false activations.
 5. Run `watch-tcn-v2` through the no-action live dashboard and save the JSONL
