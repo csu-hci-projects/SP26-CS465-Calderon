@@ -272,7 +272,9 @@ matching labeled event interval, so a weak or fully dropped gesture should not
 move boundary targets onto unrelated later motion. Shared stream grouping for
 DTW, motion, TCN datasets, and live preview now goes through the same
 hand/no-hand helper contract. The frame-evidence target rules live in
-`src/airdesk/ml/tcn_v2_evidence.py`; manifest/window assembly remains in
+`src/airdesk/ml/tcn_v2_evidence.py`; sequence-evidence training/prediction lives
+in `src/airdesk/ml/tcn_v2_train.py`; replay decoder/evaluation glue lives in
+`src/airdesk/analysis/tcn_v2.py`; manifest/window assembly remains in
 `src/airdesk/ml/dataset.py`.
 
 First old-data TCN v2 smoke:

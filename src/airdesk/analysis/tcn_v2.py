@@ -1,0 +1,117 @@
+"""TCN v2 event-decoder evaluation helpers."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from airdesk.analysis.evaluation import GestureEvaluation, evaluate_candidates
+from airdesk.gestures.decoder import DecoderFrame, EventDecoder, EventDecoderConfig
+from airdesk.labels import load_label_file
+from airdesk.ml import (
+    CausalTcnEvidencePrediction,
+    load_tcn_dataset_manifest,
+    predict_causal_tcn_v2_manifest,
+)
+from airdesk.state.types import GestureCandidate
+
+
+def evaluate_tcn_v2_manifest(
+    *,
+    manifest_path: Path,
+    model_path: Path,
+    event_decoder_config: EventDecoderConfig,
+    match_tolerance_seconds: float = 0.5,
+) -> tuple[GestureEvaluation, ...]:
+    """Evaluate TCN v2 decoder-facing evidence against labeled manifest sources."""
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    predictions = dedupe_tcn_v2_predictions(
+        predict_causal_tcn_v2_manifest(
+            model_path=model_path,
+            manifest_path=manifest_path,
+            emit_all_rows=True,
+        )
+    )
+    predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
+    for prediction in predictions:
+        if prediction.label_path is None:
+            continue
+        predictions_by_source.setdefault(
+            (prediction.feature_path, prediction.label_path),
+            [],
+        ).append(prediction)
+
+    evaluations: list[GestureEvaluation] = []
+    for source in manifest.sources:
+        if source.label_path is None:
+            continue
+        labels = load_label_file(Path(source.label_path))
+        source_predictions = predictions_by_source.get((source.feature_path, source.label_path), [])
+        candidates = decode_tcn_v2_predictions(source_predictions, event_decoder_config)
+        evaluations.append(
+            evaluate_candidates(
+                recording_path=Path(source.feature_path),
+                label_path=Path(source.label_path),
+                labels=labels,
+                recognizer="tcn_v2_event_decoder",
+                candidates=candidates,
+                match_tolerance_seconds=match_tolerance_seconds,
+            )
+        )
+    return tuple(evaluations)
+
+
+def decode_tcn_v2_predictions(
+    predictions: list[CausalTcnEvidencePrediction],
+    config: EventDecoderConfig,
+) -> list[GestureCandidate]:
+    """Convert framewise TCN v2 evidence heads into gesture candidates."""
+    frames = [
+        DecoderFrame(
+            timestamp=prediction.timestamp,
+            scores={
+                "background": 1.0 - prediction.evidence.get("intentional_motion", 0.0),
+                "swipe_left": prediction.evidence.get("stroke_left", 0.0),
+                "swipe_right": prediction.evidence.get("stroke_right", 0.0),
+            },
+            source_id=prediction.feature_path,
+            hand_id=prediction.hand_id or None,
+            window_start=prediction.window_start,
+            window_end=prediction.window_end,
+            metadata={
+                "recognizer": "tcn_v2",
+                "sample_id": prediction.sample_id,
+                "intentional_motion": prediction.evidence.get("intentional_motion", 0.0),
+                "start": prediction.evidence.get("start", 0.0),
+                "end": prediction.evidence.get("end", 0.0),
+                "raw_evidence": prediction.evidence,
+            },
+        )
+        for prediction in predictions
+    ]
+    return EventDecoder(config).decode(frames)
+
+
+def dedupe_tcn_v2_predictions(
+    predictions: list[CausalTcnEvidencePrediction],
+) -> list[CausalTcnEvidencePrediction]:
+    """Keep one causal-context prediction for each source/hand/timestamp frame."""
+    selected: dict[tuple[str, str | None, str, float], CausalTcnEvidencePrediction] = {}
+    for prediction in predictions:
+        key = (
+            prediction.feature_path,
+            prediction.label_path,
+            prediction.hand_id,
+            prediction.timestamp,
+        )
+        existing = selected.get(key)
+        if existing is None or context_seconds(prediction) > context_seconds(existing):
+            selected[key] = prediction
+    return sorted(
+        selected.values(),
+        key=lambda item: (item.feature_path, item.timestamp, item.hand_id, item.sample_id),
+    )
+
+
+def context_seconds(prediction: CausalTcnEvidencePrediction) -> float:
+    """Return the amount of causal context available for a prediction frame."""
+    return max(0.0, prediction.timestamp - prediction.window_start)

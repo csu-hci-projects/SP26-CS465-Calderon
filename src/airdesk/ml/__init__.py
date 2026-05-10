@@ -36,22 +36,24 @@ from airdesk.ml.label_refinement import (
     RefinedLabelFileResult,
     refine_motion_aligned_label_file,
 )
-from airdesk.ml.train import (
+from airdesk.ml.tcn_v2_train import (
     CausalTcnEvidencePrediction,
+    TcnEvidenceTrainingArrays,
+    predict_causal_tcn_v2_manifest,
+    prepare_tcn_v2_training_arrays,
+    train_causal_tcn_v2,
+)
+from airdesk.ml.train import (
     CausalTcnLivePrediction,
     CausalTcnLivePredictor,
     CausalTcnPrediction,
     CausalTcnTrainingConfig,
     CausalTcnTrainingResult,
     MissingMlDependencyError,
-    TcnEvidenceTrainingArrays,
     TcnTrainingArrays,
     predict_causal_tcn_manifest,
-    predict_causal_tcn_v2_manifest,
     prepare_tcn_training_arrays,
-    prepare_tcn_v2_training_arrays,
     train_causal_tcn,
-    train_causal_tcn_v2,
 )
 
 __all__ = [

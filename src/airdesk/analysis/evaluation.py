@@ -21,11 +21,9 @@ from airdesk.gestures.phrases import IntentGatedSwipeRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.labels import GestureEventLabel, GestureLabelFile, load_label_file
 from airdesk.ml import (
-    CausalTcnEvidencePrediction,
     CausalTcnPrediction,
     load_tcn_dataset_manifest,
     predict_causal_tcn_manifest,
-    predict_causal_tcn_v2_manifest,
 )
 from airdesk.recording.jsonl import iter_recording
 from airdesk.state.types import GestureCandidate, TrackingFrame
@@ -355,42 +353,15 @@ def evaluate_tcn_v2_manifest(
     event_decoder_config: EventDecoderConfig,
     match_tolerance_seconds: float = 0.5,
 ) -> tuple[GestureEvaluation, ...]:
-    """Evaluate TCN v2 decoder-facing evidence against labeled manifest sources."""
-    manifest = load_tcn_dataset_manifest(manifest_path)
-    predictions = _dedupe_tcn_v2_predictions(
-        predict_causal_tcn_v2_manifest(
-            model_path=model_path,
-            manifest_path=manifest_path,
-            emit_all_rows=True,
-        )
-    )
-    predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
-    for prediction in predictions:
-        if prediction.label_path is None:
-            continue
-        predictions_by_source.setdefault(
-            (prediction.feature_path, prediction.label_path),
-            [],
-        ).append(prediction)
+    """Compatibility wrapper for the TCN v2 evaluation module."""
+    from airdesk.analysis.tcn_v2 import evaluate_tcn_v2_manifest as _evaluate
 
-    evaluations: list[GestureEvaluation] = []
-    for source in manifest.sources:
-        if source.label_path is None:
-            continue
-        labels = load_label_file(Path(source.label_path))
-        source_predictions = predictions_by_source.get((source.feature_path, source.label_path), [])
-        candidates = _decode_tcn_v2_predictions(source_predictions, event_decoder_config)
-        evaluations.append(
-            evaluate_candidates(
-                recording_path=Path(source.feature_path),
-                label_path=Path(source.label_path),
-                labels=labels,
-                recognizer="tcn_v2_event_decoder",
-                candidates=candidates,
-                match_tolerance_seconds=match_tolerance_seconds,
-            )
-        )
-    return tuple(evaluations)
+    return _evaluate(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        event_decoder_config=event_decoder_config,
+        match_tolerance_seconds=match_tolerance_seconds,
+    )
 
 
 def _decode_tcn_predictions(
@@ -417,58 +388,27 @@ def _decode_tcn_predictions(
 
 
 def _decode_tcn_v2_predictions(
-    predictions: list[CausalTcnEvidencePrediction],
+    predictions: list[object],
     config: EventDecoderConfig,
 ) -> list[GestureCandidate]:
-    frames = [
-        DecoderFrame(
-            timestamp=prediction.timestamp,
-            scores={
-                "background": 1.0 - prediction.evidence.get("intentional_motion", 0.0),
-                "swipe_left": prediction.evidence.get("stroke_left", 0.0),
-                "swipe_right": prediction.evidence.get("stroke_right", 0.0),
-            },
-            source_id=prediction.feature_path,
-            hand_id=prediction.hand_id or None,
-            window_start=prediction.window_start,
-            window_end=prediction.window_end,
-            metadata={
-                "recognizer": "tcn_v2",
-                "sample_id": prediction.sample_id,
-                "intentional_motion": prediction.evidence.get("intentional_motion", 0.0),
-                "start": prediction.evidence.get("start", 0.0),
-                "end": prediction.evidence.get("end", 0.0),
-                "raw_evidence": prediction.evidence,
-            },
-        )
-        for prediction in predictions
-    ]
-    return EventDecoder(config).decode(frames)
+    """Compatibility wrapper for older private test imports."""
+    from airdesk.analysis.tcn_v2 import decode_tcn_v2_predictions
+
+    return decode_tcn_v2_predictions(predictions, config)  # type: ignore[arg-type]
 
 
-def _dedupe_tcn_v2_predictions(
-    predictions: list[CausalTcnEvidencePrediction],
-) -> list[CausalTcnEvidencePrediction]:
-    """Keep one causal-context prediction for each source/hand/timestamp frame."""
-    selected: dict[tuple[str, str | None, str, float], CausalTcnEvidencePrediction] = {}
-    for prediction in predictions:
-        key = (
-            prediction.feature_path,
-            prediction.label_path,
-            prediction.hand_id,
-            prediction.timestamp,
-        )
-        existing = selected.get(key)
-        if existing is None or _context_seconds(prediction) > _context_seconds(existing):
-            selected[key] = prediction
-    return sorted(
-        selected.values(),
-        key=lambda item: (item.feature_path, item.timestamp, item.hand_id, item.sample_id),
-    )
+def _dedupe_tcn_v2_predictions(predictions: list[object]) -> list[object]:
+    """Compatibility wrapper for older private test imports."""
+    from airdesk.analysis.tcn_v2 import dedupe_tcn_v2_predictions
+
+    return dedupe_tcn_v2_predictions(predictions)  # type: ignore[arg-type, return-value]
 
 
-def _context_seconds(prediction: CausalTcnEvidencePrediction) -> float:
-    return max(0.0, prediction.timestamp - prediction.window_start)
+def _context_seconds(prediction: object) -> float:
+    """Compatibility wrapper for older private test imports."""
+    from airdesk.analysis.tcn_v2 import context_seconds
+
+    return context_seconds(prediction)  # type: ignore[arg-type]
 
 
 def evaluate_candidates(

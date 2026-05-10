@@ -12,7 +12,6 @@ from airdesk.analysis.evaluation import (
     evaluate_motion_recognizer,
     evaluate_rule_recognizer,
     evaluate_tcn_manifest,
-    evaluate_tcn_v2_manifest,
     format_evaluation,
     format_holdout_evaluation,
     holdout_totals,
@@ -20,6 +19,7 @@ from airdesk.analysis.evaluation import (
     save_holdout_json,
 )
 from airdesk.analysis.recording import RecordingAnalysis, analyze_recording, format_analysis
+from airdesk.analysis.tcn_v2 import evaluate_tcn_v2_manifest
 
 __all__ = [
     "GestureEvaluation",

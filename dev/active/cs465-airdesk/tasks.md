@@ -168,7 +168,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Split replay/offline gesture diagnostic command bodies out of `src/airdesk/cli.py`
 - [x] Split remaining live tracking/watch diagnostic command bodies out of `src/airdesk/cli.py`
 - [x] Isolate TCN v2 evidence target construction after the CLI cleanup pass
-- [ ] Isolate TCN v2 train/evaluate concerns after the evidence target split
+- [x] Isolate TCN v2 train/evaluate concerns after the evidence target split
 - [ ] Split `tests/test_cli.py` into focused CLI test modules if it remains the next maintainability bottleneck
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes

@@ -112,6 +112,11 @@ Important evidence:
 - TCN v2 frame-evidence target construction is now isolated in
   `src/airdesk/ml/tcn_v2_evidence.py`; generic manifest/window construction
   remains in `src/airdesk/ml/dataset.py`.
+- TCN v2 sequence-evidence training/prediction is now isolated in
+  `src/airdesk/ml/tcn_v2_train.py`, and replay decoder/evaluation glue is
+  isolated in `src/airdesk/analysis/tcn_v2.py`. Public exports remain stable
+  through `airdesk.ml` and `airdesk.analysis`; compatibility wrappers remain in
+  `src/airdesk/analysis/evaluation.py` for older direct imports.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
@@ -136,19 +141,18 @@ Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
 architecture work. The recording, runtime/live-action, replay/offline gesture
-diagnostic, and live tracking/watch extraction chunks are complete, so treat
-targeted V2 recording as deferred until the remaining TCN v2 train/evaluate
-structure is easier to trust.
+diagnostic, live tracking/watch extraction, and TCN v2 target/train/evaluate
+boundary chunks are complete, so targeted V2 recording is close but still
+deferred until the remaining small maintainability blockers are checked.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - separate TCN v2 train/evaluation concerns in `src/airdesk/ml/train.py` and
-     `src/airdesk/analysis/evaluation.py` where they remain muddy;
    - split `tests/test_cli.py` into focused modules only if doing so preserves
      useful public CLI/safety coverage;
+   - audit shared TCN helper naming/imports now that v2 code has its own module;
    - remove or quarantine dead legacy command paths only after proving they are
      unused;
    - keep the public `airdesk.cli:app` entrypoint stable and preserve command

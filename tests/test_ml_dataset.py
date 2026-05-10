@@ -12,7 +12,7 @@ from airdesk.analysis import (
     evaluate_tcn_manifest,
     evaluate_tcn_v2_manifest,
 )
-from airdesk.analysis.evaluation import _dedupe_tcn_v2_predictions
+from airdesk.analysis.tcn_v2 import dedupe_tcn_v2_predictions
 from airdesk.features import FrameFeatureRow
 from airdesk.gestures.decoder import EventDecoderConfig
 from airdesk.labels import (
@@ -1225,7 +1225,7 @@ def test_tcn_v2_prediction_dedupe_keeps_fullest_causal_context() -> None:
         evidence={"stroke_left": 0.8},
     )
 
-    deduped = _dedupe_tcn_v2_predictions([short_context, long_context])
+    deduped = dedupe_tcn_v2_predictions([short_context, long_context])
 
     assert deduped == [long_context]
 

@@ -241,9 +241,11 @@ Current next step:
 > `src/airdesk/cli_live_commands.py` owns `watch-tcn`, `watch-dtw`, `track`,
 > `tune`, `view`, and `benchmark`, while `src/airdesk/cli.py` is down to about
 > 60 LOC of app wiring plus `doctor` / `analyze`. Do the next cleanup in
-> behavior-preserving chunks, with tests, before collecting data. Then improve
-> V2 calibration/targets and collect the targeted continuous data rather than
-> sweeping thresholds or wiring live actions.
+> behavior-preserving chunks, with tests, before collecting data. The TCN v2
+> train/evaluate boundary is now split into focused modules; finish any
+> remaining small maintainability blockers, then improve V2 calibration/targets
+> and collect the targeted continuous data rather than sweeping thresholds or
+> wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -277,6 +279,13 @@ Current TCN v2 implementation state:
   target selection, and evidence-count summaries. `src/airdesk/ml/dataset.py`
   now focuses on generic feature CSV loading, stream grouping, manifest
   serialization, and sliding-window construction.
+- The TCN v2 train/evaluate boundary now lives outside the older window
+  classifier surface: `src/airdesk/ml/tcn_v2_train.py` owns
+  `prepare_tcn_v2_training_arrays`, `train_causal_tcn_v2`, and
+  `predict_causal_tcn_v2_manifest`; `src/airdesk/analysis/tcn_v2.py` owns v2
+  prediction dedupe, evidence-to-decoder frame mapping, and
+  `evaluate_tcn_v2_manifest`. Public package exports remain stable through
+  `airdesk.ml` and `airdesk.analysis`.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
 
@@ -353,11 +362,11 @@ Next review/refactor emphasis:
   could make the targeted V2 recording session ambiguous or fragile.
 - Caden explicitly wants the next context to push harder on structure and do
   what is right/best rather than stopping after cosmetic extraction. With the
-  CLI command surfaces now split and v2 target construction isolated, the next
-  best cleanup chunk is likely the TCN v2 train/evaluate boundary in
-  `src/airdesk/ml/train.py` and `src/airdesk/analysis/evaluation.py`, or a
-  focused test split if `tests/test_cli.py` becomes the next drag on
-  maintainability.
+  CLI command surfaces split and TCN v2 target/train/evaluate concerns isolated,
+  the next best cleanup chunk is likely a focused maintainability pass on the
+  largest remaining test surface (`tests/test_cli.py`) or a smaller production
+  audit around shared TCN helper naming/dead code before switching into
+  collection.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and
