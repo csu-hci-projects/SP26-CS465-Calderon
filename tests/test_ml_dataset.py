@@ -35,6 +35,7 @@ from airdesk.ml import (
     CausalTcnEvidencePrediction,
     CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
+    CausalTcnV2LivePredictor,
     CausalTcnV2TrainingConfig,
     build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
@@ -1255,6 +1256,9 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
         model_path=model_path,
         manifest_path=manifest_path,
     )
+    live_prediction = CausalTcnV2LivePredictor.load(model_path).predict_rows(
+        load_feature_rows_csv(features)
+    )
     evaluations = evaluate_tcn_v2_manifest(
         manifest_path=manifest_path,
         model_path=model_path,
@@ -1281,6 +1285,8 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
     assert checkpoint["metadata"]["calibration"]["evidence_thresholds"]["start"] >= 0.05
     assert len(predictions) == len(manifest.windows)
     assert set(predictions[0].evidence) == set(TCN_V2_EVIDENCE_TARGETS)
+    assert live_prediction.hand_id == "hand-0"
+    assert set(live_prediction.evidence) == set(TCN_V2_EVIDENCE_TARGETS)
     assert evaluations[0].recognizer == "tcn_v2_event_decoder"
     assert evaluations[0].intended_events == 1
 

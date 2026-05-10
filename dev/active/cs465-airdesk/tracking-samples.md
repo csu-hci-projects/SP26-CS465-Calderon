@@ -264,7 +264,13 @@ uv run airdesk gesture evaluate-tcn-v2 --manifest data/models/gestures/tcn-v2-00
 uv run airdesk gesture diagnose-tcn-v2-events --manifest data/models/gestures/tcn-v2-003-004-two-hand-manifest.json --model data/models/gestures/tcn-v2-003-004-two-hand.pt --out data/evaluations/sprint4-gpu-swipes-003-004-two-hand-shared-tcn/tcn-v2-regression-diagnostics.json --activation-threshold 0.35 --release-threshold 0.2 --min-peak-confidence 0.35 --cooldown-seconds 0.5 --early-match-tolerance-seconds 0.25
 ```
 
-This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps evidence back through the replay event decoder. New v2 checkpoints are schema-2 residual dilated causal TCNs with weighted/focal BCE, calibration metadata, batched prediction, and decoder scoring that uses `start` / `end` boundary heads. Manifest summaries report source-frame `evidence_frame_counts`, no-hand windows are explicit `__no_hand__` streams, and offline evaluation decodes a deduplicated all-row evidence stream. `evaluate-tcn-v2` and `diagnose-tcn-v2-events` support `--early-match-tolerance-seconds` for causal peaks that fire slightly before hand-labeled event starts. Use v2 on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
+No-action live v2 preview command shape:
+
+```bash
+uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-swipes-001-schema2-regression.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --events-out data/logs/live-tcn-v2-preview.jsonl
+```
+
+This v2 path keeps the rolling window as causal context only. The training target is framewise evidence for `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`; evaluation maps evidence back through the replay event decoder. New v2 checkpoints are schema-2 residual dilated causal TCNs with weighted/focal BCE, calibration metadata, batched prediction, and decoder scoring that uses `start` / `end` boundary heads. Manifest summaries report source-frame `evidence_frame_counts`, no-hand windows are explicit `__no_hand__` streams, and offline evaluation decodes a deduplicated all-row evidence stream. `evaluate-tcn-v2` and `diagnose-tcn-v2-events` support `--early-match-tolerance-seconds` for causal peaks that fire slightly before hand-labeled event starts. `watch-tcn-v2` is only a live/replay preview: it shows per-hand evidence in the HUD, decodes candidates after release evidence rather than flushing open live events, and can log JSONL predictions/candidates, but it does not route learned swipes into desktop actions. Use v2 on old data for regression checks, then collect the targeted V2 continuous slice before making quality claims.
 
 Cleanup note: V2 evidence generation now keeps no-hand/tracking-drop rows
 background-only even when a coarse label interval spans the dropout. `start` and
@@ -293,7 +299,7 @@ Schema-2 TCN v2 replay check after the pre-training architecture cleanup:
 - At `activation=0.35`, `release=0.2`, `min_peak=0.35`, and no early-match tolerance, isolated swipes matched `9/16`, missed `7`, produced `22` candidates, `13` false activations, and `0` repeated fires. Diagnostics showed all 7 misses had strong same-gesture peaks slightly before label start.
 - With `--early-match-tolerance-seconds 0.25`, isolated swipes matched `16/16`, missed `0`, produced `22` candidates, `5` false activations, and `0` repeated fires. The remaining false activations were all normal-desk-motion negatives.
 - Applying the same swipes-trained model to `sprint4-chained-003` matched `8/10`, missed `2`, produced `12` candidates, `0` false activations, `3` repeated fires, and about `1.75 s` mean latency. A 0.25 s early tolerance does not change the chained score.
-- Interpretation: schema-2 v2 is no longer just underconfident plumbing, but the next pre-collection gate is still negative-motion intent rejection plus repeated-fire/boundary timing. Do not wire learned swipes to desktop actions.
+- Interpretation: schema-2 v2 is no longer just underconfident plumbing. A no-action live feel-test is now justified, especially because the negative recordings may include accidental swipe practice, but learned swipes should still not dispatch desktop actions.
 
 Live two-hand TCN diagnostic preview:
 

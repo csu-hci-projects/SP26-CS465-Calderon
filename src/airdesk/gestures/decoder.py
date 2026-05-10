@@ -68,15 +68,25 @@ class EventDecoder:
         self.config = config or EventDecoderConfig()
         self.event_map = event_map or DEFAULT_EVENT_MAP
 
-    def decode(self, frames: list[DecoderFrame]) -> list[GestureCandidate]:
+    def decode(
+        self,
+        frames: list[DecoderFrame],
+        *,
+        flush_open_events: bool = True,
+    ) -> list[GestureCandidate]:
         """Return committed gesture events from timestamp-ordered score frames."""
         self._validate_config()
         events: list[GestureCandidate] = []
         for stream_frames in _decoder_streams(frames):
-            events.extend(self._decode_stream(stream_frames))
+            events.extend(self._decode_stream(stream_frames, flush_open_events=flush_open_events))
         return _suppress_decoded_events(events, self.config)
 
-    def _decode_stream(self, frames: list[DecoderFrame]) -> list[GestureCandidate]:
+    def _decode_stream(
+        self,
+        frames: list[DecoderFrame],
+        *,
+        flush_open_events: bool,
+    ) -> list[GestureCandidate]:
         """Decode one hand/source stream without mixing active peaks."""
         events: list[GestureCandidate] = []
         active: _ActivePeak | None = None
@@ -138,7 +148,8 @@ class EventDecoder:
                 )
 
         if (
-            active is not None
+            flush_open_events
+            and active is not None
             and active.peak_confidence >= self.config.min_peak_confidence
             and self._separation_ok(active.name, active.peak_time, last_commit_by_name)
         ):

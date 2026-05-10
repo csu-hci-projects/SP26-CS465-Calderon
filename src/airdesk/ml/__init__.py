@@ -38,6 +38,8 @@ from airdesk.ml.label_refinement import (
 )
 from airdesk.ml.tcn_v2_train import (
     CausalTcnEvidencePrediction,
+    CausalTcnV2LivePrediction,
+    CausalTcnV2LivePredictor,
     CausalTcnV2TrainingConfig,
     TcnEvidenceTrainingArrays,
     predict_causal_tcn_v2_manifest,
@@ -86,6 +88,8 @@ __all__ = [
     "refine_motion_aligned_label_file",
     "CausalTcnPrediction",
     "CausalTcnEvidencePrediction",
+    "CausalTcnV2LivePrediction",
+    "CausalTcnV2LivePredictor",
     "CausalTcnLivePrediction",
     "CausalTcnLivePredictor",
     "CausalTcnTrainingConfig",

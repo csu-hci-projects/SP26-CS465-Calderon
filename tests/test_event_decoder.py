@@ -30,6 +30,36 @@ def test_event_decoder_commits_peak_after_recovery() -> None:
     assert events[0].confidence == 0.9
 
 
+def test_event_decoder_can_hold_open_live_event_until_release() -> None:
+    decoder = EventDecoder(
+        EventDecoderConfig(
+            activation_threshold=0.6,
+            release_threshold=0.4,
+            min_peak_confidence=0.7,
+            recovery_seconds=0.1,
+            min_event_separation_seconds=0.5,
+        )
+    )
+    active_only = [
+        DecoderFrame(timestamp=1.0, scores={"background": 0.8, "stroke_left": 0.2}),
+        DecoderFrame(timestamp=1.1, scores={"background": 0.3, "stroke_left": 0.75}),
+        DecoderFrame(timestamp=1.2, scores={"background": 0.1, "stroke_left": 0.90}),
+    ]
+
+    assert decoder.decode(active_only, flush_open_events=False) == []
+    assert len(decoder.decode(active_only, flush_open_events=True)) == 1
+    released = [
+        *active_only,
+        DecoderFrame(timestamp=1.4, scores={"background": 0.9, "stroke_left": 0.1}),
+    ]
+
+    events = decoder.decode(released, flush_open_events=False)
+
+    assert len(events) == 1
+    assert events[0].name == "swipe_left"
+    assert events[0].timestamp == 1.2
+
+
 def test_event_decoder_suppresses_repeated_fire_within_separation() -> None:
     decoder = EventDecoder(
         EventDecoderConfig(

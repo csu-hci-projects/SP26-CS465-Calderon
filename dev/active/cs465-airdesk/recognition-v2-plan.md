@@ -401,6 +401,17 @@ again right now, and do not collect broad combo data. The next gate is
 negative-motion intent rejection plus repeated-fire/boundary timing, then a
 targeted V2 continuous slice.
 
+Status update after the live-safety review: schema-2 v2 now has a separate
+no-action preview command, `airdesk gesture watch-tcn-v2`. It loads
+`causal_tcn_v2_evidence` checkpoints, runs the shared model per visible
+`hand_id` stream, shows intent/stroke/start/end evidence in the HUD, decodes
+candidate swipes with the same start/end-aware event decoder, and can write
+prediction/candidate JSONL through `--events-out`. The live decoder does not
+flush open events before release evidence, so the preview is closer to continuous
+runtime behavior than repeatedly decoding a truncated replay prefix. This does
+not change the live-action stance: learned swipes still do not dispatch desktop
+actions.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -423,9 +434,10 @@ Expected next-session flow:
 1. Read docs and report.
 2. Review current code boundaries.
 3. Refine this plan.
-4. Use TCN v2 diagnostics to tighten negative-motion false activations and repeated fires.
-5. Plan or collect the targeted continuous V2 slice above only after that gate is clean enough.
-6. Keep live desktop actions disabled.
+4. Use `watch-tcn-v2` for a no-action live feel-test and log predictions/candidates.
+5. Use TCN v2 diagnostics to tighten negative-motion false activations and repeated fires if the live/replay evidence still demands it.
+6. Plan or collect the targeted continuous V2 slice above only after that gate is clean enough.
+7. Keep live desktop actions disabled.
 
 If the next agent finds the plan too broad, it should narrow TCN v2 to the
 manifest/target/evaluation surface first rather than jumping straight to live

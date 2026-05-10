@@ -310,7 +310,12 @@ into decoder activation/release behavior, while desktop actions remain outside
 the learned recognizer. The same analysis boundary now owns
 `diagnose-tcn-v2-events` and early-match evaluation support for causal peaks
 that fire just before a hand-labeled event start; this keeps replay evidence
-honest without changing live action safety.
+honest without changing live action safety. `airdesk gesture watch-tcn-v2` is
+the corresponding no-action live preview: it loads schema-2 evidence checkpoints,
+runs the shared model per visible hand stream, decodes candidates through the
+same event decoder without flushing open live events before release evidence,
+and can write prediction/candidate JSONL for later review. It still bypasses
+runtime policy and action targets.
 
 ## Modes
 

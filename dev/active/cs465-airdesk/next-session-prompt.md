@@ -95,9 +95,9 @@ Important evidence:
 - Motion-peak auto-refinement worsened held-out TCN performance and should be used only for diagnostics/manual review.
 - T550 GPU MediaPipe path works through `scripts/airdesk-nvidia-mediapipe-wayland ... --hand-delegate gpu`.
 - Keep live desktop actions disabled.
-- TCN v2 is now implemented as a replay/evaluation surface:
+- TCN v2 is now implemented as a replay/evaluation/live-preview surface:
   `build-tcn-dataset --target-mode v2-evidence`, `train-tcn-v2`,
-  `evaluate-tcn-v2`, and `diagnose-tcn-v2-events`.
+  `evaluate-tcn-v2`, `diagnose-tcn-v2-events`, and no-action `watch-tcn-v2`.
 - The v2 targets are framewise decoder-facing evidence heads:
   `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`.
   Windows remain causal compute context, not semantic gesture labels.
@@ -144,6 +144,13 @@ Important evidence:
   isolated swipes scored `16/16` with 5 false activations, all normal desk
   negatives. The same model scored `8/10` on `sprint4-chained-003` with
   0 false activations, 3 repeated fires, and about 1.75 s mean latency.
+- `airdesk gesture watch-tcn-v2` is now available for a no-action live/replay
+  schema-2 v2 feel-test. It loads `causal_tcn_v2_evidence` checkpoints, runs the
+  shared model per visible hand stream, shows intent/stroke/start/end evidence in
+  the HUD, decodes candidates through the same start/end-aware decoder, avoids
+  flushing open live events before release evidence, and can write
+  prediction/candidate JSONL with `--events-out`. It does not call runtime policy
+  or action targets.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use

@@ -147,6 +147,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Review and improve TCN architecture/training before collecting V2 data: receptive field, residual/dilated blocks, normalization/dropout, class/evidence imbalance, loss weighting, calibration, checkpoint metadata, inference batching/speed, and decoder contract
 - [x] Replay-check the stronger TCN v2 architecture on old regression data before targeted V2 collection
 - [x] Add TCN v2 decoded-event diagnostics and early-match evaluation support for causal peaks
+- [x] Add no-action live/replay `watch-tcn-v2` preview for schema-2 evidence checkpoints before any desktop action wiring
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay still fires on 5/8 negative recordings
 - [ ] Tighten TCN v2 repeated-fire/boundary timing after schema-2 chained replay still has 3 repeated fires
 - [ ] Plan and collect a targeted continuous V2 data slice after the target shape is implemented

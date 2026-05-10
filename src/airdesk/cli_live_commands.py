@@ -6,31 +6,41 @@ from pathlib import Path
 from statistics import fmean
 from time import monotonic
 from typing import Annotated
+from uuid import uuid4
 
 import typer
 
+from airdesk.analysis.tcn_v2 import tcn_v2_decoder_scores
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_live import (
     _format_live_dtw_candidate,
     _format_live_tcn_prediction,
     _format_live_tcn_preview_predictions,
+    _format_live_tcn_v2_candidate,
+    _format_live_tcn_v2_prediction,
+    _format_live_tcn_v2_preview_predictions,
     _format_tracker_timing,
     _is_live_tcn_gesture_target,
     _live_dtw_preview_status,
     _live_feature_streams,
     _live_tcn_preview_status,
+    _live_tcn_v2_preview_status,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_tracking import _make_tracker
 from airdesk.features import FeatureRowStream, FrameFeatureRow
+from airdesk.gestures.decoder import DecoderFrame, EventDecoder, EventDecoderConfig
 from airdesk.gestures.dtw import DtwGestureModel, DtwTemplateRecognizer
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.ml import (
     CausalTcnLivePrediction,
     CausalTcnLivePredictor,
+    CausalTcnV2LivePrediction,
+    CausalTcnV2LivePredictor,
     MissingMlDependencyError,
 )
-from airdesk.state.types import TrackingFrame
+from airdesk.recording.jsonl import JsonlRecordingWriter
+from airdesk.state.types import EventLogEntry, GestureCandidate, TrackingFrame, utc_timestamp
 from airdesk.tracking.mediapipe import (
     DEFAULT_HAND_LANDMARKER_DELEGATE,
     DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
@@ -235,6 +245,326 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             typer.echo(str(exc), err=True)
             raise typer.Exit(code=1) from exc
         finally:
+            tracker.stop()
+
+    @gesture_app.command("watch-tcn-v2")
+    def gesture_watch_tcn_v2(
+        tcn_model: Annotated[
+            Path,
+            typer.Option("--model", exists=True, readable=True, help="TCN v2 checkpoint path."),
+        ],
+        backend: Annotated[str, typer.Option(help="Tracking backend to watch.")] = "mediapipe",
+        device: Annotated[
+            str,
+            typer.Option(help="Camera path, numeric index, or replay path."),
+        ] = "/dev/video0",
+        width: Annotated[int | None, typer.Option(help="Requested capture width.")] = 640,
+        height: Annotated[int | None, typer.Option(help="Requested capture height.")] = 480,
+        fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = 30,
+        fourcc: Annotated[
+            str | None,
+            typer.Option(help="Requested camera FOURCC, e.g. MJPG."),
+        ] = "MJPG",
+        hand_model_path: Annotated[
+            Path,
+            typer.Option(
+                "--hand-model-path", help="MediaPipe Hand Landmarker .task model path."
+            ),
+        ] = DEFAULT_HAND_LANDMARKER_MODEL,
+        max_num_hands: Annotated[
+            int,
+            typer.Option(help="Maximum number of hands for MediaPipe to track."),
+        ] = 2,
+        min_detection_confidence: Annotated[
+            float,
+            typer.Option(help="Minimum palm detection confidence."),
+        ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+        min_presence_confidence: Annotated[
+            float,
+            typer.Option(help="Minimum hand landmark presence confidence."),
+        ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+        min_tracking_confidence: Annotated[
+            float,
+            typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+        ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+        hand_delegate: Annotated[
+            str,
+            typer.Option("--hand-delegate", help="MediaPipe delegate: cpu or gpu."),
+        ] = DEFAULT_HAND_LANDMARKER_DELEGATE,
+        auto_download_model: Annotated[
+            bool,
+            typer.Option(help="Download the MediaPipe model to --hand-model-path if missing."),
+        ] = True,
+        max_frames: Annotated[
+            int | None, typer.Option(help="Stop after this many frames.")
+        ] = None,
+        show: Annotated[bool, typer.Option(help="Show an OpenCV live preview.")] = True,
+        mirror: Annotated[bool, typer.Option(help="Mirror the preview window.")] = True,
+        min_rows: Annotated[
+            int,
+            typer.Option(help="Minimum feature rows before the first TCN v2 prediction."),
+        ] = 4,
+        evidence_threshold: Annotated[
+            float,
+            typer.Option(help="Minimum decoder stroke score before printing an evidence line."),
+        ] = 0.35,
+        include_background: Annotated[
+            bool,
+            typer.Option(help="Print low-stroke/background evidence lines as well."),
+        ] = False,
+        activation_threshold: Annotated[
+            float,
+            typer.Option(help="Live decoder activation threshold over v2 stroke evidence."),
+        ] = 0.35,
+        release_threshold: Annotated[
+            float,
+            typer.Option(help="Live decoder release threshold over v2 stroke evidence."),
+        ] = 0.20,
+        min_peak_confidence: Annotated[
+            float,
+            typer.Option(help="Live decoder minimum peak stroke confidence."),
+        ] = 0.35,
+        cooldown_seconds: Annotated[
+            float,
+            typer.Option(help="Live decoder same-gesture separation/cooldown in seconds."),
+        ] = 0.5,
+        events_out: Annotated[
+            Path | None,
+            typer.Option(help="Write live TCN v2 predictions/candidates as JSONL events."),
+        ] = None,
+        show_motion: Annotated[
+            bool,
+            typer.Option(help="Show hand-normalized horizontal motion in the HUD."),
+        ] = True,
+        profile_timing: Annotated[
+            bool,
+            typer.Option(help="Print per-prediction TCN v2 timing diagnostics."),
+        ] = False,
+    ) -> None:
+        """Watch live/replay TCN v2 evidence without triggering desktop actions."""
+        if not 0 <= evidence_threshold <= 1:
+            typer.echo("evidence-threshold must be in [0, 1]", err=True)
+            raise typer.Exit(code=1)
+        if min_rows <= 0:
+            typer.echo("min-rows must be positive", err=True)
+            raise typer.Exit(code=1)
+        if not 0 <= release_threshold <= activation_threshold <= 1:
+            typer.echo("decoder thresholds must satisfy 0 <= release <= activation <= 1", err=True)
+            raise typer.Exit(code=1)
+        if not 0 <= min_peak_confidence <= 1:
+            typer.echo("min-peak-confidence must be in [0, 1]", err=True)
+            raise typer.Exit(code=1)
+        if cooldown_seconds < 0:
+            typer.echo("cooldown-seconds must be non-negative", err=True)
+            raise typer.Exit(code=1)
+        decoder_config = EventDecoderConfig(
+            activation_threshold=activation_threshold,
+            release_threshold=release_threshold,
+            min_peak_confidence=min_peak_confidence,
+            min_event_separation_seconds=cooldown_seconds,
+            cooldown_seconds=cooldown_seconds,
+        )
+        try:
+            predictor = CausalTcnV2LivePredictor.load(tcn_model)
+        except (MissingMlDependencyError, ValueError) as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+
+        tracker = _make_tracker(
+            backend=backend,
+            device=device,
+            max_frames=max_frames,
+            show=show,
+            camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+            model_path=hand_model_path,
+            auto_download_model=auto_download_model,
+            max_num_hands=max_num_hands,
+            min_detection_confidence=min_detection_confidence,
+            min_presence_confidence=min_presence_confidence,
+            min_tracking_confidence=min_tracking_confidence,
+            delegate=hand_delegate,
+            preview_mirror=mirror,
+            preview_gestures=False,
+        )
+        stream = FeatureRowStream()
+        rows: list[FrameFeatureRow] = []
+        latest_predictions: dict[str, CausalTcnV2LivePrediction] = {}
+        latest_rows_by_hand: dict[str, object] = {}
+        decoder_frames: list[DecoderFrame] = []
+        emitted_candidates: set[tuple[str | None, str, int]] = set()
+        state: dict[str, object] = {
+            "status": "warming up",
+            "alert": "",
+            "alert_until": 0.0,
+            "predictions": latest_predictions,
+            "rows_by_hand": latest_rows_by_hand,
+            "show_motion": show_motion,
+            "stream_count": 0,
+            "row_count": 0,
+        }
+        session_id = str(uuid4())
+        event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
+        first_timestamp: float | None = None
+        next_prediction_time_by_hand: dict[str, float] = {}
+        prediction_count = 0
+        candidate_count = 0
+        decoder_history_seconds = (
+            predictor.window_seconds
+            + decoder_config.recovery_seconds
+            + decoder_config.cooldown_seconds
+            + 1.0
+        )
+
+        if hasattr(tracker, "preview_status_provider"):
+            tracker.preview_status_provider = lambda: _live_tcn_v2_preview_status(state)  # type: ignore[attr-defined]
+
+        _write_tcn_v2_live_event(
+            event_writer,
+            event_type="tcn_v2_live_session_start",
+            timestamp=utc_timestamp(),
+            session_id=session_id,
+            payload={
+                "model": str(tcn_model),
+                "backend": backend,
+                "device": device,
+                "schema_version": predictor.schema_version,
+                "evidence_targets": list(predictor.evidence_targets),
+                "window_seconds": predictor.window_seconds,
+                "stride_seconds": predictor.stride_seconds,
+                "event_decoder": decoder_config.to_dict(),
+                "dry_run_only": True,
+            },
+        )
+        typer.echo(
+            "watching tcn_v2 "
+            f"model={tcn_model} backend={backend} window={predictor.window_seconds:.2f}s "
+            f"stride={predictor.stride_seconds:.2f}s heads={','.join(predictor.evidence_targets)} "
+            "actions=disabled"
+        )
+        try:
+            tracker.start()
+            for frame in tracker.frames():
+                first_timestamp = frame.timestamp if first_timestamp is None else first_timestamp
+                rows.extend(stream.append_rows(frame))
+                cutoff = frame.timestamp - predictor.window_seconds
+                rows = [item for item in rows if item.timestamp >= cutoff]
+                hand_streams = _live_feature_streams(rows)
+                if not hand_streams:
+                    state["status"] = "TCN v2 warming rows=0"
+                    state["stream_count"] = 0
+                    state["row_count"] = 0
+                    continue
+                state["stream_count"] = len(hand_streams)
+                state["row_count"] = len(rows)
+                state["status"] = _format_live_tcn_v2_preview_predictions(state)
+                for hand_id, hand_rows in hand_streams.items():
+                    latest_rows_by_hand[hand_id] = hand_rows[-1]
+                    if len(hand_rows) < min_rows:
+                        continue
+                    next_prediction_time = next_prediction_time_by_hand.get(hand_id)
+                    if (
+                        next_prediction_time is not None
+                        and hand_rows[-1].timestamp < next_prediction_time
+                    ):
+                        continue
+                    prediction_started_at = monotonic()
+                    prediction = predictor.predict_rows(hand_rows)
+                    prediction_ms = (monotonic() - prediction_started_at) * 1000
+                    decoder_scores = tcn_v2_decoder_scores(prediction.evidence)
+                    prediction_count += 1
+                    latest_predictions[hand_id] = prediction
+                    state["status"] = _format_live_tcn_v2_preview_predictions(state)
+                    decoder_frames.append(
+                        _tcn_v2_live_decoder_frame(
+                            prediction,
+                            source_id=frame.source_id,
+                            decoder_scores=decoder_scores,
+                        )
+                    )
+                    decoder_frames = [
+                        item
+                        for item in decoder_frames
+                        if item.timestamp >= prediction.end_time - decoder_history_seconds
+                    ]
+                    _write_tcn_v2_live_event(
+                        event_writer,
+                        event_type="tcn_v2_live_prediction",
+                        timestamp=utc_timestamp(),
+                        session_id=session_id,
+                        payload={
+                            "prediction": prediction.to_dict(),
+                            "decoder_scores": decoder_scores,
+                            "relative_time_seconds": (
+                                prediction.end_time - first_timestamp
+                                if first_timestamp is not None
+                                else prediction.end_time
+                            ),
+                        },
+                    )
+                    visible_evidence = (
+                        max(
+                            decoder_scores.get("swipe_left", 0.0),
+                            decoder_scores.get("swipe_right", 0.0),
+                        )
+                        >= evidence_threshold
+                    )
+                    if profile_timing and visible_evidence:
+                        typer.echo(
+                            f"tcn_v2_predict_ms={prediction_ms:.2f} hand={hand_id} "
+                            f"rows={len(hand_rows)}"
+                        )
+                    if include_background or visible_evidence:
+                        typer.echo(
+                            _format_live_tcn_v2_prediction(
+                                prediction,
+                                first_timestamp=first_timestamp,
+                                decoder_scores=decoder_scores,
+                            )
+                        )
+                    candidates = EventDecoder(decoder_config).decode(
+                        decoder_frames,
+                        flush_open_events=False,
+                    )
+                    for candidate in candidates:
+                        key = _live_candidate_key(candidate)
+                        if key in emitted_candidates:
+                            continue
+                        emitted_candidates.add(key)
+                        candidate_count += 1
+                        hand_label = candidate.hand_id or "hand"
+                        state["alert"] = f"{hand_label} {candidate.name} {candidate.confidence:.2f}"
+                        state["alert_until"] = monotonic() + 1.25
+                        _write_tcn_v2_live_event(
+                            event_writer,
+                            event_type="tcn_v2_live_candidate",
+                            timestamp=utc_timestamp(),
+                            session_id=session_id,
+                            payload={"candidate": candidate.to_dict()},
+                        )
+                        typer.echo(
+                            _format_live_tcn_v2_candidate(
+                                candidate,
+                                first_timestamp=first_timestamp,
+                            )
+                        )
+                    next_prediction_time_by_hand[hand_id] = (
+                        hand_rows[-1].timestamp + predictor.stride_seconds
+                    )
+        except KeyboardInterrupt:
+            typer.echo("interrupted")
+        except RuntimeError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
+        finally:
+            _write_tcn_v2_live_event(
+                event_writer,
+                event_type="tcn_v2_live_session_finish",
+                timestamp=utc_timestamp(),
+                session_id=session_id,
+                payload={"predictions": prediction_count, "candidates": candidate_count},
+            )
+            if event_writer is not None:
+                event_writer.close()
             tracker.stop()
 
     @gesture_app.command("watch-dtw")
@@ -810,3 +1140,51 @@ def _average_fps_from_timestamps(timestamps: list[float]) -> float | None:
     if not intervals:
         return None
     return 1.0 / fmean(intervals)
+
+
+def _tcn_v2_live_decoder_frame(
+    prediction: CausalTcnV2LivePrediction,
+    *,
+    source_id: str,
+    decoder_scores: dict[str, float],
+) -> DecoderFrame:
+    return DecoderFrame(
+        timestamp=prediction.end_time,
+        scores=decoder_scores,
+        source_id=source_id,
+        hand_id=prediction.hand_id,
+        window_start=prediction.start_time,
+        window_end=prediction.end_time,
+        metadata={
+            "recognizer": "tcn_v2_live",
+            "intentional_motion": prediction.evidence.get("intentional_motion", 0.0),
+            "start": prediction.evidence.get("start", 0.0),
+            "end": prediction.evidence.get("end", 0.0),
+            "raw_evidence": prediction.evidence,
+            "decoder_scores": decoder_scores,
+        },
+    )
+
+
+def _live_candidate_key(candidate: GestureCandidate) -> tuple[str | None, str, int]:
+    return (candidate.hand_id, candidate.name, int(round(candidate.timestamp * 1000)))
+
+
+def _write_tcn_v2_live_event(
+    writer: JsonlRecordingWriter | None,
+    *,
+    event_type: str,
+    timestamp: float,
+    session_id: str,
+    payload: dict[str, object],
+) -> None:
+    if writer is None:
+        return
+    writer.write_event(
+        EventLogEntry(
+            event_type=event_type,
+            timestamp=timestamp,
+            session_id=session_id,
+            payload=payload,
+        )
+    )

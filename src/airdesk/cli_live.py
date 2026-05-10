@@ -6,7 +6,7 @@ from statistics import fmean
 from time import monotonic
 
 from airdesk.features import FrameFeatureRow, group_feature_rows_by_stream
-from airdesk.ml import CausalTcnLivePrediction
+from airdesk.ml import CausalTcnLivePrediction, CausalTcnV2LivePrediction
 from airdesk.state.types import GestureCandidate
 from airdesk.tracking.interfaces import HandTrackerBackend
 
@@ -71,6 +71,35 @@ def _format_live_tcn_preview_predictions(state: dict[str, object]) -> str:
     return " | ".join(parts)
 
 
+def _format_live_tcn_v2_preview_predictions(state: dict[str, object]) -> str:
+    stream_count = int(state.get("stream_count", 0))
+    row_count = int(state.get("row_count", 0))
+    show_motion = bool(state.get("show_motion", False))
+    predictions = state.get("predictions", {})
+    rows_by_hand = state.get("rows_by_hand", {})
+    if not isinstance(predictions, dict) or not predictions:
+        return f"TCN v2 streams={stream_count} rows={row_count} warming"
+    parts = [f"TCN v2 streams={stream_count} rows={row_count}"]
+    for hand_id, prediction in sorted(predictions.items()):
+        if not isinstance(prediction, CausalTcnV2LivePrediction):
+            continue
+        evidence = prediction.evidence
+        motion = ""
+        if show_motion and isinstance(rows_by_hand, dict):
+            row = rows_by_hand.get(hand_id)
+            dx = getattr(row, "palm_window_dx_per_hand_scale", None)
+            if isinstance(dx, float):
+                motion = f" dx={dx:.2f}"
+        parts.append(
+            f"{hand_id}:intent={evidence.get('intentional_motion', 0.0):.2f} "
+            f"L={evidence.get('stroke_left', 0.0):.2f} "
+            f"R={evidence.get('stroke_right', 0.0):.2f} "
+            f"S={evidence.get('start', 0.0):.2f} "
+            f"E={evidence.get('end', 0.0):.2f}{motion}"
+        )
+    return " | ".join(parts)
+
+
 def _format_live_tcn_prediction(
     prediction: CausalTcnLivePrediction,
     *,
@@ -84,6 +113,36 @@ def _format_live_tcn_prediction(
     return (
         f"t={relative:7.3f}s{hand} target={prediction.target} "
         f"confidence={prediction.confidence:.3f} {probabilities}"
+    )
+
+
+def _format_live_tcn_v2_prediction(
+    prediction: CausalTcnV2LivePrediction,
+    *,
+    first_timestamp: float | None,
+    decoder_scores: dict[str, float],
+) -> str:
+    relative = prediction.end_time
+    if first_timestamp is not None:
+        relative = prediction.end_time - first_timestamp
+    hand = f" hand={prediction.hand_id}" if prediction.hand_id else ""
+    evidence = _compact_probabilities(prediction.evidence)
+    scores = _compact_probabilities(decoder_scores)
+    return f"t={relative:7.3f}s{hand} evidence=({evidence}) decoder=({scores})"
+
+
+def _format_live_tcn_v2_candidate(
+    candidate: GestureCandidate,
+    *,
+    first_timestamp: float | None,
+) -> str:
+    relative = candidate.timestamp
+    if first_timestamp is not None:
+        relative = candidate.timestamp - first_timestamp
+    hand = f" hand={candidate.hand_id}" if candidate.hand_id else ""
+    return (
+        f"t={relative:7.3f}s{hand} decoded={candidate.name} "
+        f"confidence={candidate.confidence:.3f}"
     )
 
 
@@ -149,6 +208,15 @@ def _live_tcn_preview_status(state: dict[str, object]) -> str:
     return status
 
 
+def _live_tcn_v2_preview_status(state: dict[str, object]) -> str:
+    status = str(state["status"])
+    alert_until = float(state.get("alert_until", 0.0))
+    alert = str(state.get("alert", ""))
+    if alert and monotonic() <= alert_until:
+        return f"{status} | DECODED {alert}"
+    return status
+
+
 def _live_dtw_preview_status(state: dict[str, object]) -> str:
     status = str(state["status"])
     alert_until = float(state.get("alert_until", 0.0))
@@ -178,6 +246,7 @@ def _compact_probabilities(probabilities: dict[str, float]) -> str:
 def _short_tcn_target(target: str) -> str:
     return {
         "background": "bg",
+        "intentional_motion": "intent",
         "swipe_left": "left",
         "swipe_right": "right",
         "stroke_left": "left",

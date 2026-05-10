@@ -237,10 +237,14 @@ Current next step:
 > hand-labeled start. With `--early-match-tolerance-seconds 0.25`, isolated
 > swipes score `16/16` with `5` false activations, all from negative/background
 > recordings. Chained replay remains `8/10` with `3` repeated fires and high
-> latency. Do not collect broad combo data yet. The next gate is to tighten
-> negative-motion intent rejection and repeated-fire/boundary timing, then
-> decide whether a targeted V2 slice is justified. Keep live actions
-> dry-run/disabled.
+> latency. Caden also identified a likely data issue: some "negative" desk-motion
+> recordings may contain unconscious swipe practice while looking at upcoming
+> training combos, so the 5 isolated negative false activations may be partly
+> contaminated negatives rather than pure idle false positives. Do not collect
+> broad combo data yet. The next gate is to live-preview the v2 evidence model
+> without actions, tighten negative-motion intent rejection/repeated-fire timing
+> only if the live/replay evidence still demands it, then decide whether a
+> targeted V2 slice is justified. Keep live actions dry-run/disabled.
 
 Current TCN v2 implementation state:
 
@@ -272,6 +276,13 @@ Current TCN v2 implementation state:
   diagnostics that the summary lacks: matches, misses, false activations,
   repeated fires, nearest candidate/event timing, decoder scores, and raw
   evidence heads.
+- `airdesk gesture watch-tcn-v2` is now the safe live/replay preview for schema-2
+  evidence checkpoints. It loads `causal_tcn_v2_evidence` models, applies one
+  shared checkpoint independently to each visible hand stream, shows
+  `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`
+  evidence in the preview HUD, decodes candidates through the same start/end-aware
+  event decoder, and can write live prediction/candidate JSONL via `--events-out`.
+  It does not call runtime policy or action targets.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.
@@ -300,7 +311,8 @@ Current TCN v2 implementation state:
   `evaluate_tcn_v2_manifest`. Public package exports remain stable through
   `airdesk.ml` and `airdesk.analysis`.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
-  window-classifier scaffold and diagnostic live preview.
+  window-classifier scaffold and diagnostic live preview; use `watch-tcn-v2` for
+  the schema-2 sequence-evidence model.
 - The first pre-training TCN architecture cleanup is complete. It addressed the
   concrete weak spots called out in review: receptive field, residual/dilated
   block design, normalization/dropout, sparse boundary-head imbalance,

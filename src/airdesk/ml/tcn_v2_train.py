@@ -17,6 +17,7 @@ from airdesk.ml.train import (
     CausalTcnTrainingResult,
     _batches,
     _normalization_stats,
+    _numeric_row_value,
     _require_torch,
     _split_indices,
     _window_rows,
@@ -50,6 +51,96 @@ class CausalTcnEvidencePrediction:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class CausalTcnV2LivePrediction:
+    """One live TCN v2 evidence prediction over an in-memory feature stream."""
+
+    hand_id: str | None
+    start_time: float
+    end_time: float
+    evidence: dict[str, float]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CausalTcnV2LivePredictor:
+    """Loaded TCN v2 checkpoint for rolling live evidence prediction."""
+
+    model: Any
+    torch: Any
+    evidence_targets: tuple[str, ...]
+    feature_columns: tuple[str, ...]
+    feature_mean: tuple[float, ...]
+    feature_std: tuple[float, ...]
+    window_seconds: float
+    stride_seconds: float
+    schema_version: int
+    calibration_thresholds: dict[str, float]
+
+    @classmethod
+    def load(cls, model_path: Path) -> CausalTcnV2LivePredictor:
+        """Load a TCN v2 evidence checkpoint for live rolling-window predictions."""
+        torch, nn, functional = _require_torch()
+        checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+        metadata = checkpoint["metadata"]
+        if str(metadata.get("model_type")) != "causal_tcn_v2_evidence":
+            raise ValueError("TCN v2 live prediction requires a causal_tcn_v2_evidence checkpoint")
+        model = _make_tcn_v2_sequence_model_for_checkpoint(
+            torch=torch,
+            nn=nn,
+            functional=functional,
+            model_config=checkpoint["model_config"],
+        )
+        model.load_state_dict(checkpoint["model_state"])
+        model.eval()
+        calibration = metadata.get("calibration", {})
+        thresholds = calibration.get("evidence_thresholds", {})
+        return cls(
+            model=model,
+            torch=torch,
+            evidence_targets=tuple(str(target) for target in metadata["evidence_targets"]),
+            feature_columns=tuple(str(column) for column in metadata["feature_columns"]),
+            feature_mean=tuple(float(value) for value in metadata["feature_mean"]),
+            feature_std=tuple(float(value) for value in metadata["feature_std"]),
+            window_seconds=float(metadata.get("window_seconds", 0.8)),
+            stride_seconds=float(metadata.get("stride_seconds", 0.2)),
+            schema_version=int(metadata.get("schema_version", 1)),
+            calibration_thresholds={
+                str(target): float(threshold) for target, threshold in thresholds.items()
+            },
+        )
+
+    def predict_rows(self, rows: list[Any]) -> CausalTcnV2LivePrediction:
+        """Predict decoder-facing evidence for the latest row in one live hand stream."""
+        if not rows:
+            raise ValueError("TCN v2 live prediction requires at least one feature row")
+        matrix = [
+            [_numeric_row_value(row, column) for column in self.feature_columns] for row in rows
+        ]
+        normalized = [
+            [
+                (value - self.feature_mean[index]) / self.feature_std[index]
+                for index, value in enumerate(row)
+            ]
+            for row in matrix
+        ]
+        with self.torch.no_grad():
+            sample = self.torch.tensor([normalized], dtype=self.torch.float32)
+            probabilities = self.torch.sigmoid(self.model(sample))[0, -1]
+        latest_row = rows[-1]
+        return CausalTcnV2LivePrediction(
+            hand_id=getattr(latest_row, "hand_id", None) or None,
+            start_time=float(rows[0].timestamp),
+            end_time=float(latest_row.timestamp),
+            evidence={
+                target: float(probabilities[index].item())
+                for index, target in enumerate(self.evidence_targets)
+            },
+        )
 
 
 @dataclass(frozen=True)

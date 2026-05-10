@@ -12,6 +12,7 @@ from airdesk.actions.hyprland import GuardedHyprlandActionTarget
 from airdesk.cli import app
 from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
+    _format_live_tcn_v2_preview_predictions,
     _format_tracker_timing,
     _show_live_tcn_prediction,
 )
@@ -31,7 +32,7 @@ from airdesk.labels import (
     load_label_file,
     save_label_file,
 )
-from airdesk.ml import CausalTcnLivePrediction
+from airdesk.ml import CausalTcnLivePrediction, CausalTcnV2LivePrediction
 from airdesk.profiles.models import ActionBinding, Profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
@@ -270,6 +271,26 @@ def test_watch_tcn_help_exposes_live_classifier_controls() -> None:
     assert "--profile-timing" in result.stdout
 
 
+def test_watch_tcn_v2_help_exposes_live_evidence_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "watch-tcn-v2", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--model" in result.stdout
+    assert "--hand-model-path" in result.stdout
+    assert "--max-num-hands" in result.stdout
+    assert "[default: 2]" in result.stdout
+    assert "--activation-threshold" in result.stdout
+    assert "--release-threshold" in result.stdout
+    assert "--min-peak-confidence" in result.stdout
+    assert "--evidence-threshold" in result.stdout
+    assert "--events-out" in result.stdout
+    assert "--profile-timing" in result.stdout
+
+
 def test_watch_tcn_filters_recovery_by_default() -> None:
     prediction = CausalTcnLivePrediction(
         hand_id="hand-0",
@@ -339,6 +360,46 @@ def test_live_tcn_preview_status_lists_each_hand_stably() -> None:
     assert status == (
         "TCN streams=2 rows=15 | hand-0:bg 0.91 L=0.04 R=0.05 | "
         "hand-1:right 0.72 L=0.08 R=0.72"
+    )
+
+
+def test_live_tcn_v2_preview_status_lists_evidence_stably() -> None:
+    status = _format_live_tcn_v2_preview_predictions(
+        {
+            "stream_count": 2,
+            "row_count": 15,
+            "predictions": {
+                "hand-1": CausalTcnV2LivePrediction(
+                    hand_id="hand-1",
+                    start_time=1.0,
+                    end_time=1.2,
+                    evidence={
+                        "intentional_motion": 0.80,
+                        "stroke_left": 0.10,
+                        "stroke_right": 0.72,
+                        "start": 0.25,
+                        "end": 0.05,
+                    },
+                ),
+                "hand-0": CausalTcnV2LivePrediction(
+                    hand_id="hand-0",
+                    start_time=1.0,
+                    end_time=1.2,
+                    evidence={
+                        "intentional_motion": 0.20,
+                        "stroke_left": 0.04,
+                        "stroke_right": 0.05,
+                        "start": 0.02,
+                        "end": 0.90,
+                    },
+                ),
+            },
+        }
+    )
+
+    assert status == (
+        "TCN v2 streams=2 rows=15 | hand-0:intent=0.20 L=0.04 R=0.05 S=0.02 E=0.90 | "
+        "hand-1:intent=0.80 L=0.10 R=0.72 S=0.25 E=0.05"
     )
 
 
