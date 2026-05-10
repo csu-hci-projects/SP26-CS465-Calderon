@@ -48,6 +48,14 @@ Observed local data:
 
 ## Recognition Evidence
 
+Recognizer motivation:
+
+- Prior LSTM/sliding-window smart-home gesture work exposed a timing problem that AirDesk should name in the paper.
+- Fixed windows can capture partial gestures, reset motion, adjacent gestures, or background motion.
+- A longer window improves context but increases latency and can merge repeated commands.
+- A shorter window improves responsiveness but misses gesture boundaries.
+- TCN v2 is motivated by treating windows as causal compute context, while event boundaries and decoder logic define commands.
+
 Rule recognizer:
 
 - 16 intended positive swipe events.
@@ -89,12 +97,22 @@ Gated DTW holdout variant:
 - Mean latency about 0.36 seconds.
 - Interpretation: promising, but tuned after viewing the holdout. Needs fresh chained continuous validation.
 
+TCN v2 quick smoke:
+
+- TCN v2 manifest/model/evaluation surface exists for replay/evaluation.
+- Uses frame-level evidence heads: intentional motion, left/right stroke, start, and end.
+- Old-data smoke trained cleanly, but event-level replay was weak.
+- Permissive replay pass matched 1/16 intended swipes.
+- Produced 2 false activations.
+- Applying the same old-data model to a chained session matched 0/10.
+- Interpretation: useful architecture direction and regression harness, but not pilot-ready without fresh continuous training data and better event decoding.
+
 ## Evidence Needed Next
 
 - Fresh 60-90 second chained recording with multiple left/right swipes and normal motion between them.
-- Gated DTW evaluation on that fresh recording.
+- Gated DTW, motion-baseline, and TCN v2 evaluation on that fresh recording.
+- A recognizer decision for the pilot based on event-level behavior, not window accuracy alone.
 - Caden pilot notes.
 - Roommate pilot notes.
 - Keyboard/mouse baseline timings for the same task set.
 - At least one table comparing task success, misses, false activations, and subjective notes.
-

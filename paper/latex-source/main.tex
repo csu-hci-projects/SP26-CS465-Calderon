@@ -1,5 +1,8 @@
 \documentclass[manuscript]{acmart}
 
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
 \setcopyright{none}
 \settopmatter{printacmref=false}
 \renewcommand\footnotetextcopyrightpermission[1]{}
@@ -30,7 +33,7 @@
 \renewcommand{\shortauthors}{Calderon}
 
 \begin{abstract}
-AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop with mid-air hand gestures. The project is motivated by situationally impaired interaction: moments when keyboard and mouse input is unavailable, undesirable, dirty, painful, or physically costly. AirDesk does not try to replace traditional desktop input. Instead, it explores whether a small, clutch-based gesture vocabulary can work as a secondary control channel for coarse commands such as workspace switching, focus movement, and pause or cancel actions. This paper describes the AirDesk system, gesture vocabulary, safety model, logging and replay pipeline, and a small pilot evaluation with the project developer and one additional participant. Early prototype evidence suggests that naive rule-based recognition is not reliable enough for natural dynamic swipes. A personalized DTW baseline with motion gates looks more promising, but still needs fresh continuous-session validation before live-control claims. The paper contributes a focused system design and an evidence-bounded evaluation plan for mid-air desktop control under situational impairment.
+AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop with mid-air hand gestures. The project is motivated by situationally impaired interaction: moments when keyboard and mouse input is unavailable, undesirable, dirty, painful, or physically costly. AirDesk does not try to replace traditional desktop input. Instead, it explores whether a small, clutch-based gesture vocabulary can work as a secondary control channel for coarse commands such as workspace switching, focus movement, and pause or cancel actions. This paper describes the AirDesk system, gesture vocabulary, safety model, logging and replay pipeline, and a small pilot evaluation with the project developer and one additional participant. Early prototype evidence suggests that naive rule-based recognition is not reliable enough for natural dynamic swipes. It also shows why fixed sliding-window recognition is a poor fit for continuous command streams: windows can cut gestures apart, merge adjacent gestures, or include background motion. DTW, motion-based spotting, and a newer TCN v2 recognizer are treated as competing pilot candidates until fresh continuous-session evidence shows which one is reliable enough to use. The paper contributes a focused system design and an evidence-bounded evaluation plan for mid-air desktop control under situational impairment.
 \end{abstract}
 
 \begin{CCSXML}
@@ -70,7 +73,7 @@ AirDesk explores whether webcam-based mid-air hand gestures can help in these si
 
 This paper presents AirDesk as a system paper with pilot evidence. The prototype is a Python-based webcam-to-desktop pipeline for Hyprland Linux. It includes camera capture, MediaPipe hand tracking, normalized hand-state events, command-mode gesture policy, dry-run action routing, guarded Hyprland dispatch, replayable JSONL logs, labeling tools, feature export, and offline recognizer evaluation. The evaluation is intentionally formative: the project developer and one roommate participant are used to identify which parts of the interaction are promising and which parts are not yet reliable enough for live desktop control.
 
-This paper makes three contributions. First, it describes a safety-conscious interaction design for mid-air desktop commands based on explicit clutching, a small gesture vocabulary, dry-run defaults, and recovery gestures. Second, it documents a prototype pipeline that records, replays, labels, and evaluates hand-tracking sessions without repeatedly re-performing gestures. Third, it reports early prototype evidence showing that naive rule-based dynamic gesture recognition fails under natural desktop motion, while a personalized DTW baseline is more promising but still needs fresh continuous-session validation.
+This paper makes three contributions. First, it describes a safety-conscious interaction design for mid-air desktop commands based on explicit clutching, a small gesture vocabulary, dry-run defaults, and recovery gestures. Second, it documents a prototype pipeline that records, replays, labels, and evaluates hand-tracking sessions without repeatedly re-performing gestures. Third, it reports early prototype evidence showing how the recognizer evolved from simple rules, to DTW and motion baselines, toward a continuous TCN v2 spotting architecture.
 
 \section{Related Work}
 
@@ -98,7 +101,9 @@ Work comparing touch and mid-air interaction also supports AirDesk's secondary-c
 
 AirDesk uses MediaPipe Hand Landmarker as its first hand-tracking backend \cite{zhang2020mediapipehands}. MediaPipe provides practical RGB hand landmarks, but it is not the contribution of this paper. The contribution is the desktop-control system built around tracking: safety policy, mode handling, replayable logs, labeling, and evaluation.
 
-For gesture recognition, AirDesk separates static pose primitives, rule-based dynamic phrases, template or DTW matching, and future learned temporal models. Template-based recognizers have a long history in HCI prototyping, including Wobbrock et al.'s work comparing simple recognizers with DTW and other baselines \cite{wobbrock2007dollar}. Temporal convolutional networks are a reasonable future direction for continuous temporal segmentation once the project has enough labeled data \cite{lea2017tcn}. The current prototype uses rules as inspectable scaffolding, DTW as a low-data personalized baseline, and causal temporal recognition as future work rather than as a current claim.
+For gesture recognition, AirDesk separates static pose primitives, rule-based dynamic phrases, template or DTW matching, deterministic motion spotting, and learned temporal models. Template-based recognizers have a long history in HCI prototyping, including Wobbrock et al.'s work comparing simple recognizers with DTW and other baselines \cite{wobbrock2007dollar}. Temporal convolutional networks are useful for action segmentation and detection because they can model evidence over time rather than treating each frame in isolation \cite{lea2017tcn}. AirDesk uses this distinction to keep model claims honest: rules and DTW are practical baselines, while TCN v2 is an architecture for continuous gesture spotting that still needs fresh pilot evidence before it can drive live commands.
+
+A key recognition challenge is the sliding-window problem. Many prototype recognizers classify a fixed window of recent frames. That works best when the gesture has already been neatly clipped, but live desktop control is not neatly clipped. A window may contain only the first half of a swipe, the end of one gesture plus the beginning of the next, or ordinary hand motion that happens to look gesture-like. Increasing the window size can capture more context, but also adds latency and makes repeated gestures blur together. Decreasing it improves responsiveness, but makes partial gestures more likely. AirDesk's TCN v2 direction is motivated by this trade-off: the model can still use a causal rolling window as context, but the window should not be treated as the gesture itself.
 
 \section{Design Goals and Research Questions}
 
@@ -110,7 +115,7 @@ AirDesk is built around four design goals.
 
 \textbf{G3: Make live desktop control safe to test.} Recognizer errors can affect the real desktop, so AirDesk defaults to dry-run routing, logs actions before execution, and limits guarded execution to allowlisted non-destructive Hyprland dispatchers.
 
-\textbf{G4: Make recognition behavior replayable and measurable.} Gesture systems are easy to demo and hard to trust. AirDesk records hand-state streams, runtime events, labels, features, and evaluation outputs so recognizers can be tested against the same sessions.
+\textbf{G4: Make recognition behavior replayable and measurable.} Gesture systems are easy to demo and hard to trust. AirDesk records hand-state streams, runtime events, labels, features, and evaluation outputs so recognizers can be tested against the same sessions. This is especially important for continuous gesture spotting, where window accuracy can look good even when event timing, repeated gestures, or background rejection fail.
 
 These goals lead to the following research questions for the formative pilot:
 
@@ -126,13 +131,39 @@ AirDesk is implemented as a Python prototype with a modular pipeline. Hyprland i
 
 \begin{figure}[h]
   \centering
-  \fbox{\parbox{0.9\linewidth}{\centering
-  camera capture $\rightarrow$ hand tracking $\rightarrow$ normalized hand state $\rightarrow$ gesture recognition $\rightarrow$ mode/profile policy $\rightarrow$ action routing $\rightarrow$ Hyprland or dry-run logs}}
-  \caption{AirDesk's current pipeline. The same normalized hand-state stream can be routed to live policy, JSONL replay, labeling, feature export, and offline evaluation.}
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    node distance=0.45cm,
+    stage/.style={draw, rounded corners, align=center, minimum width=1.75cm, minimum height=0.8cm, font=\scriptsize},
+    artifact/.style={draw, dashed, rounded corners, align=center, minimum width=1.9cm, minimum height=0.7cm, font=\scriptsize},
+    arrow/.style={-{Latex[length=2mm]}, thick}
+  ]
+    \node[stage] (camera) {Webcam\\capture};
+    \node[stage, right=of camera] (tracking) {Hand\\tracking};
+    \node[stage, right=of tracking] (features) {Normalized\\feature stream};
+    \node[stage, right=of features] (evidence) {Recognizer\\evidence};
+    \node[stage, right=of evidence] (decoder) {Event\\decoder};
+    \node[stage, right=of decoder] (policy) {Command\\policy};
+    \node[stage, right=of policy] (action) {Dry-run log\\or Hyprland};
+
+    \node[artifact, below=of features] (replay) {JSONL replay\\labels/features};
+    \node[artifact, below=of decoder] (eval) {Offline scoring\\pilot tables};
+
+    \draw[arrow] (camera) -- (tracking);
+    \draw[arrow] (tracking) -- (features);
+    \draw[arrow] (features) -- (evidence);
+    \draw[arrow] (evidence) -- (decoder);
+    \draw[arrow] (decoder) -- (policy);
+    \draw[arrow] (policy) -- (action);
+    \draw[arrow] (features) -- (replay);
+    \draw[arrow] (replay) -- (eval);
+    \draw[arrow] (decoder) -- (eval);
+  \end{tikzpicture}}
+  \caption{AirDesk's current architecture. The live path moves from webcam frames to guarded desktop actions, while the same feature and event streams feed replay, labeling, and offline evaluation.}
   \label{fig:pipeline}
 \end{figure}
 
-The current prototype includes OpenCV camera capture, MediaPipe hand tracking, replayable JSONL recordings, a replay backend, typed profile files, static gesture primitives, command-mode policy, dry-run action routing, guarded Hyprland dispatch, cursor-control experiments, label files, feature export, and offline gesture evaluation.
+The current prototype includes OpenCV camera capture, MediaPipe hand tracking, replayable JSONL recordings, a replay backend, typed profile files, static gesture primitives, command-mode policy, dry-run action routing, guarded Hyprland dispatch, cursor-control experiments, label files, feature export, and offline gesture evaluation. Figure~\ref{fig:pipeline} shows the main architecture.
 
 \subsection{Pipeline Components}
 
@@ -182,9 +213,23 @@ AirDesk records normalized tracking frames and runtime events as JSONL. Replay s
 
 This replay workflow makes the system easier to evaluate honestly. A recognizer can be changed, tuned, or replaced, then tested against the same recorded sessions. The final submission package will include the LaTeX source, literature PDFs, README links, and enough project documentation to locate the code, recordings, labels, features, and evaluation summaries used in the report.
 
+\subsection{Recognizer Evolution}
+
+AirDesk's recognizer changed as the project moved from isolated gestures toward continuous desktop use. This shift was partly motivated by prior project experience with an LSTM-based smart-home gesture recognizer. That recognizer used a traditional sliding window over recent frames. It could work when the window happened to contain a full gesture, but it was fragile when the timing was not perfect. Sometimes the window captured only part of the gesture. Sometimes it included the reset motion after the gesture. Sometimes it caught the end of one gesture and the start of the next. It was also slower than desired for interactive control.
+
+That experience shaped AirDesk's model search. The goal was not simply to find a higher-accuracy classifier, but to find a recognizer that could handle fast commands, repeated gestures, and short chains without requiring a long pause between actions. DTW and TCNs became the two practical directions. DTW is useful because it aligns variable-length motion traces and can work with a small number of personal examples. A causal TCN is useful because it can process a stream with explicit, bounded latency rather than waiting for a recurrent model to summarize the sequence.
+
+The first AirDesk dynamic recognizer was rule-based: it looked for simple motion patterns over a recent time window and emitted a swipe when the motion crossed a threshold. This was easy to inspect, but it failed under natural motion. Normal desk activity could look enough like a command to trigger false activations, while some real swipes were missed because tracking dropped or the hand did not move in the exact expected way.
+
+The next step was a DTW-style template baseline. DTW is practical for a small personal vocabulary because it compares a new motion trace against examples instead of relying only on hand-written thresholds. However, DTW still depends on good segmentation. The system has to decide when a gesture starts and ends before comparing it to a template. In continuous use, that boundary problem is often the hard part.
+
+The current TCN v2 direction is a response to the same boundary problem. The first learned AirDesk model still treated rolling windows too much like gesture clips: each window received one label, and the model tried to classify the window. That is a weak match for live desktop gestures. A real hand stream contains partial gestures, pauses, resets, fast repeated commands, tracking loss, and ordinary background motion. TCN v2 instead treats a rolling window as compute context. The model produces frame-level evidence such as intentional motion, left/right stroke evidence, and start/end boundaries. An event decoder then turns that evidence into one command event. The key design change is that the window provides context, but the emitted gesture is defined by evidence and boundaries rather than by the arbitrary start and end of a fixed buffer.
+
+This does not mean TCN v2 is assumed to be the final recognizer. The final pilot should use whichever recognizer is most reliable after fresh continuous validation. If TCN v2 produces clean event-level behavior, it can become the pilot recognizer. If it remains underconfident or false-activation prone, a gated DTW or deterministic motion baseline is a better choice for the pilot, and TCN v2 should be reported as an architectural improvement and future-work path.
+
 \subsection{Recognizer Baselines}
 
-AirDesk currently uses three levels of recognition evidence. Static pose recognizers provide simple primitives such as open palm, fist, point, and pinch. Rule-based dynamic recognizers inspect recent hand motion to identify candidate swipes. A DTW-style template baseline compares observed motion against personalized examples. The rule recognizer is useful because it is inspectable, but early evidence shows that it is too brittle for natural dynamic swipes. The DTW baseline is more promising for a small personal vocabulary, but it must be validated with fresh continuous recordings before being treated as live-control reliable.
+AirDesk currently uses four levels of recognition evidence. Static pose recognizers provide simple primitives such as open palm, fist, point, and pinch. Rule-based dynamic recognizers inspect recent hand motion to identify candidate swipes. A DTW-style template baseline compares observed motion against personalized examples. A TCN v2 sequence-evidence model is being prepared for continuous gesture spotting. The final evaluation should compare recognizers using event-level behavior: matches, misses, false activations, repeated fires, latency, and sequence order. Clip accuracy alone is not enough for a desktop command system because it does not show whether commands can be chained, repeated, or rejected during normal background motion.
 
 \section{Pilot Method}
 
@@ -219,10 +264,10 @@ Objective measures include task success, completion time, false activations, mis
 
 \section{Prototype Evidence and Findings}
 
-The current evidence comes from recorded local gesture sessions and replay evaluation. A Sprint 4 batch contains 24 recordings: eight left-swipe takes, eight right-swipe takes, and eight normal desk-motion negative takes. Labels, features, DTW models, and evaluation summaries were generated from those recordings. These data are not a substitute for the planned pilot, but they are useful for deciding which recognizer is credible enough to test.
+The current evidence comes from recorded local gesture sessions and replay evaluation. A Sprint 4 batch contains 24 recordings: eight left-swipe takes, eight right-swipe takes, and eight normal desk-motion negative takes. Labels, features, DTW models, TCN v2 manifests, and evaluation summaries were generated from those recordings. These data are not a substitute for the planned pilot, but they are useful for deciding which recognizer is credible enough to test.
 
 \begin{table}[h]
-  \caption{Current offline recognizer evidence from the Sprint 4 swipe batch. Same-batch DTW is optimistic because calibration and evaluation used the same small distribution. The gated holdout result was tuned after inspecting the split and should be validated on a fresh continuous recording.}
+  \caption{Current offline recognizer evidence from the Sprint 4 swipe batch. Same-batch DTW is optimistic because calibration and evaluation used the same small distribution. The gated holdout result was tuned after inspecting the split. The first TCN v2 model validates the training/evaluation surface, but does not yet provide usable event-level recognition.}
   \label{tab:offline-evidence}
   \centering
   \begin{tabular}{llll}
@@ -233,6 +278,7 @@ The current evidence comes from recorded local gesture sessions and replay evalu
     Same-batch DTW & 16/16 & 2 & 0.44s \\
     Initial holdout DTW & 2/4 & 0 & 0.40s \\
     Gated holdout DTW & 4/4 & 0 & 0.36s \\
+    TCN v2 quick smoke & 1/16 & 2 & n/a \\
     \hline
   \end{tabular}
 \end{table}
@@ -243,13 +289,15 @@ A personalized DTW baseline performed better on the same batch, matching all six
 
 A deterministic holdout evaluation trained on takes 001--006 and tested on takes 007--008. The first holdout matched both right swipes but missed both left swipes, with no false activations on held-out negatives. A later horizontal-displacement-gated variant matched all four held-out swipes with no held-out false activations, but it was tuned after inspecting that split. The gated result is promising but should be validated on a fresh continuous chained recording before being used as live-control evidence.
 
+The first TCN v2 smoke test shows the opposite kind of result. The data/model/evaluation surface works, and the model can be trained over frame-level evidence heads. However, the initial old-data model was underconfident at the event level. A permissive replay pass matched only one of sixteen intended swipes and produced two false activations. This result does not mean the TCN v2 direction is wrong. It means the architecture needs fresh continuous training data and event-level decoding before it can be compared fairly with DTW.
+
 The pilot results will extend this evidence with live-session task outcomes and short interview notes. The main values to report are task success, false activations, missed gestures, repeated fires, completion time, perceived control, fatigue, and perceived usefulness. The qualitative summary will focus on which commands felt natural, which commands felt unreliable, and when participants would actually prefer AirDesk over keyboard or mouse input.
 
 \section{Discussion}
 
 AirDesk's current results support the project framing: the most valuable contribution so far is not a final gesture recognizer, but an instrumented system for making desktop gesture control measurable. The rule recognizer failure is useful because it shows that clean synthetic gestures are not enough. Natural desktop motion creates false activations, and dynamic command gestures require explicit intent gates, background rejection, and replay-based evaluation.
 
-The DTW results suggest that personalized gesture templates may be viable for a small vocabulary, especially when combined with motion-direction gates. However, the system still needs fresh continuous-session validation with chained gestures and normal background motion before claiming live reliability.
+The DTW results suggest that personalized gesture templates may be viable for a small vocabulary, especially when combined with motion-direction gates. The TCN v2 work suggests a different lesson: the learned-model problem is not simply ``classify this window.'' The model and decoder have to spot gesture events inside a continuous stream. This matters because a desktop command system should allow repeated or chained gestures without forcing the user to pause until a fixed window resets. That is why the current paper should compare recognizers at the event level, not by window accuracy. The final pilot should use the most reliable recognizer available at that point, even if that is DTW rather than TCN v2.
 
 The design also suggests a useful boundary for future development. Command mode is a better first paper target than cursor mode because workspace and focus actions are discrete, recoverable, and easy to log. Cursor takeover, click, drag, and text entry are more demanding because small errors are more disruptive and fatigue accumulates quickly. AirDesk can still grow into those modes, but the first evaluation should focus on commands that match the strengths of mid-air input.
 
@@ -259,17 +307,17 @@ Finally, the small pilot should be interpreted as a formative design check. If t
 
 This project has several limitations. The pilot participant count is small, and one participant is the developer. The current hardware baseline is a commodity webcam at approximately 30 FPS, which may limit tracking quality under poor lighting, occlusion, or fast movement. The evaluation so far is developer-centered and may overfit to one user's gesture style. Dynamic gesture recognition is not yet validated for real-time live control in a fresh continuous session. Cursor mode exists as a guarded prototype but is not part of the main paper evaluation. Accessibility benefits are design motivations, not validated claims.
 
-The recognizer evidence also has limits. Same-batch DTW results are optimistic, and the gated holdout result was tuned after observing the first holdout behavior. These results are useful engineering signals, but the paper should not present them as final model performance. The final pilot should add fresh continuous motion and normal background activity before making any stronger reliability claims.
+The recognizer evidence also has limits. Same-batch DTW results are optimistic, and the gated holdout result was tuned after observing the first holdout behavior. The current TCN v2 result is also preliminary: it validates the pipeline shape more than the recognition quality. These results are useful engineering signals, but the paper should not present them as final model performance. The final pilot should add fresh continuous motion and normal background activity before making any stronger reliability claims.
 
 \section{Future Work}
 
-Future work includes a larger participant study, improved continuous-session labeling, a causal TCN recognizer over AirDesk feature streams, richer overlay feedback, safer real cursor click and drag injection, depth or Kinect context, and profile-specific gesture vocabularies for media, presentation, and accessibility use cases. A larger study should include participants who actually experience the target constraints rather than only simulating them. For example, future work could separately study gloves, distance-from-keyboard use, wrist-pain scenarios, and presentation contexts.
+Future work includes a larger participant study, improved continuous-session labeling, a stronger continuous-spotting recognizer, richer overlay feedback, safer real cursor click and drag injection, depth or Kinect context, and profile-specific gesture vocabularies for media, presentation, and accessibility use cases. A larger study should include participants who actually experience the target constraints rather than only simulating them. For example, future work could separately study gloves, distance-from-keyboard use, wrist-pain scenarios, and presentation contexts.
 
-The system could also support user-specific calibration. The early DTW results suggest that personalized templates may work for a small vocabulary, but future versions should make calibration explicit, measure how many examples are needed, and determine whether templates transfer across days, lighting conditions, and camera positions.
+The system could also support user-specific calibration. The early DTW results suggest that personalized templates may work for a small vocabulary, but future versions should make calibration explicit, measure how many examples are needed, and determine whether templates transfer across days, lighting conditions, and camera positions. For TCN v2, the next step is not simply more epochs. It is better continuous data, reviewed labels, event-boundary evidence, and decoder thresholds that are evaluated on full streams. The long-term target is a recognizer that can handle partial gestures, adjacent gestures, and repeated commands without treating a fixed frame window as the unit of meaning.
 
 \section{Conclusion}
 
-AirDesk explores mid-air gestures as a secondary desktop command layer for situationally impaired interaction. The current prototype provides a pluggable architecture, explicit command mode, dry-run-first execution, replayable logs, labeling, feature extraction, and early recognition baselines. The system is strongest when framed as an optional command channel for moments when keyboard and mouse input is inconvenient, not as a replacement for ordinary desktop input. The main lesson so far is that credible desktop gesture systems need explicit intent, safety boundaries, and continuous-stream evaluation rather than isolated gesture demos. The planned pilot will use that framing to determine which parts of AirDesk are ready for broader evaluation and which should remain future work.
+AirDesk explores mid-air gestures as a secondary desktop command layer for situationally impaired interaction. The current prototype provides a pluggable architecture, explicit command mode, dry-run-first execution, replayable logs, labeling, feature extraction, and early recognition baselines. The system is strongest when framed as an optional command channel for moments when keyboard and mouse input is inconvenient, not as a replacement for ordinary desktop input. The main lesson so far is that credible desktop gesture systems need explicit intent, safety boundaries, and continuous-stream evaluation rather than isolated gesture demos. The planned pilot will use that framing to determine which recognizer and interaction loop are ready for broader evaluation and which should remain future work.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

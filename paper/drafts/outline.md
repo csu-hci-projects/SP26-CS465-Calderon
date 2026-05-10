@@ -59,6 +59,7 @@ examples, and evidence-bounded claims.
 - Dry-run-first execution and replayable logs make the system safer to evaluate.
 - Naive rule-based dynamic swipe recognition fails under natural desktop motion.
 - Personalized DTW recognition is a more promising low-data baseline, but still needs fresh continuous-session validation.
+- TCN v2 is a better architecture direction for continuous gesture spotting than the first fixed-window classifier, but it is not proven pilot-ready yet.
 - Small command vocabularies and explicit clutching are more defensible than broad always-on gesture control.
 
 ## Claims To Avoid
@@ -66,5 +67,20 @@ examples, and evidence-bounded claims.
 - Gestures replace keyboard and mouse.
 - AirDesk is validated as an accessibility tool.
 - The current recognizer is live-control reliable.
+- TCN v2 is reliable before fresh continuous validation proves it.
 - The pilot generalizes to a broad population.
 - MediaPipe is the contribution.
+
+## Recognizer Story To Preserve
+
+The recognizer story should read as an evolution:
+
+1. Prior LSTM/sliding-window smart-home gesture work exposed the fundamental timing problem: fixed windows can capture half a gesture, a reset, background motion, or two adjacent gestures.
+2. Rules were inspectable but brittle under natural motion.
+3. DTW made a small personalized vocabulary look possible, but still depends on spotting gesture boundaries.
+4. TCN v2 exists because the real problem is continuous gesture spotting, not isolated window classification.
+5. The final pilot should use whichever recognizer is most reliable after fresh continuous validation. If that is DTW, TCN v2 becomes an honest architecture/future-work result rather than a failed promise.
+
+Important wording: the TCN v2 window is compute context, not the semantic gesture
+unit. The emitted command should come from event evidence and boundary decoding,
+not from the arbitrary start/end of a fixed frame buffer.
