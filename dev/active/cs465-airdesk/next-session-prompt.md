@@ -177,69 +177,58 @@ Important evidence:
 
 Next-session assignment:
 
-Continue from the schema-2 replay/live mismatch. The TCN architecture itself no
-longer looks like the only blocker, but the old-data source holdout now proves
-the same-source replay result was optimistic: `airdesk gesture holdout-tcn-v2`
-on `sprint4-swipes-001` trained on takes 001-006, tested on 007-008, and scored
-`2/4` held-out swipes with `5` false activations despite strong train/validation
-frame accuracy. The feature-contract audit is complete: new V2 manifests should
-use `--feature-preset stream-invariant-v2`, which excludes absolute palm
-position, raw image-space palm motion, `hand_scale`, `hand_count`, and unscaled
+Continue from the new public-dataset / atomic-gesture planning pivot. The
+feature-contract audit is complete: new V2 manifests should use
+`--feature-preset stream-invariant-v2`, which excludes absolute palm position,
+raw image-space palm motion, `hand_scale`, `hand_count`, and unscaled
 finger/pinch geometry from classifier input while preserving those fields in
-logs/dashboard diagnostics. The next high-value gate is a targeted held-out V2
-slice with explicit wrist-twist / desk-motion negatives plus near/far and
-left/center/right frame positions as invariance checks, then negative-motion
-intent rejection and repeated-fire/boundary timing fixes from that evidence.
-Keep learned swipes preview/replay only.
+logs/dashboard diagnostics. Caden has also collected an initial targeted V2
+local slice under `data/recordings/v2-*` with train/holdout/invariance
+recordings, but the next session should pause before blindly training on only
+that data. The strategic question is whether public datasets, especially IPN
+Hand, can provide useful atomic gesture priors.
+
+Architectural stance:
+
+- Train the TCN to detect atomic events and boundaries, not combo classes.
+- Good TCN outputs are still `intentional_motion`, `stroke_left`,
+  `stroke_right`, `start`, and `end`.
+- A second command-grammar layer should turn emitted event streams such as
+  `R, R, L` into optional combos. Do not train labels like `right_right_left`
+  unless a future experiment proves this is necessary.
+- Public datasets are training aids, not AirDesk's final success metric.
+  AirDesk source-held-out recordings remain the authority for pass/fail.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. Start with a short review/reporting pass, then implement the highest-value
-   cleanup chunk without stopping for permission unless there is a real blocker.
-   Reasonable first candidates:
-   - inspect `data/evaluations/sprint4-swipes-001-tcn-v2/schema2-holdout-summary.json`
-     and `schema2-holdout-diagnostics.json` before trusting old same-source
-     replay numbers;
-   - use the updated `watch-tcn-v2` dashboard/JSONL motion diagnostics to log
-     wrist-twist, hand repositioning, and normal desk-motion false activations;
-   - decide whether targeted V2 recording is now justified, with a real source
-     holdout and explicit twist/negative-motion labels;
-   - if code is changed before collection, focus on decoder/intent gating that
-     removes negative-motion false activations without losing true held-out
-     swipes;
-   - inspect the `sprint4-chained-003` repeated fires and decide whether the
-     decoder needs stronger end/start valley handling before targeted data;
-   - if a code fix is clear, implement it with tests and rerun the old replay
-     summaries; if not, document that targeted V2 data should explicitly cover
-     those failure modes;
-   - split `tests/test_cli.py` into focused modules only if doing so preserves
-     useful public CLI/safety coverage;
-   - audit shared TCN helper naming/imports now that v2 code has its own module;
-   - remove or quarantine dead legacy command paths only after proving they are
-     unused;
-   - keep the public `airdesk.cli:app` entrypoint stable and preserve command
-     names/options/help output;
-   - add tests before changing behavior around replay, labels, feature rows, and
-     decoder output.
-3. Preserve current behavior unless a bug is found and fixed intentionally. Keep
+2. Start with a public dataset survey. Use primary sources where possible.
+   Compare IPN Hand, Jester, and any better continuous/dynamic hand datasets you
+   find. Record license/access status, gesture classes, whether the data is
+   continuous or clip-level, number of subjects/samples, RGB vs landmarks, and
+   whether classes map to AirDesk atomic gestures such as left/right swipe,
+   click/select, push, or background/no-gesture.
+3. Make a concrete recommendation. Current expectation: IPN Hand first because
+   it is continuous and has natural non-gesture motion; Jester may be useful for
+   later large-scale clip pretraining but is less directly aligned.
+4. If IPN is still the best bet, implement the smallest importer/converter:
+   public video -> MediaPipe tracking frames -> AirDesk feature CSV rows ->
+   labels/manifest using `stream-invariant-v2`. Keep raw downloaded data out of
+   Git.
+5. Train an IPN-only TCN v2 atomic model and evaluate it in replay/live-preview
+   form before mixing it with AirDesk data.
+6. Then compare AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or
+   hybrid training on the AirDesk source-held-out V2 recordings.
+7. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
-4. Do not record broad combo data. A targeted V2 slice is now justified only if
-   it is explicitly designed as train/val/test data with held-out sources and
-   includes wrist-twist/lightbulb negatives, desk motion, hand enters/leaves
-   frame, near/far starts, and left/center/right frame-position variants as
-   invariance checks rather than labels.
-5. The targeted V2 recording slice should still be: repeated
-   same-direction swipes, alternating swipes, weak/tiny lefts, natural desk-motion
-   negatives, hand enters/leaves frame, near/far starts, and two visible hands
-   with one resting.
-6. Update README/context/tasks/tracking-samples/next-session docs with whatever
+8. Update README/context/tasks/tracking-samples/next-session docs with whatever
    changes.
-7. Run `uv run ruff check .` and `uv run pytest`.
-8. Commit meaningful chunks and push to `origin/main`.
+9. Run `uv run ruff check .` and `uv run pytest`.
+10. Commit meaningful chunks and push to `origin/main`.
 
 Do not:
 
 - Do not collect broad new combo data first.
+- Do not train every combo as its own TCN class.
 - Do not keep sweeping current TCN thresholds.
 - Do not treat old data as final V2 proof; use it as regression coverage.
 - Do not wire learned/DTW/motion swipes to live desktop actions.

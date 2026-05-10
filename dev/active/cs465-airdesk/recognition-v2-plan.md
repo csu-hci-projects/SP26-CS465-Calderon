@@ -279,6 +279,71 @@ old scaffold is that a window is compute context, not the semantic gesture unit.
 The output should be frame/event evidence for a decoder, not one argmax label for
 an arbitrary clip.
 
+### Atomic Gestures And Combo Grammar
+
+The TCN should not learn every command sequence as a separate class. AirDesk
+should train the model to spot atomic gesture evidence quickly:
+
+```text
+intentional_motion
+stroke_left
+stroke_right
+start
+end
+```
+
+The decoder should emit a stream of atomic events such as:
+
+```text
+R, R, L
+```
+
+Then a second command-grammar layer can interpret short histories:
+
+```text
+R R L within 1.5s -> optional combo command
+```
+
+This keeps repeated same-direction swipes possible, avoids class explosion, and
+lets the system feel like it supports combos without forcing the TCN to relearn
+`swipe_right` inside every possible sequence. `chart-record` already writes
+atomic `swipe_left` / `swipe_right` event labels for blocks such as `RR` or
+`R L`; combo labels should remain a command-layer concept unless a future
+experiment proves an end-to-end combo class is necessary.
+
+### Public Dataset Branch
+
+Public hand-gesture datasets may help AirDesk learn broader atomic motion
+priors, but they should not replace AirDesk recordings as the pass/fail gate.
+The next session should survey candidates before committing to one. Initial
+notes:
+
+- IPN Hand is the best first candidate because it is a continuous RGB hand
+  gesture benchmark with natural non-gesture hand movements, real background /
+  illumination variation, 50 subjects, 4k+ gesture samples, and 800k RGB frames.
+  Its "throw left" / "throw right" classes are plausible stand-ins for AirDesk
+  swipes, and other classes may map to future click/select/control ideas.
+- Jester is useful for large-scale webcam-style motion pretraining: 148k short
+  clips, 27 classes, and 1,376 actors. It is less directly aligned because it is
+  mostly short clip classification rather than continuous desktop-control
+  spotting.
+- Other datasets may be better for specific goals. Do a small survey before
+  downloading anything large.
+
+Recommended experiment order:
+
+1. Build an adapter that runs public videos through the same MediaPipe /
+   `FrameFeatureRow` / `stream-invariant-v2` feature path.
+2. Train a TCN v2 model on IPN-only atomic targets and inspect replay/live feel.
+3. Compare against AirDesk-only on the new held-out V2 slice.
+4. Try hybrid training only after the IPN-only importer is trustworthy:
+   pretrain on public data, fine-tune on AirDesk, then evaluate on AirDesk
+   source-held-out sessions.
+
+Do not train an RGB-video model first. The useful question is whether public
+datasets improve AirDesk's existing landmark-feature recognizer and event
+decoder, not whether a separate video classifier can score a benchmark.
+
 ## Refactor Plan
 
 This is a real architecture shift. The initial review/refinement pass is now

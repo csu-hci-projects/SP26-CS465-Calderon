@@ -153,6 +153,11 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Add source-level `airdesk gesture holdout-tcn-v2` and run it on `sprint4-swipes-001`; first schema-2 holdout scored 2/4 held-out swipes with 5 false activations, confirming same-source replay was optimistic
 - [x] Add live TCN v2 dashboard/JSONL motion diagnostics for position, hand scale, normalized dx, peak velocity, and direction consistency so wrist-twist/desk-motion false positives are inspectable
 - [x] Audit and tighten the V2 feature preset so the clean collection pass uses `stream-invariant-v2` instead of raw image-space motion/scale features
+- [ ] Survey public dynamic/continuous hand-gesture datasets before committing to IPN only
+- [ ] Prototype an IPN Hand importer that runs videos through MediaPipe and exports AirDesk `FrameFeatureRow` CSVs with `stream-invariant-v2` features
+- [ ] Train an IPN-only TCN v2 atomic gesture model and evaluate how it feels before hybridizing datasets
+- [ ] Compare AirDesk-only, public-pretrained/fine-tuned, and hybrid training on AirDesk source-held-out recordings
+- [ ] Add a command-grammar layer for combos over atomic emitted events instead of training every combo as its own TCN class
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay and source holdout still fire on normal desk motion
 - [ ] Tighten TCN v2 repeated-fire/boundary timing after schema-2 chained replay still has 3 repeated fires
 - [ ] Plan and collect a targeted continuous V2 data slice with true held-out files and explicit wrist-twist/lightbulb, hand repositioning, near/far and left/center/right frame-position invariance checks, weak/tiny swipes, fast/slow swipes, repeated same-direction swipes, alternating swipes, hand enters/leaves frame, normal desk/keyboard/phone/cup/scratch/headset motion, and a resting second hand visible

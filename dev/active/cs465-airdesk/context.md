@@ -263,6 +263,24 @@ Current V2 feature contract:
   old replay/regression work, but it should not be the default for the clean V2
   collection pass because it still feeds raw image-space motion and scale.
 
+Current recognition strategy update:
+
+- Treat gestures as atomic events first. The TCN should learn fast
+  `stroke_left` / `stroke_right` / boundary evidence, not classes such as
+  `right_right_left`.
+- Combos should be decoded in a second command-grammar layer over emitted
+  atomic events, for example `R R L` inside a short time window.
+- Public datasets are now a serious branch to explore. IPN Hand is the first
+  candidate because it is continuous and includes thousands of hand-gesture
+  examples plus natural non-gesture motion. Jester is much larger and webcam-like
+  but mostly clip-classification shaped. The next session should survey
+  alternatives, then build an IPN-only TCN v2 experiment through the same
+  MediaPipe -> `FrameFeatureRow` -> `stream-invariant-v2` path before deciding
+  between AirDesk-only, public-pretrained, or hybrid training.
+- AirDesk recordings remain the authority for pass/fail because the final task
+  is Hyprland desktop control under Caden's camera/setup, not benchmark accuracy
+  on public videos.
+
 Current TCN v2 implementation state:
 
 - `airdesk gesture build-tcn-dataset --target-mode v2-evidence` keeps windows as
