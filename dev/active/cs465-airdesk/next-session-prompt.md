@@ -122,24 +122,26 @@ Important evidence:
   `src/airdesk/cli_system.py`, shared CLI helpers live in
   `src/airdesk/cli_support.py`, live preview/status formatting helpers live in
   `src/airdesk/cli_live.py`, recording/collection/chart workflows live in
-  `src/airdesk/cli_recording.py`, and shared tracker construction lives in
-  `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is now about 1,971 LOC and
-  still owns live tracking/runtime/diagnostic command bodies.
+  `src/airdesk/cli_recording.py`, runtime/live-action commands and guarded
+  execution policy live in `src/airdesk/cli_runtime.py`, and shared tracker
+  construction lives in `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is
+  now about 1,585 LOC and still owns live tracking diagnostics plus older
+  gesture evaluation command bodies.
 
 Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. The recording extraction chunk is complete, so treat targeted
-V2 recording as deferred until the remaining live/runtime structure is easier to
-trust.
+architecture work. The recording and runtime/live-action extraction chunks are
+complete, so treat targeted V2 recording as deferred until the remaining
+diagnostic/evaluation structure is easier to trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - isolate runtime/live-action command boundaries in a separate module so
-     dry-run safety is easy to audit;
+   - split the remaining live diagnostic/evaluation command bodies out of
+     `src/airdesk/cli.py`;
    - keep the public `airdesk.cli:app` entrypoint stable and preserve command
      names/options/help output;
    - separate TCN v2 evidence/dataset/evaluation concerns where they are

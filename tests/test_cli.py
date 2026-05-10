@@ -4,8 +4,11 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
+from airdesk.actions.dry_run import DryRunActionTarget
+from airdesk.actions.hyprland import GuardedHyprlandActionTarget
 from airdesk.cli import app
 from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
@@ -19,6 +22,7 @@ from airdesk.cli_recording import (
     _parse_record_prompt_segments,
     _record_preview_status,
 )
+from airdesk.cli_runtime import _make_runtime_action_target
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
     GestureEventLabel,
@@ -28,6 +32,7 @@ from airdesk.labels import (
     save_label_file,
 )
 from airdesk.ml import CausalTcnLivePrediction
+from airdesk.profiles.models import ActionBinding, Profile
 from airdesk.recording.jsonl import JsonlRecordingWriter, iter_recording
 from airdesk.state.types import (
     FrameMetadata,
@@ -36,6 +41,23 @@ from airdesk.state.types import (
     NormalizedHand,
     TrackingFrame,
 )
+
+
+def _profile(
+    *,
+    dry_run_default: bool,
+    bindings: tuple[ActionBinding, ...] = (),
+    destructive_actions: bool = False,
+) -> Profile:
+    return Profile(
+        profile_id="test",
+        name="Test",
+        allowed_modes=("command",),
+        activation_gesture="open_palm",
+        bindings=bindings,
+        destructive_actions=destructive_actions,
+        dry_run_default=dry_run_default,
+    )
 
 
 def test_cli_help_works() -> None:
@@ -1243,6 +1265,46 @@ def test_run_refuses_no_dry_run_without_execute() -> None:
     assert "Real actions require explicit --execute" in result.stderr
 
 
+def test_runtime_action_target_defaults_to_dry_run() -> None:
+    target = _make_runtime_action_target(
+        profile=_profile(dry_run_default=True),
+        execute=False,
+        allow_profile_execute=False,
+    )
+
+    assert isinstance(target, DryRunActionTarget)
+
+
+def test_runtime_action_target_allows_only_explicit_guarded_execution() -> None:
+    target = _make_runtime_action_target(
+        profile=_profile(dry_run_default=True),
+        execute=True,
+        allow_profile_execute=True,
+    )
+
+    assert isinstance(target, GuardedHyprlandActionTarget)
+
+
+def test_runtime_action_target_blocks_unsafe_dispatchers() -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+        _make_runtime_action_target(
+            profile=_profile(
+                dry_run_default=False,
+                bindings=(
+                    ActionBinding(
+                        gesture="pinch",
+                        action_type="hyprland.dispatch",
+                        command="killactive",
+                    ),
+                ),
+            ),
+            execute=True,
+            allow_profile_execute=False,
+        )
+
+    assert exc_info.value.exit_code == 1
+
+
 def test_run_execute_requires_profile_override_for_dry_run_profiles() -> None:
     result = CliRunner().invoke(
         app,
@@ -1280,6 +1342,37 @@ def test_run_execute_allows_replay_when_profile_override_is_explicit() -> None:
 
     assert result.exit_code == 0
     assert "frames=1" in result.stdout
+
+
+def test_cursor_run_defaults_to_dry_run_target(tmp_path: Path) -> None:
+    output = tmp_path / "cursor-events.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "cursor",
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--events-out",
+            str(output),
+            "--max-frames",
+            "1",
+            "--no-show",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "cursor dry-run complete frames=1 moves=0" in result.stdout
+    events = [record.payload for record in iter_recording(output) if record.kind == "event"]
+    assert [event.event_type for event in events] == [
+        "cursor_session_start",
+        "cursor_session_finish",
+    ]
+    assert events[0].payload["execute"] is False
+    assert events[0].payload["target"] == "cursor-dry-run"
 
 
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:

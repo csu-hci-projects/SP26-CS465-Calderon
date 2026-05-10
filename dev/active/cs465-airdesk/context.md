@@ -235,14 +235,13 @@ Current next step:
 > permissive `0.30` thresholds. `sprint4-chained-003` remained `0/10`.
 > Before recording the targeted V2 slice, continue the staff-level
 > review/refactor pass more aggressively. The recording/collection/chart split
-> is now complete: `src/airdesk/cli_recording.py` owns recording, replay
-> summaries, collection, chart parsing, preview key handling, and chart label
-> writing, while shared tracker construction lives in `src/airdesk/cli_tracking.py`.
-> `src/airdesk/cli.py` is down to about 1,971 LOC but still mixes live tracking,
-> runtime action wiring, and live diagnostic loops. Do the right architectural
-> cleanup in behavior-preserving chunks, with tests, before collecting data.
-> Then improve V2 calibration/targets and collect the targeted continuous data
-> rather than sweeping thresholds or wiring live actions.
+> is complete, and the runtime/live-action boundary is now isolated in
+> `src/airdesk/cli_runtime.py` with dry-run and guarded-execute tests.
+> `src/airdesk/cli.py` is down to about 1,585 LOC and still owns live tracking
+> diagnostics plus older gesture evaluation command bodies. Do the next cleanup
+> in behavior-preserving chunks, with tests, before collecting data. Then
+> improve V2 calibration/targets and collect the targeted continuous data rather
+> than sweeping thresholds or wiring live actions.
 
 Current TCN v2 implementation state:
 
@@ -299,6 +298,9 @@ Current CLI cleanup state:
   `src/airdesk/cli_system.py`.
 - Small shared CLI helpers live in `src/airdesk/cli_support.py`.
 - Live preview/status formatting helpers now live in `src/airdesk/cli_live.py`.
+- Runtime `airdesk run`, `airdesk cursor run`, preview pause wiring, cursor
+  session event logging, dry-run action routing, and guarded Hyprland execution
+  policy now live in `src/airdesk/cli_runtime.py`.
 - Recording, replay summaries, prompted collection, chart prompt parsing, chart
   label writing, collection paths, and preview key handling now live in
   `src/airdesk/cli_recording.py`; shared tracker construction lives in
@@ -307,24 +309,28 @@ Current CLI cleanup state:
   `src/airdesk/feature_streams.py` and are re-exported through
   `src/airdesk/features/`; DTW, motion, TCN dataset building, and live TCN
   preview use the same grouping contract.
-- `src/airdesk/cli.py` still owns live tracking/runtime/diagnostic command bodies.
-  Continue refactoring those in behavior-preserving chunks. The next pass may
-  isolate runtime/live-action boundaries so dry-run safety is easier to audit;
-  keep the public `airdesk.cli:app` entrypoint stable and test CLI behavior as
-  the boundary.
+- `src/airdesk/cli.py` still owns live tracking diagnostic loops and several
+  gesture evaluation command bodies. Continue refactoring those in
+  behavior-preserving chunks; keep the public `airdesk.cli:app` entrypoint
+  stable and test CLI behavior as each boundary moves.
 
 Next review/refactor emphasis:
 
 - The recording extraction chunk is complete: `cli.py` dropped from about 3,371
   LOC to about 1,971 LOC, recording/chart behavior moved behind a dedicated
   module boundary, and CLI help/behavior tests cover the extracted surfaces.
+- The runtime/live-action boundary chunk is complete: `cli_runtime.py` owns
+  runtime command registration, action-target selection, cursor execution, and
+  preview pause controls; CLI tests cover default dry-run, explicit guarded
+  execute, unsafe dispatcher refusal, and cursor dry-run event logging.
 - Continue prioritizing real bugs, dead code, oversized files/functions,
   duplicated logic, unclear package ownership, missing tests, and anything that
   could make the targeted V2 recording session ambiguous or fragile.
 - Caden explicitly wants the next context to push harder on structure and do
   what is right/best rather than stopping after cosmetic extraction. The next
-  best chunk is isolating runtime/live-action boundaries with explicit dry-run
-  safety tests.
+  best cleanup chunk is to split the remaining live diagnostic/evaluation
+  command bodies out of `cli.py`, or to isolate TCN v2 evidence/dataset/eval
+  concerns if that path looks more tangled during review.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and

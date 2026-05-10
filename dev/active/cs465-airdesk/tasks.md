@@ -162,8 +162,9 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Add V2 no-hand/tracking-drop evidence tests and keep no-hand rows background-only
 - [x] Run `uv run ruff check .` and `uv run pytest` for the cleanup chunk
 - [x] Aggressively split recording/collection/chart-prompt ownership out of `src/airdesk/cli.py` while preserving `airdesk.cli:app`
-- [ ] Isolate runtime/live-action command boundaries after recording extraction, with dry-run safety tests
+- [x] Isolate runtime/live-action command boundaries after recording extraction, with dry-run safety tests
 - [x] Add/expand CLI help and behavior tests for extracted recording/runtime modules
+- [ ] Split remaining live diagnostic/evaluation command bodies out of `src/airdesk/cli.py` or isolate TCN v2 evidence/dataset/evaluation concerns, whichever review shows is the highest-value next boundary
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [x] Run `ruff`, `pytest`, and replay evaluation smoke
