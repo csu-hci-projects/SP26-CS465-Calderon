@@ -14,21 +14,21 @@ from airdesk.features import (
     FrameFeatureRow,
     feature_stream_id,
     group_indexed_feature_rows_by_stream,
-    is_tracked_feature_row,
 )
 from airdesk.labels import GestureLabelFile, load_label_file
+from airdesk.ml.tcn_v2_evidence import (
+    TCN_V2_EVIDENCE_TARGETS,
+    TCN_V2_WINDOW_TARGETS,
+    row_motion_matches_tcn_target,
+    tcn_v2_evidence_counts,
+    tcn_v2_evidence_for_row,
+    tcn_v2_frame_evidence_targets,
+    tcn_v2_window_target_from_evidence,
+)
 
 TCN_EVENT_TARGETS = ("background", "swipe_left", "swipe_right")
 TCN_PHASE_TARGETS = ("background", "stroke_left", "stroke_right", "recovery")
 TCN_PHASE_STROKE_TARGETS = ("background", "stroke_left", "stroke_right")
-TCN_V2_EVIDENCE_TARGETS = (
-    "intentional_motion",
-    "stroke_left",
-    "stroke_right",
-    "start",
-    "end",
-)
-TCN_V2_WINDOW_TARGETS = ("background",) + TCN_V2_EVIDENCE_TARGETS
 TCN_TARGETS = TCN_EVENT_TARGETS
 TCN_LEGACY_FEATURE_COLUMNS = (
     "dt",
@@ -331,7 +331,7 @@ def build_tcn_dataset_manifest(
         rows = load_feature_rows_csv(feature_path)
         label_path, labels = _matching_labels(feature_path, labels_dir)
         evidence_by_row = (
-            _v2_evidence_targets_for_rows(
+            tcn_v2_frame_evidence_targets(
                 rows,
                 labels,
                 target_assignment=target_assignment,
@@ -342,7 +342,7 @@ def build_tcn_dataset_manifest(
             else None
         )
         target_by_row = (
-            [_v2_window_target_from_evidence(evidence) for evidence in evidence_by_row]
+            [tcn_v2_window_target_from_evidence(evidence) for evidence in evidence_by_row]
             if evidence_by_row is not None
             else [
                 _target_for_row(
@@ -369,7 +369,7 @@ def build_tcn_dataset_manifest(
                 duration_seconds=_duration(rows),
                 target_frame_counts=_target_counts(target_by_row, resolved_targets),
                 evidence_frame_counts=(
-                    _evidence_counts(evidence_by_row, evidence_targets)
+                    tcn_v2_evidence_counts(evidence_by_row, evidence_targets)
                     if evidence_by_row is not None
                     else {}
                 ),
@@ -560,7 +560,7 @@ def _target_for_row(
         return "background"
     event = row.event or _event_at(labels, row.timestamp)
     if target_mode == "v2-evidence":
-        evidence = _v2_evidence_for_row(
+        evidence = tcn_v2_evidence_for_row(
             row,
             labels,
             target_assignment=target_assignment,
@@ -600,7 +600,7 @@ def _apply_target_assignment(
     if target_assignment == "label":
         return target
     if target_assignment == "motion-gated":
-        if _row_motion_matches_target(
+        if row_motion_matches_tcn_target(
             row,
             target,
             min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
@@ -612,25 +612,6 @@ def _apply_target_assignment(
     raise ValueError(f"unsupported target_assignment={target_assignment}; use one of: {options}")
 
 
-def _row_motion_matches_target(
-    row: FrameFeatureRow,
-    target: str,
-    *,
-    min_dx_per_hand_scale: float,
-    min_direction_consistency: float,
-) -> bool:
-    if row.tracking_present != 1:
-        return False
-    if row.hand_scale <= 0:
-        return False
-    if row.palm_window_direction_consistency < min_direction_consistency:
-        return False
-    dx = abs(row.palm_window_dx_per_hand_scale)
-    if target in {"swipe_left", "stroke_left", "swipe_right", "stroke_right"}:
-        return dx >= min_dx_per_hand_scale
-    return True
-
-
 def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:
     if labels is None:
         return ""
@@ -638,111 +619,6 @@ def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:
         if event.label_type == "gesture" and event.start_time <= timestamp <= event.end_time:
             return event.gesture
     return ""
-
-
-def _v2_evidence_targets_for_rows(
-    rows: list[FrameFeatureRow],
-    labels: GestureLabelFile | None,
-    *,
-    target_assignment: str,
-    motion_gate_min_dx_per_hand_scale: float,
-    motion_gate_min_direction_consistency: float,
-) -> list[dict[str, float]]:
-    evidence = [
-        _v2_evidence_for_row(
-            row,
-            labels,
-            target_assignment=target_assignment,
-            motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
-            motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
-        )
-        for row in rows
-    ]
-    if labels is None or not rows:
-        return evidence
-    for event in labels.event_labels:
-        if event.label_type != "gesture":
-            continue
-        candidate_indices = [
-            index
-            for index, (row, frame_evidence) in enumerate(zip(rows, evidence, strict=True))
-            if event.start_time <= row.timestamp <= event.end_time
-            and is_tracked_feature_row(row)
-            if frame_evidence["intentional_motion"] > 0
-        ]
-        if not candidate_indices:
-            continue
-        start_index = min(
-            candidate_indices,
-            key=lambda index: abs(rows[index].timestamp - event.start_time),
-        )
-        end_index = min(
-            candidate_indices,
-            key=lambda index: abs(rows[index].timestamp - event.end_time),
-        )
-        evidence[start_index]["start"] = 1.0
-        evidence[end_index]["end"] = 1.0
-    return evidence
-
-
-def _v2_evidence_for_row(
-    row: FrameFeatureRow,
-    labels: GestureLabelFile | None,
-    *,
-    target_assignment: str,
-    motion_gate_min_dx_per_hand_scale: float,
-    motion_gate_min_direction_consistency: float,
-) -> dict[str, float]:
-    if not is_tracked_feature_row(row):
-        return {
-            "intentional_motion": 0.0,
-            "stroke_left": 0.0,
-            "stroke_right": 0.0,
-            "start": 0.0,
-            "end": 0.0,
-        }
-    phase = (
-        row.phase
-        if row.phase and row.phase != "background"
-        else _phase_at(labels, row.timestamp)
-    )
-    event = row.event or _event_at(labels, row.timestamp)
-    stroke_left = phase == "stroke_left" or event == "swipe_left"
-    stroke_right = phase == "stroke_right" or event == "swipe_right"
-    if target_assignment == "motion-gated":
-        if stroke_left and not _row_motion_matches_target(
-            row,
-            "stroke_left",
-            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
-            min_direction_consistency=motion_gate_min_direction_consistency,
-        ):
-            stroke_left = False
-        if stroke_right and not _row_motion_matches_target(
-            row,
-            "stroke_right",
-            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
-            min_direction_consistency=motion_gate_min_direction_consistency,
-        ):
-            stroke_right = False
-    intentional_motion = bool(
-        stroke_left
-        or stroke_right
-        or phase in {"recovery", "reset", "release", "cooldown"}
-    )
-    return {
-        "intentional_motion": 1.0 if intentional_motion else 0.0,
-        "stroke_left": 1.0 if stroke_left else 0.0,
-        "stroke_right": 1.0 if stroke_right else 0.0,
-        "start": 0.0,
-        "end": 0.0,
-    }
-
-
-def _v2_window_target_from_evidence(evidence: dict[str, float]) -> str:
-    for target in ("stroke_left", "stroke_right", "start", "end", "intentional_motion"):
-        if evidence.get(target, 0.0) > 0:
-            return target
-    return "background"
 
 
 def _phase_at(labels: GestureLabelFile | None, timestamp: float) -> str:
@@ -854,18 +730,6 @@ def _target_counts(target_by_row: list[str], targets: tuple[str, ...]) -> dict[s
     counts = {target: 0 for target in targets}
     for target in target_by_row:
         counts[target if target in counts else "background"] += 1
-    return counts
-
-
-def _evidence_counts(
-    evidence_by_row: list[dict[str, float]],
-    evidence_targets: tuple[str, ...],
-) -> dict[str, int]:
-    counts = {target: 0 for target in evidence_targets}
-    for frame_evidence in evidence_by_row:
-        for target in evidence_targets:
-            if frame_evidence.get(target, 0.0) > 0:
-                counts[target] += 1
     return counts
 
 

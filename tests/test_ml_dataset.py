@@ -44,6 +44,7 @@ from airdesk.ml import (
     train_causal_tcn,
     train_causal_tcn_v2,
 )
+from airdesk.ml.tcn_v2_evidence import tcn_v2_frame_evidence_targets
 from airdesk.state.types import GestureCandidate
 
 
@@ -628,6 +629,62 @@ def test_build_tcn_manifest_v2_evidence_targets_framewise_heads(tmp_path: Path) 
         "start": 1,
         "end": 1,
     }
+
+
+def test_tcn_v2_frame_evidence_keeps_boundaries_on_tracked_intentional_rows() -> None:
+    labels = GestureLabelFile(
+        schema_version=1,
+        created_at=1.0,
+        session=SessionMetadata(
+            recording_path="recording.jsonl",
+            start_timestamp=1.0,
+            end_timestamp=1.4,
+        ),
+        event_labels=(
+            GestureEventLabel(
+                label_id="event-001",
+                label_type="gesture",
+                gesture="swipe_left",
+                start_time=1.0,
+                end_time=1.3,
+            ),
+        ),
+        phase_labels=(
+            GesturePhaseLabel(
+                label_id="phase-001",
+                phase="stroke_left",
+                start_time=1.0,
+                end_time=1.3,
+                gesture="swipe_left",
+            ),
+        ),
+    )
+    rows = [
+        _row(timestamp=1.0, frame_index=0, event="", tracking_present=0, hand_id=""),
+        _row(timestamp=1.1, frame_index=1, event="", tracking_present=0, hand_id=""),
+        _row(timestamp=1.2, frame_index=2, event="", phase="stroke_left"),
+        _row(timestamp=1.3, frame_index=3, event="", phase="stroke_left"),
+    ]
+
+    evidence = tcn_v2_frame_evidence_targets(
+        rows,
+        labels,
+        target_assignment="label",
+        motion_gate_min_dx_per_hand_scale=0.35,
+        motion_gate_min_direction_consistency=0.45,
+    )
+
+    assert evidence[0] == {
+        "intentional_motion": 0.0,
+        "stroke_left": 0.0,
+        "stroke_right": 0.0,
+        "start": 0.0,
+        "end": 0.0,
+    }
+    assert evidence[1] == evidence[0]
+    assert evidence[2]["start"] == 1.0
+    assert evidence[2]["stroke_left"] == 1.0
+    assert evidence[3]["end"] == 1.0
 
 
 def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path) -> None:

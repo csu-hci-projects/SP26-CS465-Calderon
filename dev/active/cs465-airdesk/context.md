@@ -270,6 +270,13 @@ Current TCN v2 implementation state:
   `end` boundary targets are assigned only to tracked intentional evidence inside
   the corresponding labeled event interval. This prevents weak/missing events
   from moving boundary targets onto unrelated later motion.
+- The TCN v2 evidence target boundary now lives in
+  `src/airdesk/ml/tcn_v2_evidence.py`. It owns the framewise
+  `intentional_motion`, `stroke_left`, `stroke_right`, `start`, and `end`
+  target construction, motion-gated weak-label checks, collapsed v2 display
+  target selection, and evidence-count summaries. `src/airdesk/ml/dataset.py`
+  now focuses on generic feature CSV loading, stream grouping, manifest
+  serialization, and sliding-window construction.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
 
@@ -346,9 +353,11 @@ Next review/refactor emphasis:
   could make the targeted V2 recording session ambiguous or fragile.
 - Caden explicitly wants the next context to push harder on structure and do
   what is right/best rather than stopping after cosmetic extraction. With the
-  CLI command surfaces now split, the next best cleanup chunk is likely a TCN v2
-  evidence/dataset/evaluation boundary review, or a focused test split if
-  `tests/test_cli.py` becomes the next drag on maintainability.
+  CLI command surfaces now split and v2 target construction isolated, the next
+  best cleanup chunk is likely the TCN v2 train/evaluate boundary in
+  `src/airdesk/ml/train.py` and `src/airdesk/analysis/evaluation.py`, or a
+  focused test split if `tests/test_cli.py` becomes the next drag on
+  maintainability.
 - Likely audit targets: `src/airdesk/cli.py`, extracted `cli_*.py` modules,
   `src/airdesk/ml/dataset.py`, `src/airdesk/ml/train.py`,
   `src/airdesk/analysis/evaluation.py`, `src/airdesk/features/`, and

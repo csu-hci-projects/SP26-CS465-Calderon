@@ -109,6 +109,9 @@ Important evidence:
 - V2 manifest/evaluation cleanup from that smoke is in place: summaries include
   `evidence_frame_counts`, no-hand windows use explicit `__no_hand__` stream ids,
   and offline v2 evaluation decodes a deduplicated all-row causal-context stream.
+- TCN v2 frame-evidence target construction is now isolated in
+  `src/airdesk/ml/tcn_v2_evidence.py`; generic manifest/window construction
+  remains in `src/airdesk/ml/dataset.py`.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
@@ -134,15 +137,16 @@ Next-session assignment:
 Continue the review/refactor pass and be more aggressive about doing the right
 architecture work. The recording, runtime/live-action, replay/offline gesture
 diagnostic, and live tracking/watch extraction chunks are complete, so treat
-targeted V2 recording as deferred until the TCN v2 structure is easier to trust.
+targeted V2 recording as deferred until the remaining TCN v2 train/evaluate
+structure is easier to trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - separate TCN v2 evidence/dataset/evaluation concerns where they are
-     currently muddy;
+   - separate TCN v2 train/evaluation concerns in `src/airdesk/ml/train.py` and
+     `src/airdesk/analysis/evaluation.py` where they remain muddy;
    - split `tests/test_cli.py` into focused modules only if doing so preserves
      useful public CLI/safety coverage;
    - remove or quarantine dead legacy command paths only after proving they are
