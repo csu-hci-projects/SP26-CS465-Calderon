@@ -122,33 +122,33 @@ Important evidence:
   `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands live in
   `src/airdesk/cli_system.py`, shared CLI helpers live in
   `src/airdesk/cli_support.py`, live preview/status formatting helpers live in
-  `src/airdesk/cli_live.py`, recording/collection/chart workflows live in
-  `src/airdesk/cli_recording.py`, runtime/live-action commands and guarded
+  `src/airdesk/cli_live.py`, live tracking/watch diagnostic commands live in
+  `src/airdesk/cli_live_commands.py`, recording/collection/chart workflows live
+  in `src/airdesk/cli_recording.py`, runtime/live-action commands and guarded
   execution policy live in `src/airdesk/cli_runtime.py`, and shared tracker
   construction lives in `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is
-  now about 837 LOC and still owns live tracking/watch diagnostics.
+  now about 60 LOC of app wiring plus `doctor` / `analyze`.
 
 Next-session assignment:
 
 Continue the review/refactor pass and be more aggressive about doing the right
-architecture work. The recording, runtime/live-action, and replay/offline
-gesture diagnostic extraction chunks are complete, so treat targeted V2
-recording as deferred until the remaining live diagnostic or TCN v2 structure is
-easier to trust.
+architecture work. The recording, runtime/live-action, replay/offline gesture
+diagnostic, and live tracking/watch extraction chunks are complete, so treat
+targeted V2 recording as deferred until the TCN v2 structure is easier to trust.
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - split the remaining live tracking/watch diagnostics out of
-     `src/airdesk/cli.py`;
-   - keep the public `airdesk.cli:app` entrypoint stable and preserve command
-     names/options/help output;
    - separate TCN v2 evidence/dataset/evaluation concerns where they are
      currently muddy;
+   - split `tests/test_cli.py` into focused modules only if doing so preserves
+     useful public CLI/safety coverage;
    - remove or quarantine dead legacy command paths only after proving they are
      unused;
+   - keep the public `airdesk.cli:app` entrypoint stable and preserve command
+     names/options/help output;
    - add tests before changing behavior around replay, labels, feature rows, and
      decoder output.
 3. Preserve current behavior unless a bug is found and fixed intentionally. Keep

@@ -157,7 +157,7 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Refactor oversized/unclear CLI, ML, analysis, feature, or gesture boundaries found in that review
 - [x] Audit dead-code scanner results and leave required protocol/test-double keyword parameters intact
 - [ ] Remove or quarantine confirmed dead code with tests/docs updated
-- [ ] Confirm targeted V2 recording commands/protocol after cleanup
+- [ ] Confirm targeted V2 recording commands/protocol after the TCN v2 boundary review
 - [x] Continue no-behavior-change CLI refactor for live tracking/runtime/preview commands
 - [x] Centralize hand/no-hand feature stream grouping for DTW, motion, TCN datasets, and live preview
 - [x] Add V2 no-hand/tracking-drop evidence tests and keep no-hand rows background-only
@@ -166,7 +166,9 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Isolate runtime/live-action command boundaries after recording extraction, with dry-run safety tests
 - [x] Add/expand CLI help and behavior tests for extracted recording/runtime modules
 - [x] Split replay/offline gesture diagnostic command bodies out of `src/airdesk/cli.py`
-- [ ] Split remaining live tracking/watch diagnostic command bodies out of `src/airdesk/cli.py` or isolate TCN v2 evidence/dataset/evaluation concerns, whichever review shows is the highest-value next boundary
+- [x] Split remaining live tracking/watch diagnostic command bodies out of `src/airdesk/cli.py`
+- [ ] Isolate TCN v2 evidence/dataset/evaluation concerns after the CLI cleanup pass
+- [ ] Split `tests/test_cli.py` into focused CLI test modules if it remains the next maintainability bottleneck
 - [ ] Document Sprint 5 recognizer decision after event-decoder replay evidence
 - [x] Update dynamic gesture protocol and research notes
 - [x] Run `ruff`, `pytest`, and replay evaluation smoke
