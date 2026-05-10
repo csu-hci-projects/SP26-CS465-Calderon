@@ -201,6 +201,8 @@ def test_train_tcn_v2_help_exposes_evidence_training_controls() -> None:
     assert "--manifest" in result.stdout
     assert "--epochs" in result.stdout
     assert "--hidden-channels" in result.stdout
+    assert "--positive-weight-cap" in result.stdout
+    assert "--focal-gamma" in result.stdout
 
 
 def test_evaluate_tcn_help_exposes_optional_evaluation_controls() -> None:

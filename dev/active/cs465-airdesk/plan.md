@@ -100,7 +100,7 @@ The first hard problem is gesture spotting, not just classification:
 
 ### Recognition V2 Pivot
 
-May 2026 update: AirDesk is due for a recognizer architecture cleanup before more broad data collection.
+May 2026 update: AirDesk is due for a recognizer architecture cleanup before more broad data collection. The first pre-training TCN v2 architecture cleanup is now complete: residual dilated causal blocks, normalization/dropout, weighted/focal evidence loss, sparse-boundary weighting, calibration metadata, schema-versioned checkpoints, batched prediction, and start/end-aware decoder scoring are in place. This still needs replay evidence before targeted V2 collection.
 
 The current TCN work proved useful infrastructure, but the live tests showed that the implementation is still too close to sliding-window phase classification. The next architecture should treat TCN as one possible temporal core inside a continuous spotting system, not as the whole recognizer.
 

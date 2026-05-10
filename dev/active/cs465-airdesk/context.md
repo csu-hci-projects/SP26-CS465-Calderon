@@ -242,13 +242,12 @@ Current next step:
 > `tune`, `view`, and `benchmark`, while `src/airdesk/cli.py` is down to about
 > 60 LOC of app wiring plus `doctor` / `analyze`. Do the next cleanup in
 > behavior-preserving chunks, with tests, before collecting data. The TCN v2
-> train/evaluate boundary is now split into focused modules. Caden explicitly
-> wants the next pass to be less protective of legacy code: AirDesk is still
-> pre-training, so if the TCN model shape, training loop, loss, calibration,
-> checkpoint contract, or evaluation boundary should be rewritten, do it now
-> rather than carrying weak architecture into the V2 dataset. Keep live actions
-> dry-run/disabled, but be willing to change internals aggressively when the
-> architecture case is strong.
+> train/evaluate boundary is now split into focused modules, and the first
+> pre-training architecture cleanup is complete: v2 uses a residual dilated
+> causal TCN, weighted/focal BCE, calibration metadata, schema-versioned
+> checkpoints, batched prediction, and start/end-aware decoder scoring. Keep
+> live actions dry-run/disabled. The next step is to replay-check this stronger
+> contract before deciding whether the targeted V2 collection slice is ready.
 
 Current TCN v2 implementation state:
 
@@ -258,10 +257,23 @@ Current TCN v2 implementation state:
 - The v2 evidence heads are `intentional_motion`, `stroke_left`, `stroke_right`,
   `start`, and `end`. Recovery/reset is not a user-facing command target.
 - `airdesk gesture train-tcn-v2` trains an optional PyTorch sequence-evidence
-  model with one shared checkpoint shape over hand-scoped streams.
-- `airdesk gesture evaluate-tcn-v2` maps stroke evidence through the existing
-  replay event decoder and preserves intent/start/end evidence in candidate
-  metadata. It is replay/evaluation tooling only.
+  model with one shared checkpoint shape over hand-scoped streams. The current
+  v2 default is a residual dilated causal TCN: `hidden_channels=32`, `levels=3`,
+  `kernel_size=3`, `dropout=0.10`, per-frame layer normalization, and two
+  causal convs per residual block. At 30 FPS this gives about a 29-frame / roughly 0.9-second
+  receptive field, which is much closer to the target swipe duration than the
+  earlier shallow scaffold.
+- V2 training now uses weighted/focal BCE instead of plain unweighted BCE.
+  Positive weights are computed per evidence head, capped, and multiplied for
+  sparse `start` / `end` heads. Checkpoints store the positive weights,
+  per-head calibration thresholds, per-head precision/recall/F1 metrics,
+  receptive-field metadata, and schema version `2`. Schema-1 v2 checkpoints
+  still load for replay compatibility.
+- `airdesk gesture evaluate-tcn-v2` maps evidence through the existing replay
+  event decoder, but `start` and `end` are no longer passive metadata: `start`
+  can boost a boundary-backed stroke into activation, and `end` suppresses
+  stroke scores / raises background for release. It is still replay/evaluation
+  tooling only.
 - V2 manifest summaries now include `evidence_frame_counts` so `start`/`end`
   and intent evidence are visible even when the collapsed window display target
   is `background`.
@@ -291,14 +303,14 @@ Current TCN v2 implementation state:
   `airdesk.ml` and `airdesk.analysis`.
 - Old `train-tcn` / `evaluate-tcn` / `watch-tcn` remain intact for the previous
   window-classifier scaffold and diagnostic live preview.
-- Next TCN review should look beyond file boundaries. Audit the actual model and
-  training choices: causal receptive field versus gesture duration, lack of
-  residual/skip connections, target imbalance for sparse `start` / `end`
-  evidence, BCE loss weighting/focal-style alternatives, calibration of
-  evidence heads, threshold selection, per-hand inference batching, checkpoint
-  metadata/versioning, and whether the decoder should consume explicit
-  boundary heads instead of only stroke-derived scores. Rewrite early code if it
-  is the cleanest way to avoid training the wrong architecture.
+- The first pre-training TCN architecture cleanup is complete. It addressed the
+  concrete weak spots called out in review: receptive field, residual/dilated
+  block design, normalization/dropout, sparse boundary-head imbalance,
+  weighted/focal BCE, calibration metadata, batched manifest prediction,
+  checkpoint metadata/versioning, schema-1 compatibility, and decoder use of
+  explicit `start` / `end` evidence. The next review should validate this
+  architecture on old replay data and then decide whether the targeted V2 slice
+  is ready to collect.
 
 Current TCN v2 old-data smoke:
 

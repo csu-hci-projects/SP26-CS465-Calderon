@@ -38,9 +38,11 @@ from airdesk.ml.label_refinement import (
 )
 from airdesk.ml.tcn_v2_train import (
     CausalTcnEvidencePrediction,
+    CausalTcnV2TrainingConfig,
     TcnEvidenceTrainingArrays,
     predict_causal_tcn_v2_manifest,
     prepare_tcn_v2_training_arrays,
+    tcn_v2_receptive_field_frames,
     train_causal_tcn_v2,
 )
 from airdesk.ml.train import (
@@ -87,6 +89,7 @@ __all__ = [
     "CausalTcnLivePrediction",
     "CausalTcnLivePredictor",
     "CausalTcnTrainingConfig",
+    "CausalTcnV2TrainingConfig",
     "CausalTcnTrainingResult",
     "MissingMlDependencyError",
     "TcnTrainingArrays",
@@ -97,6 +100,7 @@ __all__ = [
     "predict_causal_tcn_v2_manifest",
     "save_tcn_dataset_manifest",
     "target_assignments",
+    "tcn_v2_receptive_field_frames",
     "targets_for_mode",
     "save_feature_diagnostics_report",
     "split_feature_holdout",

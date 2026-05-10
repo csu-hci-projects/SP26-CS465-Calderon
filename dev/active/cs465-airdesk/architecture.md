@@ -301,6 +301,14 @@ scorer now lives at the existing gesture boundary in `airdesk/gestures/motion.py
 evaluate that boundary before deciding whether a top-level `recognition/`
 package is justified.
 
+May 2026 TCN v2 architecture update: the v2 learned scorer is now closer to the
+continuous-spotting boundary above. `src/airdesk/ml/tcn_v2_train.py` owns a
+schema-2 residual dilated causal TCN with normalization/dropout, weighted/focal
+evidence loss, sparse-boundary weighting, calibration metadata, and batched
+prediction. `src/airdesk/analysis/tcn_v2.py` maps `start` and `end` evidence
+into decoder activation/release behavior, while desktop actions remain outside
+the learned recognizer.
+
 ## Modes
 
 Modes describe interaction technique. Profiles describe context and bindings.

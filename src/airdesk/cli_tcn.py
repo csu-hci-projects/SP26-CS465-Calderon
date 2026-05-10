@@ -18,6 +18,7 @@ from airdesk.gestures.decoder import EventDecoderConfig
 from airdesk.labels import load_label_file
 from airdesk.ml import (
     CausalTcnTrainingConfig,
+    CausalTcnV2TrainingConfig,
     FeatureDiagnosticsReport,
     MissingMlDependencyError,
     build_feature_diagnostics_report,
@@ -183,18 +184,30 @@ def gesture_train_tcn_v2(
     epochs: Annotated[int, typer.Option(help="Training epochs.")] = 25,
     learning_rate: Annotated[float, typer.Option(help="Adam learning rate.")] = 0.001,
     batch_size: Annotated[int, typer.Option(help="Training batch size.")] = 16,
-    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 24,
-    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 2,
+    hidden_channels: Annotated[int, typer.Option(help="TCN hidden channels.")] = 32,
+    levels: Annotated[int, typer.Option(help="Dilated causal convolution levels.")] = 3,
     kernel_size: Annotated[int, typer.Option(help="Causal convolution kernel size.")] = 3,
-    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.0,
+    dropout: Annotated[float, typer.Option(help="Dropout probability.")] = 0.10,
     validation_fraction: Annotated[
         float,
         typer.Option(help="Deterministic validation split fraction."),
     ] = 0.2,
     seed: Annotated[int, typer.Option(help="Deterministic training seed.")] = 7,
+    positive_weight_cap: Annotated[
+        float,
+        typer.Option(help="Maximum BCE positive-class weight per evidence head."),
+    ] = 30.0,
+    boundary_positive_weight_multiplier: Annotated[
+        float,
+        typer.Option(help="Extra positive-weight multiplier for sparse start/end heads."),
+    ] = 2.0,
+    focal_gamma: Annotated[
+        float,
+        typer.Option(help="Focal loss gamma for hard evidence frames; 0 disables focal scaling."),
+    ] = 1.0,
 ) -> None:
     """Train a TCN v2 sequence model for decoder-facing evidence heads."""
-    config = CausalTcnTrainingConfig(
+    config = CausalTcnV2TrainingConfig(
         epochs=epochs,
         learning_rate=learning_rate,
         batch_size=batch_size,
@@ -204,6 +217,9 @@ def gesture_train_tcn_v2(
         dropout=dropout,
         validation_fraction=validation_fraction,
         seed=seed,
+        positive_weight_cap=positive_weight_cap,
+        boundary_positive_weight_multiplier=boundary_positive_weight_multiplier,
+        focal_gamma=focal_gamma,
     )
     try:
         result = train_causal_tcn_v2(manifest_path=manifest, out_path=out, config=config)

@@ -376,6 +376,17 @@ and `evaluate-tcn-v2` routes stroke evidence through the existing replay event
 decoder while keeping intent/boundary evidence in metadata. This is still a
 surface and regression harness, not proof of V2 quality.
 
+Status update after the pre-training architecture review: `train-tcn-v2` is no
+longer the early plain-conv scaffold. New v2 checkpoints use a schema-2 residual
+dilated causal TCN with per-frame layer normalization, dropout, a default 29-frame
+receptive field at `levels=3` / `kernel_size=3`, weighted/focal BCE for sparse
+evidence heads, calibrated per-head threshold metadata, per-head metrics, and
+batched manifest prediction. Schema-1 v2 checkpoints still load for old replay
+compatibility. `evaluate-tcn-v2` now converts `start` evidence into a
+boundary-backed activation boost and `end` evidence into release/background
+pressure instead of using only stroke-derived scores. The next proof point is a
+replay check on old regression data, not live action wiring.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:

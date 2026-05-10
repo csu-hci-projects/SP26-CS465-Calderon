@@ -12,7 +12,11 @@ from airdesk.analysis import (
     evaluate_tcn_manifest,
     evaluate_tcn_v2_manifest,
 )
-from airdesk.analysis.tcn_v2 import dedupe_tcn_v2_predictions
+from airdesk.analysis.tcn_v2 import (
+    decode_tcn_v2_predictions,
+    dedupe_tcn_v2_predictions,
+    tcn_v2_decoder_scores,
+)
 from airdesk.features import FrameFeatureRow
 from airdesk.gestures.decoder import EventDecoderConfig
 from airdesk.labels import (
@@ -29,6 +33,7 @@ from airdesk.ml import (
     CausalTcnEvidencePrediction,
     CausalTcnLivePredictor,
     CausalTcnTrainingConfig,
+    CausalTcnV2TrainingConfig,
     build_feature_diagnostics_report,
     build_tcn_dataset_manifest,
     feature_window_frame_targets,
@@ -41,6 +46,7 @@ from airdesk.ml import (
     prepare_tcn_v2_training_arrays,
     refine_motion_aligned_label_file,
     save_tcn_dataset_manifest,
+    tcn_v2_receptive_field_frames,
     train_causal_tcn,
     train_causal_tcn_v2,
 )
@@ -1117,6 +1123,8 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
 ) -> None:
     if importlib.util.find_spec("torch") is None:
         pytest.skip("optional PyTorch dependency is not installed")
+    import torch
+
     features_dir = tmp_path / "features"
     labels_dir = tmp_path / "labels"
     features_dir.mkdir()
@@ -1178,8 +1186,20 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
     result = train_causal_tcn_v2(
         manifest_path=manifest_path,
         out_path=model_path,
-        config=CausalTcnTrainingConfig(epochs=1, batch_size=2, validation_fraction=0.0, seed=1),
+        config=CausalTcnV2TrainingConfig(
+            epochs=1,
+            batch_size=2,
+            hidden_channels=8,
+            levels=2,
+            dropout=0.0,
+            validation_fraction=0.0,
+            seed=1,
+            positive_weight_cap=12.0,
+            boundary_positive_weight_multiplier=2.0,
+            focal_gamma=0.5,
+        ),
     )
+    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
     predictions = predict_causal_tcn_v2_manifest(
         model_path=model_path,
         manifest_path=manifest_path,
@@ -1197,6 +1217,17 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
     )
 
     assert result.targets == TCN_V2_EVIDENCE_TARGETS
+    assert checkpoint["metadata"]["schema_version"] == 2
+    assert checkpoint["model_config"]["architecture"] == "residual_dilated_causal_tcn_v2"
+    assert checkpoint["model_config"]["normalization"] == "layer_norm"
+    assert checkpoint["metadata"]["receptive_field_frames"] == tcn_v2_receptive_field_frames(
+        levels=2,
+        kernel_size=3,
+    )
+    loss = checkpoint["metadata"]["loss"]
+    assert loss["type"] == "weighted_focal_bce"
+    assert loss["positive_weights"]["start"] > loss["positive_weights"]["stroke_right"]
+    assert checkpoint["metadata"]["calibration"]["evidence_thresholds"]["start"] >= 0.05
     assert len(predictions) == len(manifest.windows)
     assert set(predictions[0].evidence) == set(TCN_V2_EVIDENCE_TARGETS)
     assert evaluations[0].recognizer == "tcn_v2_event_decoder"
@@ -1228,6 +1259,174 @@ def test_tcn_v2_prediction_dedupe_keeps_fullest_causal_context() -> None:
     deduped = dedupe_tcn_v2_predictions([short_context, long_context])
 
     assert deduped == [long_context]
+
+
+def test_tcn_v2_decoder_scores_use_start_and_end_boundaries() -> None:
+    start_scores = tcn_v2_decoder_scores(
+        {
+            "intentional_motion": 0.8,
+            "stroke_left": 0.4,
+            "stroke_right": 0.0,
+            "start": 1.0,
+            "end": 0.0,
+        }
+    )
+    end_scores = tcn_v2_decoder_scores(
+        {
+            "intentional_motion": 0.9,
+            "stroke_left": 0.6,
+            "stroke_right": 0.0,
+            "start": 0.0,
+            "end": 1.0,
+        }
+    )
+
+    assert start_scores["swipe_left"] == pytest.approx(0.6)
+    assert end_scores["background"] == 1.0
+    assert end_scores["swipe_left"] < 0.1
+
+
+def test_tcn_v2_decoder_can_activate_on_boundary_backed_stroke() -> None:
+    predictions = [
+        CausalTcnEvidencePrediction(
+            sample_id="window-001",
+            feature_path="features.csv",
+            label_path="labels.json",
+            hand_id="hand-0",
+            timestamp=1.0,
+            window_start=0.8,
+            window_end=1.0,
+            evidence={
+                "intentional_motion": 0.8,
+                "stroke_left": 0.4,
+                "stroke_right": 0.0,
+                "start": 1.0,
+                "end": 0.0,
+            },
+        ),
+        CausalTcnEvidencePrediction(
+            sample_id="window-002",
+            feature_path="features.csv",
+            label_path="labels.json",
+            hand_id="hand-0",
+            timestamp=1.1,
+            window_start=0.9,
+            window_end=1.1,
+            evidence={
+                "intentional_motion": 0.9,
+                "stroke_left": 0.5,
+                "stroke_right": 0.0,
+                "start": 0.0,
+                "end": 0.0,
+            },
+        ),
+        CausalTcnEvidencePrediction(
+            sample_id="window-003",
+            feature_path="features.csv",
+            label_path="labels.json",
+            hand_id="hand-0",
+            timestamp=1.2,
+            window_start=1.0,
+            window_end=1.2,
+            evidence={
+                "intentional_motion": 0.9,
+                "stroke_left": 0.5,
+                "stroke_right": 0.0,
+                "start": 0.0,
+                "end": 1.0,
+            },
+        ),
+    ]
+
+    candidates = decode_tcn_v2_predictions(
+        predictions,
+        EventDecoderConfig(
+            activation_threshold=0.55,
+            release_threshold=0.35,
+            min_peak_confidence=0.55,
+            recovery_seconds=0.0,
+            cooldown_seconds=0.0,
+            min_event_separation_seconds=0.0,
+        ),
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].name == "swipe_left"
+    assert candidates[0].timestamp == pytest.approx(1.0)
+    assert candidates[0].metadata["decoder_scores"]["swipe_left"] == pytest.approx(0.6)
+
+
+def test_tcn_v2_prediction_loads_schema_v1_checkpoints_when_torch_is_installed(
+    tmp_path: Path,
+) -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("optional PyTorch dependency is not installed")
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as functional
+
+    from airdesk.ml.tcn_v2_train import _make_legacy_causal_tcn_v2_sequence_model
+
+    features = tmp_path / "features.csv"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event="", phase="background"),
+            _row(timestamp=1.1, frame_index=1, event="", phase="stroke_left"),
+            _row(timestamp=1.2, frame_index=2, event="", phase="stroke_left"),
+        ],
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.25,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+    )
+    manifest_path = tmp_path / "manifest.json"
+    model_path = tmp_path / "legacy-v2.pt"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+    model_config = {
+        "input_features": len(manifest.feature_columns),
+        "targets": len(manifest.evidence_targets),
+        "hidden_channels": 4,
+        "levels": 1,
+        "kernel_size": 3,
+        "dropout": 0.0,
+    }
+    model = _make_legacy_causal_tcn_v2_sequence_model(
+        torch=torch,
+        nn=nn,
+        functional=functional,
+        **model_config,
+    )
+    arrays = prepare_tcn_v2_training_arrays(manifest)
+    torch.save(
+        {
+            "model_state": model.state_dict(),
+            "metadata": {
+                "schema_version": 1,
+                "model_type": "causal_tcn_v2_evidence",
+                "evidence_targets": list(manifest.evidence_targets),
+                "targets": list(manifest.targets),
+                "feature_columns": list(manifest.feature_columns),
+                "feature_mean": list(arrays.feature_mean),
+                "feature_std": list(arrays.feature_std),
+            },
+            "model_config": model_config,
+        },
+        model_path,
+    )
+
+    predictions = predict_causal_tcn_v2_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+    )
+
+    assert len(predictions) == len(manifest.windows)
+    assert set(predictions[0].evidence) == set(TCN_V2_EVIDENCE_TARGETS)
 
 
 def _write_features(path: Path, rows: list[FrameFeatureRow]) -> None:

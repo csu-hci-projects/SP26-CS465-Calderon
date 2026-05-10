@@ -117,6 +117,18 @@ Important evidence:
   isolated in `src/airdesk/analysis/tcn_v2.py`. Public exports remain stable
   through `airdesk.ml` and `airdesk.analysis`; compatibility wrappers remain in
   `src/airdesk/analysis/evaluation.py` for older direct imports.
+- The first pre-training TCN v2 architecture cleanup is complete. New
+  `train-tcn-v2` checkpoints use schema version `2`, a residual dilated causal
+  TCN with per-frame layer normalization/dropout, default `hidden_channels=32`,
+  `levels=3`, and a 29-frame receptive field at `kernel_size=3`. Training uses
+  weighted/focal BCE with extra weighting for sparse `start` / `end` positives,
+  stores per-head calibration thresholds and metrics, and predicts manifest
+  windows in batches. Schema-1 v2 checkpoints still load for replay
+  compatibility.
+- `evaluate-tcn-v2` now uses boundary heads in the decoder contract: `start`
+  evidence can boost a moderate stroke into activation, while `end` evidence
+  suppresses stroke scores and raises background/release pressure. Boundary
+  heads are no longer metadata-only.
 - A staff-level cleanup chunk is complete. Shared hand/no-hand feature stream
   helpers live in `src/airdesk/feature_streams.py` and are re-exported through
   `airdesk.features`; DTW, motion, TCN dataset windows, and live preview now use
@@ -153,11 +165,10 @@ still deferred until the recognizer architecture is worth training against.
 2. Start with a short review/reporting pass, then implement the highest-value
    cleanup chunk without stopping for permission unless there is a real blocker.
    Reasonable first candidates:
-   - audit and improve the TCN v2 architecture/training path before data
-     collection: causal receptive field, residual/dilated block design,
-     normalization/dropout, sparse boundary-head loss weighting, evidence-head
-     calibration, threshold selection, checkpoint metadata/versioning,
-     per-hand inference batching/speed, and decoder use of start/end evidence;
+   - replay-check the stronger TCN v2 architecture on old regression data and
+     compare against the previous underconfident old-data smoke;
+   - inspect the new per-head calibration thresholds and head metrics before
+     deciding whether targeted V2 data collection is ready;
    - rewrite early TCN scaffolding if it is the cleanest way to avoid training a
      weak architecture; keep public CLI names stable unless there is an
      intentional bug fix or documented migration reason;

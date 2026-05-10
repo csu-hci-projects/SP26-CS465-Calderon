@@ -68,11 +68,7 @@ def decode_tcn_v2_predictions(
     frames = [
         DecoderFrame(
             timestamp=prediction.timestamp,
-            scores={
-                "background": 1.0 - prediction.evidence.get("intentional_motion", 0.0),
-                "swipe_left": prediction.evidence.get("stroke_left", 0.0),
-                "swipe_right": prediction.evidence.get("stroke_right", 0.0),
-            },
+            scores=tcn_v2_decoder_scores(prediction.evidence),
             source_id=prediction.feature_path,
             hand_id=prediction.hand_id or None,
             window_start=prediction.window_start,
@@ -84,11 +80,47 @@ def decode_tcn_v2_predictions(
                 "start": prediction.evidence.get("start", 0.0),
                 "end": prediction.evidence.get("end", 0.0),
                 "raw_evidence": prediction.evidence,
+                "decoder_scores": tcn_v2_decoder_scores(prediction.evidence),
             },
         )
         for prediction in predictions
     ]
     return EventDecoder(config).decode(frames)
+
+
+def tcn_v2_decoder_scores(evidence: dict[str, float]) -> dict[str, float]:
+    """Map v2 evidence heads into decoder scores that use start/end boundaries."""
+    intentional_motion = _bounded_score(evidence.get("intentional_motion", 0.0))
+    start = _bounded_score(evidence.get("start", 0.0))
+    end = _bounded_score(evidence.get("end", 0.0))
+    return {
+        "background": max(1.0 - intentional_motion, end),
+        "swipe_left": _boundary_adjusted_stroke_score(
+            evidence.get("stroke_left", 0.0),
+            start=start,
+            end=end,
+        ),
+        "swipe_right": _boundary_adjusted_stroke_score(
+            evidence.get("stroke_right", 0.0),
+            start=start,
+            end=end,
+        ),
+    }
+
+
+def _boundary_adjusted_stroke_score(
+    stroke_score: float,
+    *,
+    start: float,
+    end: float,
+) -> float:
+    stroke = _bounded_score(stroke_score)
+    start_boosted = min(1.0, stroke * (1.0 + 0.5 * start))
+    return start_boosted * max(0.0, 1.0 - 0.85 * end)
+
+
+def _bounded_score(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
 
 
 def dedupe_tcn_v2_predictions(
