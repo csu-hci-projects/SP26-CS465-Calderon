@@ -27,6 +27,7 @@ from airdesk.cli_live import (
     _live_tcn_v2_dashboard_snapshot,
     _live_tcn_v2_preview_status,
     _live_tcn_v2_row_motion_features,
+    _max_tcn_v2_visible_evidence,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_tracking import _make_tracker
@@ -324,11 +325,11 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         ] = 4,
         evidence_threshold: Annotated[
             float,
-            typer.Option(help="Minimum decoder stroke score before printing an evidence line."),
+            typer.Option(help="Minimum evidence score before printing a prediction line."),
         ] = 0.35,
         include_background: Annotated[
             bool,
-            typer.Option(help="Print low-stroke/background evidence lines as well."),
+            typer.Option(help="Print low-confidence/background evidence lines as well."),
         ] = False,
         activation_threshold: Annotated[
             float,
@@ -489,6 +490,14 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             f"stride={predictor.stride_seconds:.2f}s heads={','.join(predictor.evidence_targets)} "
             "actions=disabled"
         )
+        if (
+            "stroke_left" not in predictor.evidence_targets
+            and "stroke_right" not in predictor.evidence_targets
+        ):
+            typer.echo(
+                "custom evidence heads detected; displaying top heads only, "
+                "AirDesk swipe decoder/candidates disabled"
+            )
         try:
             tracker.start()
             for frame in tracker.frames():
@@ -555,10 +564,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         },
                     )
                     visible_evidence = (
-                        max(
-                            decoder_scores.get("swipe_left", 0.0),
-                            decoder_scores.get("swipe_right", 0.0),
-                        )
+                        _max_tcn_v2_visible_evidence(prediction.evidence)
                         >= evidence_threshold
                     )
                     if profile_timing and visible_evidence:

@@ -85,21 +85,32 @@ def _format_live_tcn_v2_preview_predictions(state: dict[str, object]) -> str:
         if not isinstance(prediction, CausalTcnV2LivePrediction):
             continue
         evidence = prediction.evidence
-        left = evidence.get("stroke_left", 0.0)
-        right = evidence.get("stroke_right", 0.0)
         motion = ""
         if show_motion and isinstance(rows_by_hand, dict):
             row = rows_by_hand.get(hand_id)
             dx = getattr(row, "palm_window_dx_per_hand_scale", None)
             if isinstance(dx, float):
                 motion = f" dx={dx:.2f}"
-        parts.append(
-            f"{hand_id}:L={left:.2f} "
-            f"R={right:.2f} "
-            f"I={evidence.get('intentional_motion', 0.0):.2f} "
-            f"S={evidence.get('start', 0.0):.2f} "
-            f"E={evidence.get('end', 0.0):.2f}{motion}"
-        )
+        if _has_tcn_v2_stroke_heads(evidence):
+            left = evidence.get("stroke_left", 0.0)
+            right = evidence.get("stroke_right", 0.0)
+            parts.append(
+                f"{hand_id}:L={left:.2f} "
+                f"R={right:.2f} "
+                f"I={evidence.get('intentional_motion', 0.0):.2f} "
+                f"S={evidence.get('start', 0.0):.2f} "
+                f"E={evidence.get('end', 0.0):.2f}{motion}"
+            )
+        else:
+            top = " ".join(
+                f"{name}={score:.2f}" for name, score in _top_tcn_v2_evidence(evidence)
+            )
+            parts.append(
+                f"{hand_id}:top[{top}] "
+                f"I={evidence.get('intentional_motion', 0.0):.2f} "
+                f"S={evidence.get('start', 0.0):.2f} "
+                f"E={evidence.get('end', 0.0):.2f}{motion}"
+            )
     return " | ".join(parts)
 
 
@@ -129,9 +140,19 @@ def _format_live_tcn_v2_prediction(
     if first_timestamp is not None:
         relative = prediction.end_time - first_timestamp
     hand = f" hand={prediction.hand_id}" if prediction.hand_id else ""
-    evidence = _compact_probabilities(prediction.evidence)
-    scores = _compact_probabilities(decoder_scores)
-    return f"t={relative:7.3f}s{hand} evidence=({evidence}) decoder=({scores})"
+    if _has_tcn_v2_stroke_heads(prediction.evidence):
+        evidence = _compact_probabilities(prediction.evidence)
+        scores = _compact_probabilities(decoder_scores)
+        return f"t={relative:7.3f}s{hand} evidence=({evidence}) decoder=({scores})"
+    top = " ".join(
+        f"{name}={score:.2f}" for name, score in _top_tcn_v2_evidence(prediction.evidence)
+    )
+    return (
+        f"t={relative:7.3f}s{hand} top=({top}) "
+        f"I={prediction.evidence.get('intentional_motion', 0.0):.2f} "
+        f"S={prediction.evidence.get('start', 0.0):.2f} "
+        f"E={prediction.evidence.get('end', 0.0):.2f} decoder=disabled"
+    )
 
 
 def _format_live_tcn_v2_candidate(
@@ -274,6 +295,7 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
         if not isinstance(prediction, CausalTcnV2LivePrediction):
             continue
         evidence = prediction.evidence
+        top_evidence = _top_tcn_v2_evidence(evidence)
         hand: dict[str, object] = {
             "hand_id": hand_id,
             "left": evidence.get("stroke_left", 0.0),
@@ -282,6 +304,11 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
             "start": evidence.get("start", 0.0),
             "end": evidence.get("end", 0.0),
         }
+        if top_evidence:
+            hand["evidence"] = [
+                {"name": name, "score": score}
+                for name, score in top_evidence
+            ]
         if isinstance(rows_by_hand, dict):
             row = rows_by_hand.get(hand_id)
             features = _live_tcn_v2_row_motion_features(row)
@@ -290,6 +317,31 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
                 hand["dx"] = features["dx_scale"]
         hands.append(hand)
     return hands
+
+
+def _has_tcn_v2_stroke_heads(evidence: dict[str, float]) -> bool:
+    return "stroke_left" in evidence or "stroke_right" in evidence
+
+
+def _top_tcn_v2_evidence(
+    evidence: dict[str, float],
+    *,
+    limit: int = 4,
+) -> list[tuple[str, float]]:
+    hidden = {"intentional_motion", "start", "end", "stroke_left", "stroke_right"}
+    scored = [
+        (target, float(score))
+        for target, score in evidence.items()
+        if target not in hidden
+    ]
+    return sorted(scored, key=lambda item: (-item[1], item[0]))[:limit]
+
+
+def _max_tcn_v2_visible_evidence(evidence: dict[str, float]) -> float:
+    if _has_tcn_v2_stroke_heads(evidence):
+        return max(evidence.get("stroke_left", 0.0), evidence.get("stroke_right", 0.0))
+    top = _top_tcn_v2_evidence(evidence, limit=1)
+    return top[0][1] if top else evidence.get("intentional_motion", 0.0)
 
 
 def _live_tcn_v2_row_motion_features(row: object) -> dict[str, float]:

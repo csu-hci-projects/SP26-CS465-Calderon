@@ -15,6 +15,7 @@ from airdesk.cli import app
 from airdesk.cli_live import (
     _format_live_tcn_preview_predictions,
     _format_live_tcn_v2_candidate,
+    _format_live_tcn_v2_prediction,
     _format_live_tcn_v2_preview_predictions,
     _format_tracker_timing,
     _live_tcn_v2_dashboard_snapshot,
@@ -462,6 +463,60 @@ def test_live_tcn_v2_preview_status_lists_evidence_stably() -> None:
     )
 
 
+def test_live_tcn_v2_preview_status_lists_custom_heads_when_no_strokes() -> None:
+    status = _format_live_tcn_v2_preview_predictions(
+        {
+            "stream_count": 1,
+            "row_count": 20,
+            "predictions": {
+                "hand-0": CausalTcnV2LivePrediction(
+                    hand_id="hand-0",
+                    start_time=1.0,
+                    end_time=1.2,
+                    evidence={
+                        "intentional_motion": 0.80,
+                        "ipn_g07": 0.72,
+                        "ipn_b0a": 0.20,
+                        "ipn_g01": 0.61,
+                        "start": 0.25,
+                        "end": 0.05,
+                    },
+                ),
+            },
+        }
+    )
+
+    assert status == (
+        "TCNv2 s=1 r=20 | hand-0:top[ipn_g07=0.72 ipn_g01=0.61 "
+        "ipn_b0a=0.20] I=0.80 S=0.25 E=0.05"
+    )
+
+
+def test_live_tcn_v2_prediction_line_summarizes_custom_heads() -> None:
+    line = _format_live_tcn_v2_prediction(
+        CausalTcnV2LivePrediction(
+            hand_id="hand-0",
+            start_time=1.0,
+            end_time=1.2,
+            evidence={
+                "intentional_motion": 0.80,
+                "ipn_g07": 0.72,
+                "ipn_b0a": 0.20,
+                "ipn_g01": 0.61,
+                "start": 0.25,
+                "end": 0.05,
+            },
+        ),
+        first_timestamp=1.0,
+        decoder_scores={},
+    )
+
+    assert line == (
+        "t=  0.200s hand=hand-0 top=(ipn_g07=0.72 ipn_g01=0.61 "
+        "ipn_b0a=0.20) I=0.80 S=0.25 E=0.05 decoder=disabled"
+    )
+
+
 def test_live_tcn_v2_preview_status_uses_gesture_banner_marker() -> None:
     status = _live_tcn_v2_preview_status(
         {
@@ -584,6 +639,49 @@ def test_live_tcn_v2_dashboard_snapshot_contains_structured_evidence() -> None:
         }
     ]
     assert snapshot["recent_candidates"][0]["delay"] == 0.5
+
+
+def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
+    snapshot = _live_tcn_v2_dashboard_snapshot(
+        {
+            "status": "TCNv2 s=1 r=20",
+            "stream_count": 1,
+            "row_count": 20,
+            "prediction_count": 1,
+            "candidate_count": 0,
+            "latest_relative_time": 3.0,
+            "predictions": {
+                "hand-0": CausalTcnV2LivePrediction(
+                    hand_id="hand-0",
+                    start_time=2.2,
+                    end_time=3.0,
+                    evidence={
+                        "intentional_motion": 0.80,
+                        "ipn_g07": 0.72,
+                        "ipn_g01": 0.61,
+                        "start": 0.25,
+                        "end": 0.05,
+                    },
+                ),
+            },
+        },
+        first_timestamp=0.0,
+    )
+
+    assert snapshot["hands"] == [
+        {
+            "hand_id": "hand-0",
+            "left": 0.0,
+            "right": 0.0,
+            "intent": 0.8,
+            "start": 0.25,
+            "end": 0.05,
+            "evidence": [
+                {"name": "ipn_g07", "score": 0.72},
+                {"name": "ipn_g01", "score": 0.61},
+            ],
+        }
+    ]
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:

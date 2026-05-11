@@ -272,6 +272,20 @@ class LiveDashboardRenderer:
                 color=color,
             )
             meter_y += 20
+        evidence = hand.get("evidence", [])
+        if isinstance(evidence, list) and evidence:
+            top_line = self._evidence_summary_line(evidence)
+            self._put_text_fit(
+                image=image,
+                text=top_line,
+                x=x + 12,
+                y=meter_y + 2,
+                max_width=width - 24,
+                scale=0.34,
+                color=(200, 210, 228),
+                thickness=1,
+            )
+            meter_y += 20
         features = hand.get("features", {})
         if isinstance(features, dict):
             motion_lines = self._motion_feature_lines(features)
@@ -288,6 +302,18 @@ class LiveDashboardRenderer:
                     thickness=1,
                 )
                 feature_y += 18
+
+    def _evidence_summary_line(self, evidence: list[Any]) -> str:
+        parts: list[str] = []
+        for item in evidence[:4]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", ""))
+            score = item.get("score")
+            if not name or not isinstance(score, int | float):
+                continue
+            parts.append(f"{name} {float(score):.2f}")
+        return "top " + " | ".join(parts) if parts else "top"
 
     def _motion_feature_lines(self, features: dict[str, Any]) -> tuple[str, ...]:
         def value(name: str) -> float:
