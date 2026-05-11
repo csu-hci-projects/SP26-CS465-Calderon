@@ -228,16 +228,15 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> Crunch-time pivot: stop trying to turn the all-IPN/TCN gesture recognizer into
-> the live command layer. Learned/DTW/motion recognizers should stay in
-> preview/replay/evaluation. The next implementation should build a deterministic
-> landmark-logic control path: stable open palm, fist, sideways open palm, pinch
-> taps/holds, palm zones, hold timing, cooldowns, and a rolling combo buffer over
-> stable pose-transition events. Use that grammar to recreate the practical
-> mouse/window-manager loop: move pointer, left/right click, scroll, open the
-> launcher, switch workspaces, move the focused/window-under-cursor to adjacent
-> workspaces, and close the active window through a deliberate combo. Keep all
-> execution dry-run-first with visible overlay feedback and JSONL logs.
+> Continue the deterministic live-control path, but do not treat workspace
+> switching or move-window as live-proven yet. The latest pre-hardening logs
+> showed the newest dry-run almost never stabilized fist, while the older
+> execute run fired workspace commands that Hyprland reported as `ok` but never
+> produced `movetoworkspace` intents. The control pose layer now logs
+> per-pose evidence/confidence and ambiguity, suppresses close fist/pinch/open
+> conflicts, and uses an anchored fist grammar for workspace and window moves.
+> The next live step is a fresh dry-run that inspects `pose_evidence`,
+> `ambiguity`, and `grammar_diagnostics` before any further tuning.
 
 2026-05-11 logic-control architecture decision:
 
@@ -259,6 +258,24 @@ Current next step:
 - Show `Seeing`, `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`
   states in preview/dashboard rather than relying on terminal text.
 
+2026-05-11 live-control hardening update:
+
+- `ControlPoseRecognizer` now treats command poses as resolved facts, not
+  independent booleans. Fist must have all-finger fold evidence plus fingertip
+  clustering, low fingertip spread, and thumb support. Clean dominant poses win;
+  close fist/pinch/open-palm conflicts emit no command pose and log the
+  ambiguity.
+- `control_seen` logs now include `features[]` with per-pose scores,
+  `pose_evidence`, active/suppressed poses, ambiguity, and
+  `grammar_diagnostics`.
+- Fist workspace/window commands now arm from a fist anchor. Vertical motion
+  from that anchor switches workspaces; horizontal motion or side-zone crossing
+  moves the active/window-under-cursor to a neighboring workspace; release,
+  expiry, or one fired command consumes the arm.
+- Focused tests cover relaxed curl, partial curl, real fist, pinch-like fist
+  artifacts, noisy/sideways hand conflicts, anchored workspace/window moves,
+  consumed arms, and diagonal ambiguity suppression.
+
 MVP grammar candidate:
 
 - Open/relaxed hand in cursor mode: move cursor through Hyprland `movecursor`.
@@ -266,8 +283,9 @@ MVP grammar candidate:
 - Index pinch hold: hold left button for select/drag through a future input target.
 - Thumb/middle pinch tap: right click through a future input target.
 - Thumb/middle pinch hold plus vertical movement: scroll through a future input target.
-- Fist held center: arm one fist command and show active window title.
-- Fist moved left/right zone: `hyprctl dispatch movetoworkspace -1` / `+1`.
+- Fist held: arm one command from the fist anchor and show active window title.
+- Fist moved left/right from anchor or across side zone:
+  `hyprctl dispatch movetoworkspace -1` / `+1`.
 - Fist moved up/down from fist start: `hyprctl dispatch workspace -1` / `+1`.
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via

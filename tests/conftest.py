@@ -17,22 +17,39 @@ from airdesk.state.types import (
 def make_hand() -> Callable[[str], NormalizedHand]:
     def _make_hand(pose: str) -> NormalizedHand:
         landmarks = [Landmark(0.5, 0.8, 0.0) for _ in range(21)]
-        mcp_xs = {5: 0.38, 9: 0.47, 13: 0.56, 17: 0.65}
-        tip_xs = {8: 0.34, 12: 0.45, 16: 0.58, 20: 0.70}
+        finger_joints = {
+            (5, 6, 7, 8): (0.38, 0.34),
+            (9, 10, 11, 12): (0.47, 0.45),
+            (13, 14, 15, 16): (0.56, 0.58),
+            (17, 18, 19, 20): (0.65, 0.70),
+        }
+        mcp_xs = {
+            mcp: mcp_x
+            for (mcp, _pip, _dip, _tip), (mcp_x, _tip_x) in finger_joints.items()
+        }
         for index, x in mcp_xs.items():
             landmarks[index] = Landmark(x, 0.55, 0.0)
 
         if pose == "open_palm":
-            for index, x in tip_xs.items():
-                landmarks[index] = Landmark(x, 0.25, 0.0)
+            for (mcp, pip, dip, tip), (mcp_x, tip_x) in finger_joints.items():
+                landmarks[mcp] = Landmark(mcp_x, 0.55, 0.0)
+                landmarks[pip] = Landmark((mcp_x + tip_x) / 2, 0.45, 0.0)
+                landmarks[dip] = Landmark((mcp_x + tip_x) / 2, 0.35, 0.0)
+                landmarks[tip] = Landmark(tip_x, 0.25, 0.0)
             landmarks[4] = Landmark(0.26, 0.43, 0.0)
         elif pose == "fist":
-            for index, x in tip_xs.items():
-                landmarks[index] = Landmark(x, 0.66, 0.0)
-            landmarks[4] = Landmark(0.42, 0.63, 0.0)
+            curled_tip_xs = {8: 0.43, 12: 0.47, 16: 0.51, 20: 0.55}
+            for mcp, pip, dip, tip in finger_joints:
+                landmarks[pip] = Landmark(landmarks[mcp].x, 0.58, 0.0)
+                landmarks[dip] = Landmark(curled_tip_xs[tip], 0.62, 0.0)
+                landmarks[tip] = Landmark(curled_tip_xs[tip], 0.66, 0.0)
+            landmarks[4] = Landmark(0.45, 0.64, 0.0)
         elif pose == "pinch":
-            for index, x in tip_xs.items():
-                landmarks[index] = Landmark(x, 0.25, 0.0)
+            for (mcp, pip, dip, tip), (mcp_x, tip_x) in finger_joints.items():
+                landmarks[mcp] = Landmark(mcp_x, 0.55, 0.0)
+                landmarks[pip] = Landmark((mcp_x + tip_x) / 2, 0.45, 0.0)
+                landmarks[dip] = Landmark((mcp_x + tip_x) / 2, 0.35, 0.0)
+                landmarks[tip] = Landmark(tip_x, 0.25, 0.0)
             landmarks[4] = Landmark(0.36, 0.26, 0.0)
             landmarks[8] = Landmark(0.36, 0.26, 0.0)
         elif pose == "point_left":

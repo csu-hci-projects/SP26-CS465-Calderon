@@ -121,14 +121,18 @@ class ControlRuntime:
                         )
                     )
                 scroll_delta_by_hand = self._scroll_delta_by_hand(features)
-                self._emit_frame_status(
-                    features,
-                    events,
-                    timestamp=frame.timestamp,
-                    scroll_delta_by_hand=scroll_delta_by_hand,
-                )
+                intents: list[ControlIntent] = []
 
                 if self.paused:
+                    self.grammar.last_diagnostics = ["runtime paused"]
+                    self._emit_frame_status(
+                        features,
+                        events,
+                        timestamp=frame.timestamp,
+                        scroll_delta_by_hand=scroll_delta_by_hand,
+                        grammar_diagnostics=self.grammar.last_diagnostics,
+                        intents=intents,
+                    )
                     continue
 
                 moved = self._move_cursor_from_features(
@@ -146,12 +150,13 @@ class ControlRuntime:
                         current_cursor = moved
                         cursor_moves += 1
 
-                for intent in self.grammar.update(
+                intents = self.grammar.update(
                     features=features,
                     events=events,
                     timestamp=frame.timestamp,
                     scroll_delta_by_hand=scroll_delta_by_hand,
-                ):
+                )
+                for intent in intents:
                     action_requests += 1
                     result = self._execute_intent(intent)
                     if result.ok:
@@ -170,6 +175,14 @@ class ControlRuntime:
                             "result": result.to_dict(),
                         },
                     )
+                self._emit_frame_status(
+                    features,
+                    events,
+                    timestamp=frame.timestamp,
+                    scroll_delta_by_hand=scroll_delta_by_hand,
+                    grammar_diagnostics=self.grammar.last_diagnostics,
+                    intents=intents,
+                )
         finally:
             self.tracker.stop()
             close_pointer = getattr(self.pointer_target, "close", None)
@@ -332,12 +345,21 @@ class ControlRuntime:
         *,
         timestamp: float,
         scroll_delta_by_hand: dict[str, int],
+        grammar_diagnostics: list[str],
+        intents: list[ControlIntent],
     ) -> None:
         seeing = [feature.sees() for feature in features]
         event_summaries = [f"{event.hand_id}:{event.pose}:{event.event_type}" for event in events]
         suppressed = "paused" if self.paused else "none"
         if not features:
             suppressed = "no hands"
+        pose_ambiguities = [
+            f"{feature.hand_id}:{feature.ambiguity}"
+            for feature in features
+            if feature.ambiguity is not None
+        ]
+        if pose_ambiguities and not intents:
+            suppressed = "; ".join(pose_ambiguities)
         self._last_status.update(
             {
                 "seeing": "; ".join(seeing) if seeing else "none",
@@ -352,8 +374,19 @@ class ControlRuntime:
             "control_seen",
             {
                 "seeing": seeing,
+                "features": [feature.to_log_dict() for feature in features],
                 "events": [event.__dict__ for event in events],
                 "event_summaries": event_summaries,
+                "intents": [
+                    {
+                        "name": intent.name,
+                        "hand_id": intent.hand_id,
+                        "reason": intent.reason,
+                        "request": intent.request.to_dict(),
+                    }
+                    for intent in intents
+                ],
+                "grammar_diagnostics": grammar_diagnostics,
                 "combo": self.grammar.combo_buffer.summary(now=timestamp),
                 "armed": self._last_status.get("armed", "none"),
                 "target_window": self._last_status.get("target_window", "active"),

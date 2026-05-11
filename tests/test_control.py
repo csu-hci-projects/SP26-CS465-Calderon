@@ -28,21 +28,38 @@ def test_control_pose_features_prioritize_conflicting_landmark_facts(
     assert open_features.palm_zone == "left"
     assert "fist" in fist_features.poses
     assert "index_pinch" not in fist_features.poses
+    assert fist_features.pose_scores["fist"] >= 0.72
+    assert fist_features.pose_evidence["fist"]["strong_folded_fingers"] == 4
     assert "middle_pinch" in middle_features.poses
     assert "open_palm" not in middle_features.poses
 
 
-def test_control_pose_sideways_palm_suppresses_pinch_artifacts(
+def test_control_pose_sideways_palm_suppresses_weak_pinch_artifacts(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
-    noisy_sideways = _middle_pinch_hand(_move_hand(make_hand("open_palm"), x=0.30))
+    noisy_sideways = _weak_middle_pinch_hand(_move_hand(make_hand("open_palm"), x=0.30))
 
     features = recognizer.features_for_frame(make_tracking_frame(noisy_sideways))[0]
 
     assert features.poses == frozenset({"open_palm", "sideways_open_palm_left"})
     assert "middle_pinch" in features.suppressed_poses
+    assert features.ambiguity is None
+
+
+def test_control_pose_suppresses_ambiguous_sideways_palm_pinch(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    ambiguous_sideways = _middle_pinch_hand(_move_hand(make_hand("open_palm"), x=0.30))
+
+    features = recognizer.features_for_frame(make_tracking_frame(ambiguous_sideways))[0]
+
+    assert features.poses == frozenset()
+    assert "middle_pinch" in features.suppressed_poses
+    assert features.ambiguity == "sideways_palm_pinch_conflict"
 
 
 def test_control_pose_requires_strong_finger_fold_for_fist(
@@ -56,6 +73,63 @@ def test_control_pose_requires_strong_finger_fold_for_fist(
 
     assert "fist" not in features.poses
     assert features.poses == frozenset()
+
+
+def test_control_pose_rejects_partial_curl_as_command_pose(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    partial_curl = _partial_curled_hand(make_hand("open_palm"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(partial_curl))[0]
+
+    assert "fist" not in features.poses
+    assert features.poses == frozenset()
+    assert features.pose_evidence["fist"]["strong_folded_fingers"] == 2
+
+
+def test_control_pose_rejects_pinch_like_fist_artifact(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    artifact = _pinch_like_fist_artifact(make_hand("fist"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(artifact))[0]
+
+    assert features.poses == frozenset()
+    assert "fist" not in features.poses
+    assert features.ambiguity == "fist_pose_conflict"
+
+
+def test_control_pose_rejects_noisy_sideways_curl(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    noisy_sideways = _move_hand(_pinch_like_fist_artifact(make_hand("fist")), x=0.28)
+
+    features = recognizer.features_for_frame(make_tracking_frame(noisy_sideways))[0]
+
+    assert features.poses == frozenset()
+    assert features.ambiguity == "fist_pose_conflict"
+
+
+def test_control_pose_log_dict_exposes_evidence_and_ambiguity(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    artifact = _pinch_like_fist_artifact(make_hand("fist"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(artifact))[0]
+    payload = features.to_log_dict()
+
+    assert payload["ambiguity"] == "fist_pose_conflict"
+    assert "fist" in payload["pose_evidence"]
+    assert payload["pose_scores"]["fist"] > 0
+    assert payload["suppressed_poses"]
 
 
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
@@ -127,10 +201,18 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
 
     assert open_palm_workspace == []
 
+    side_fist_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
+    )
     unarmed_move = grammar.update(
-        features=side_open_features,
+        features=side_fist_features,
         events=[PoseEvent("hand-0", "fist", "held", 2.8, duration=0.4)],
         timestamp=2.8,
+    )
+    grammar.update(
+        features=side_fist_features,
+        events=[PoseEvent("hand-0", "fist", "released", 2.9, duration=0.5)],
+        timestamp=2.9,
     )
 
     assert unarmed_move == []
@@ -142,9 +224,7 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
         timestamp=3.0,
     )
     move_window = grammar.update(
-        features=recognizer.features_for_frame(
-            make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
-        ),
+        features=side_fist_features,
         events=[PoseEvent("hand-0", "fist", "held", 3.2, duration=0.6)],
         timestamp=3.2,
     )
@@ -223,6 +303,77 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
 
     assert expired == []
     assert cleared == []
+
+
+def test_fist_move_window_uses_horizontal_motion_from_anchor(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(
+        ControlGrammarConfig(
+            command_cooldown_seconds=0.0,
+            move_window_motion_threshold=0.12,
+        )
+    )
+    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
+    side_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
+    )
+
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "fist", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    move_window = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.2, duration=0.2)],
+        timestamp=1.2,
+    )
+    after_consumed = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.3, duration=0.3)],
+        timestamp=1.3,
+    )
+
+    assert move_window[0].name == "move_window_-1"
+    assert move_window[0].request.command == "movetoworkspace"
+    assert move_window[0].request.parameters["args"] == ["-1"]
+    assert after_consumed == []
+
+
+def test_fist_motion_ambiguity_does_not_fire_command(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(
+        ControlGrammarConfig(
+            command_cooldown_seconds=0.0,
+            workspace_motion_threshold=0.10,
+            move_window_motion_threshold=0.10,
+            fist_axis_margin=0.05,
+        )
+    )
+    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
+    diagonal_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), x=0.62, y=0.43))
+    )
+
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "fist", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    intents = grammar.update(
+        features=diagonal_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.2, duration=0.2)],
+        timestamp=1.2,
+    )
+
+    assert intents == []
+    assert any("fist motion ambiguous" in item for item in grammar.last_diagnostics)
 
 
 def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
@@ -455,11 +606,71 @@ def _middle_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
     )
 
 
+def _weak_middle_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    landmarks[4] = Landmark(0.42, 0.30, 0.0)
+    landmarks[12] = Landmark(0.47, 0.30, 0.0)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
 def _relaxed_curled_hand(hand: NormalizedHand) -> NormalizedHand:
     landmarks = list(hand.landmarks.landmarks)
     for index in (8, 12, 16, 20):
         point = landmarks[index]
         landmarks[index] = Landmark(point.x, 0.61, point.z, point.visibility, point.presence)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _partial_curled_hand(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    for index in (8, 12):
+        point = landmarks[index]
+        landmarks[index] = Landmark(point.x, 0.66, point.z, point.visibility, point.presence)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _pinch_like_fist_artifact(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    spread_tip_xs = {8: 0.34, 12: 0.45, 16: 0.58, 20: 0.70}
+    for index, x in spread_tip_xs.items():
+        point = landmarks[index]
+        landmarks[index] = Landmark(x, 0.66, point.z, point.visibility, point.presence)
+    landmarks[4] = Landmark(0.40, 0.66, 0.0)
+    landmarks[8] = Landmark(0.40, 0.66, 0.0)
+    landmarks[12] = Landmark(0.40, 0.66, 0.0)
     return NormalizedHand(
         hand_id=hand.hand_id,
         landmarks=type(hand.landmarks)(

@@ -119,29 +119,33 @@ Current implementation status:
   loop.
 - `airdesk control run` exists and defaults to dry-run. It logs what the system
   is seeing, stable pose events, combo state, cursor moves, requested actions,
-  and action results.
+  action results, per-pose evidence/confidence, ambiguity reasons, and
+  grammar diagnostics.
 - The current grammar covers open-hand relative cursor movement, index
   pinch-tap left click, index-pinch-hold left-button drag/select,
   middle-pinch-tap right click, middle-pinch-hold vertical scroll, center-fist
   armed move-window/workspace switching, launcher combo, and deliberate
   close-window combo.
-- Control pose facts are prioritized to reduce accidental overlap: fist
-  suppresses pinch artifacts, sideways-open-palm suppresses pinch artifacts, and
-  clean pinch suppresses plain open-palm.
+- Control pose facts are resolved through a suppression policy rather than a
+  blind priority list. Fist must clearly dominate pinch evidence, sideways palm
+  must clearly dominate pinch artifacts, clean pinch can suppress plain
+  open-palm, and close calls emit no command pose with an ambiguity reason.
 - Guarded move/close actions can query the active window title for target-window
   feedback.
-- Fist is now the command clutch: center-fist arms briefly, left/right fist
-  movement fires one `movetoworkspace`, and up/down fist motion from the fist
-  start point fires one `workspace` switch. Workspace switching no longer
-  requires the hand to enter a top/bottom zone. Open palm no longer triggers
-  workspace changes during cursor use. Side zones default to `left <= 0.30` and
-  `right >= 0.70`; workspace motion defaults to `0.10`; cursor gain defaults to
-  `12.0` with smoother `0.25` alpha and a `1px` dead zone. The control runtime
-  filters to one active hand, and the recommended live command now uses
-  `--max-num-hands 1`.
-- Fist detection now requires a stronger fold: all four fingertips must sit at
-  least `0.09` normalized y-units below their MCP joints before `fist` can
-  trigger, so a relaxed curled hand should stay in cursor mode.
+- Fist is now the command clutch: a stable fist creates a short-lived anchor,
+  left/right motion or side-zone crossing from that anchor fires one
+  `movetoworkspace`, and up/down motion from that anchor fires one `workspace`
+  switch. Firing, release, or expiry consumes the arm. Ambiguous diagonal motion
+  logs a suppression reason and emits no command. Side zones default to
+  `left <= 0.30` and `right >= 0.70`; workspace motion defaults to `0.10`;
+  move-window motion defaults to `0.12`; cursor gain defaults to `12.0` with
+  smoother `0.25` alpha and a `1px` dead zone. The control runtime filters to
+  one active hand, and the recommended live command now uses `--max-num-hands 1`.
+- Fist detection now requires multi-finger, multi-landmark evidence: all four
+  fingertips must sit at least `0.09` normalized y-units below their MCP joints,
+  the curled fingertips must remain clustered/low-spread, and the thumb must
+  support the fist shape. Relaxed curl, partial curl, pinch-like fist artifacts,
+  and noisy sideways hands are covered by tests.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release. Holding an index
   pinch past the tap window presses and holds the left button until release;
@@ -154,53 +158,45 @@ Current implementation status:
 
 Latest live-test findings and next priority:
 
-- Stop treating workspace switching and move-window as done. Caden reports that
-  **change workspace still is not working** and **move to workspace also is not
-  working** in live Hyprland testing.
-- The fist primitive is still not trustworthy enough. Caden suspects it is too
-  dependent on middle-finger geometry; it needs to be a multi-landmark,
-  multi-finger evidence check, not "one or two points look folded."
-- Gesture overlap is still a major trap. When a pose looks like it could be
-  fist + pinch, or open/relaxed + pinch, the runtime should either suppress to
-  the safest dominant intent or mark the frame ambiguous and do nothing.
-- Before changing more thresholds, inspect the latest JSONL logs under
-  `data/logs/control-live-*.jsonl`. Summarize:
-  - what `Seeing` reported during intended fist-up/down and fist-left/right;
-  - whether `fist` events entered/held/released;
-  - whether `workspace_*` or `move_window_*` intents were requested;
-  - whether Hyprland returned success or a failure message.
-- Add tests before live retesting. The next code slice should focus on hardened
-  primitive evidence and conflict routing, not more ad hoc command mapping.
+- Stop treating workspace switching and move-window as done until a fresh
+  post-hardening live dry-run proves them.
+- Latest pre-hardening log read:
+  - `control-live-dry-run.jsonl` saw mostly `index_pinch`,
+    `middle_pinch`, and relaxed states. It had only two single-frame fist
+    sightings, no `fist:entered` or `fist:held`, no armed state, and no
+    `workspace_*` or `move_window_*` intents.
+  - `control-live-execute.jsonl` saw many fists, usually with
+    `suppressed=index_pinch,middle_pinch`. It fired eight `workspace_*`
+    intents and Hyprland returned `ok` for each, but it fired zero
+    `movetoworkspace` intents. The move-window failure in that log was grammar
+    level; the newest dry-run failure was primitive/conflict level.
+- The next live pass should inspect `features[].pose_evidence`,
+  `features[].ambiguity`, and `grammar_diagnostics` before changing thresholds.
+  If fist never stabilizes, tune primitive thresholds. If fist stabilizes but
+  `workspace_*` / `move_window_*` do not fire, tune anchor-motion thresholds or
+  axis ambiguity. If Hyprland returns `ok` but the desktop does not change,
+  verify Caden's desired workspace token (`+1` / `-1` versus `r+1` / `r-1`) in
+  the live setup before changing the gesture grammar.
 
 Recommended next implementation slice:
 
 1. Review the latest live logs first:
    `data/logs/control-live-dry-run.jsonl` and any newer `control-live-*.jsonl`.
-2. Harden `ControlPoseRecognizer`:
-   - make `fist` require a combination of all/most fingertips relative to MCPs,
-     finger-tip clustering, thumb position, and low finger spread;
-   - expose/log per-pose evidence or confidence fields so ambiguous frames can
-     be diagnosed;
-   - add focused tests for relaxed curled hand, pinch-like fist artifacts, real
-     fist, partial curl, and sideways/noisy hand.
-3. Add a conflict/suppression policy:
-   - if `fist` and any pinch evidence both appear, only emit `fist` when fist
-     confidence clearly wins;
-   - if evidence is close, emit no command pose and log an ambiguity reason;
-   - keep click/scroll and fist-command paths from firing in the same hand
-     state.
-4. Rework/retest command grammar only after the primitive layer is safer:
+2. The primitive hardening slice is implemented. Start the next pass with a
+   fresh live dry-run and inspect the new evidence fields rather than reverting
+   to blind threshold sweeps.
+3. Retest command grammar with:
    - workspace switch: fist held, then vertical motion from fist anchor;
    - move-window: fist held, then left/right motion/zone from fist anchor;
-   - both must consume the arm, expire quickly, and log why they did or did not
-     fire.
-5. Then run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
-6. Improve live status/dashboard rendering so it clearly shows `Seeing`,
+   - both should consume the arm, expire quickly, and log why they did or did
+     not fire.
+4. Then run live dry-run testing with:
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+5. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
-7. Only after dry-run feels stable, consider guarded real Hyprland movement
+6. Only after dry-run feels stable, consider guarded real Hyprland movement
    with pointer button/scroll still dry-run.
-8. Keep running `uv run ruff check .` and `uv run pytest` after changes.
+7. Keep running `uv run ruff check .` and `uv run pytest` after changes.
 
 Safety stance:
 

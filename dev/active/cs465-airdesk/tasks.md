@@ -17,16 +17,28 @@ The first vocabulary should be small and adjustable after live feel testing.
 
 Immediate next-session checklist:
 
-- [ ] Keep `git status` clean before editing; preserve user changes.
-- [ ] Read `README.md`, `context.md`, `recognition-v2-plan.md`,
+- [x] Keep `git status` clean before editing; preserve user changes.
+- [x] Read `README.md`, `context.md`, `recognition-v2-plan.md`,
       `public-dataset-survey.md`, `tracking-samples.md`, and this file.
-- [ ] Review existing `StaticHandPoseRecognizer`, `PinchCursorController`,
+- [x] Review existing `StaticHandPoseRecognizer`, `PinchCursorController`,
       Hyprland actions, cursor actions, runtime preview hooks, and tests.
+- [x] Review the latest `data/logs/control-live-*.jsonl` logs before tuning:
+      the newest dry-run saw only two single-frame fist sightings, no fist
+      enter/held events, no arming, and no workspace/move-window intents; the
+      older execute log fired workspace intents that Hyprland reported as `ok`,
+      but never fired `movetoworkspace`.
 - [x] Add the new live-control path side-by-side, preferably under
       `src/airdesk/control/` and `airdesk control run`; do not overload the old
       learned/dynamic `gestures` stack.
 - [x] Add primitive logic features for stable open palm, fist, sideways open
       palm, index pinch, middle pinch, palm zone, and simple vertical motion.
+- [x] Harden `ControlPoseRecognizer` so fist requires multi-finger and
+      multi-landmark evidence: strong folds, low fingertip spread, fingertip
+      clustering, and thumb/finger-cluster support.
+- [x] Log per-pose scores/evidence and ambiguity reasons in `control_seen`
+      records so live false positives can be diagnosed frame-by-frame.
+- [x] Suppress ambiguous fist/pinch/open-palm frames instead of letting one hand
+      shape emit overlapping command poses.
 - [x] Add a stable-pose debouncer that emits enter/held/release events rather
       than per-frame spam.
 - [x] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
@@ -37,6 +49,10 @@ Immediate next-session checklist:
       scroll; center-fist armed workspace up/down; center-fist armed move-window
       left/right; open palm -> sideways palm launcher; open palm -> fist -> open
       palm close-window combo.
+- [x] Rework fist workspace/move-window grammar around a consumed fist anchor:
+      vertical motion from the anchor switches workspaces, horizontal motion or
+      a side-zone crossing from the anchor moves the window, diagonal ambiguity
+      suppresses both, and JSONL diagnostics explain why it did or did not fire.
 - [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
       and pointer button/scroll injection. Execution must stay guarded.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
@@ -60,17 +76,19 @@ Immediate next-session checklist:
 - [ ] Defer learned-model hard-negative collection unless Caden explicitly pivots
       back to the model lane. It is no longer the next class-demo blocker.
 - [ ] Keep learned/DTW/motion gestures out of live desktop actions.
-- [ ] Run `uv run ruff check .` and `uv run pytest`.
+- [x] Run `uv run ruff check .` and `uv run pytest`.
 - [ ] Commit meaningful chunks and push to `origin/main`.
 
-First logic-control slice note: `airdesk control run` exists and is dry-run by
-default. The current grammar covers open-hand relative cursor movement, index
-pinch left click, index-pinch-hold left-button drag/select, middle pinch right
-click, middle-pinch-hold vertical scroll, center-fist armed workspace up/down,
-center-fist armed move-window left/right, launcher combo, and deliberate
-close-window combo. The remaining MVP polish is richer live
-overlay/preview rendering beyond the current status line and JSONL fields for
-`Armed`, `Target window`, `Executed`, and `Suppressed`.
+Logic-control hardening note: `airdesk control run` exists and is dry-run by
+default. The grammar covers open-hand relative cursor movement, index-pinch
+left click/drag, middle-pinch right click/scroll, launcher combo, deliberate
+close-window combo, and anchor-based fist workspace/window commands. Fist is no
+longer a mostly single-axis fold check: the control pose layer requires
+all-finger fold evidence plus fingertip clustering/spread/thumb support, emits
+per-pose evidence into logs, and suppresses ambiguous fist/pinch/open-palm
+frames. The remaining MVP polish is richer live overlay/preview rendering and
+fresh live dry-run validation of workspace switching and `movetoworkspace`
+after this primitive hardening.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,

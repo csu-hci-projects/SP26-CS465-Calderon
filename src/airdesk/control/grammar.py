@@ -33,8 +33,18 @@ class ControlGrammarConfig:
     close_cooldown_seconds: float = 2.0
     tap_max_seconds: float = 0.45
     scroll_cooldown_seconds: float = 0.12
-    fist_command_arm_seconds: float = 1.75
+    fist_command_arm_seconds: float = 1.25
     workspace_motion_threshold: float = 0.10
+    move_window_motion_threshold: float = 0.12
+    fist_axis_margin: float = 0.04
+
+
+@dataclass(frozen=True)
+class _FistArm:
+    anchor_x: float
+    anchor_y: float
+    anchor_zone: str
+    expires_at: float
 
 
 @dataclass
@@ -46,8 +56,8 @@ class ControlGrammar:
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
     _held_buttons: dict[tuple[str, str], str] = field(default_factory=dict)
-    _window_move_armed_until: dict[str, float] = field(default_factory=dict)
-    _fist_anchor_y: dict[str, float] = field(default_factory=dict)
+    _fist_arms: dict[str, _FistArm] = field(default_factory=dict)
+    last_diagnostics: list[str] = field(default_factory=list)
 
     def update(
         self,
@@ -60,7 +70,8 @@ class ControlGrammar:
         intents: list[ControlIntent] = []
         feature_by_hand = {item.hand_id: item for item in features}
         scroll_delta_by_hand = scroll_delta_by_hand or {}
-        self._expire_window_move_arms(timestamp)
+        self.last_diagnostics = []
+        self._expire_fist_arms(timestamp)
 
         for event in events:
             self.combo_buffer.add(event)
@@ -73,7 +84,12 @@ class ControlGrammar:
                 elif event.pose == "middle_pinch":
                     self._pending_taps[(event.hand_id, "middle_pinch")] = True
                 elif event.pose == "fist" and hand_features is not None:
-                    self._fist_anchor_y[event.hand_id] = hand_features.palm_y
+                    self._arm_fist(
+                        hand_id=event.hand_id,
+                        hand_features=hand_features,
+                        timestamp=timestamp,
+                        reason="fist entered",
+                    )
 
             if hand_features is None:
                 if event.event_type == "released":
@@ -121,51 +137,28 @@ class ControlGrammar:
                                 ),
                             )
                         )
-                if (
-                    event.pose == "fist"
-                    and hand_features.palm_zone == "center"
-                    and hand_features.palm_vertical_zone == "middle"
-                ):
-                    self._fist_anchor_y.setdefault(event.hand_id, hand_features.palm_y)
-                    workspace_motion = self._workspace_motion_intent_if_ready(
+                if event.pose == "fist":
+                    self._arm_fist_if_missing(
+                        hand_id=event.hand_id,
                         hand_features=hand_features,
                         timestamp=timestamp,
+                        reason="fist held without anchor",
                     )
-                    intents.extend(workspace_motion)
-                    if not workspace_motion:
-                        self._window_move_armed_until[event.hand_id] = (
-                            timestamp + self.config.fist_command_arm_seconds
-                        )
-                elif (
-                    event.pose == "fist"
-                    and hand_features.palm_zone in {"left", "right"}
-                    and self._window_move_is_armed(event.hand_id, timestamp)
-                ):
-                    direction = "+1" if hand_features.palm_zone == "left" else "-1"
-                    self._window_move_armed_until.pop(event.hand_id, None)
                     intents.extend(
-                        self._hyprland_intent_if_ready(
-                            key=f"{event.hand_id}:move_window:{direction}",
-                            timestamp=timestamp,
-                            name=f"move_window_{direction}",
-                            command="movetoworkspace",
-                            args=[direction],
-                            hand_id=event.hand_id,
-                            reason="fist held in side zone",
-                        )
-                    )
-                elif event.pose == "fist":
-                    intents.extend(
-                        self._workspace_motion_intent_if_ready(
+                        self._fist_motion_intent_if_ready(
                             hand_features=hand_features,
                             timestamp=timestamp,
                         )
                     )
 
             if event.event_type == "released":
-                if event.pose == "fist":
-                    self._window_move_armed_until.pop(event.hand_id, None)
-                    self._fist_anchor_y.pop(event.hand_id, None)
+                if (
+                    event.pose == "fist"
+                    and self._fist_arms.pop(event.hand_id, None) is not None
+                ):
+                    self.last_diagnostics.append(
+                        f"{event.hand_id}: fist arm released without firing"
+                    )
                 if event.pose == "index_pinch":
                     if self._button_is_held(event.hand_id, "index_pinch"):
                         intents.extend(
@@ -241,11 +234,14 @@ class ControlGrammar:
 
     def armed_summary(self, *, now: float) -> str:
         """Return a compact runtime summary of currently armed control states."""
-        self._expire_window_move_arms(now)
+        self._expire_fist_arms(now)
         armed: list[str] = []
         armed.extend(
-            f"{hand_id}:fist_command {expires_at - now:.1f}s"
-            for hand_id, expires_at in sorted(self._window_move_armed_until.items())
+            (
+                f"{hand_id}:fist_command {arm.expires_at - now:.1f}s "
+                f"anchor={arm.anchor_x:.2f},{arm.anchor_y:.2f}"
+            )
+            for hand_id, arm in sorted(self._fist_arms.items())
         )
         if not armed:
             return "none"
@@ -373,25 +369,116 @@ class ControlGrammar:
     def _button_is_held(self, hand_id: str, pose: str) -> bool:
         return (hand_id, pose) in self._held_buttons
 
-    def _workspace_motion_intent_if_ready(
+    def _arm_fist(
+        self,
+        *,
+        hand_id: str,
+        hand_features: ControlPoseFeatures,
+        timestamp: float,
+        reason: str,
+    ) -> None:
+        self._fist_arms[hand_id] = _FistArm(
+            anchor_x=hand_features.palm_x,
+            anchor_y=hand_features.palm_y,
+            anchor_zone=hand_features.palm_zone,
+            expires_at=timestamp + self.config.fist_command_arm_seconds,
+        )
+        self.last_diagnostics.append(
+            f"{hand_id}: fist armed from {reason} "
+            f"at x={hand_features.palm_x:.3f} y={hand_features.palm_y:.3f}"
+        )
+
+    def _arm_fist_if_missing(
+        self,
+        *,
+        hand_id: str,
+        hand_features: ControlPoseFeatures,
+        timestamp: float,
+        reason: str,
+    ) -> None:
+        if hand_id in self._fist_arms:
+            return
+        self._arm_fist(
+            hand_id=hand_id,
+            hand_features=hand_features,
+            timestamp=timestamp,
+            reason=reason,
+        )
+
+    def _fist_motion_intent_if_ready(
         self, *, hand_features: ControlPoseFeatures, timestamp: float
     ) -> list[ControlIntent]:
-        anchor_y = self._fist_anchor_y.setdefault(hand_features.hand_id, hand_features.palm_y)
-        dy = hand_features.palm_y - anchor_y
-        if abs(dy) < self.config.workspace_motion_threshold:
+        arm = self._fist_arms.get(hand_features.hand_id)
+        if arm is None:
+            self.last_diagnostics.append(f"{hand_features.hand_id}: fist held with no arm")
             return []
-        direction = "-1" if dy < 0 else "+1"
-        self._window_move_armed_until.pop(hand_features.hand_id, None)
-        self._fist_anchor_y.pop(hand_features.hand_id, None)
-        return self._hyprland_intent_if_ready(
-            key=f"{hand_features.hand_id}:workspace:{direction}",
-            timestamp=timestamp,
-            name=f"workspace_{direction}",
-            command="workspace",
-            args=[direction],
-            hand_id=hand_features.hand_id,
-            reason="fist vertical motion",
+        if arm.expires_at < timestamp:
+            self._fist_arms.pop(hand_features.hand_id, None)
+            self.last_diagnostics.append(f"{hand_features.hand_id}: fist arm expired")
+            return []
+
+        dx = hand_features.palm_x - arm.anchor_x
+        dy = hand_features.palm_y - arm.anchor_y
+        vertical_ready = abs(dy) >= self.config.workspace_motion_threshold
+        zone_crossed = (
+            arm.anchor_zone != hand_features.palm_zone
+            and hand_features.palm_zone in {"left", "right"}
         )
+        horizontal_ready = (
+            abs(dx) >= self.config.move_window_motion_threshold
+            or (
+                zone_crossed
+                and abs(dx) >= self.config.move_window_motion_threshold * 0.5
+            )
+        )
+
+        if vertical_ready and horizontal_ready:
+            axis_delta = abs(abs(dy) - abs(dx))
+            if axis_delta < self.config.fist_axis_margin:
+                self.last_diagnostics.append(
+                    f"{hand_features.hand_id}: fist motion ambiguous "
+                    f"dx={dx:.3f} dy={dy:.3f}"
+                )
+                return []
+            if abs(dy) > abs(dx):
+                horizontal_ready = False
+            else:
+                vertical_ready = False
+
+        if vertical_ready:
+            direction = "-1" if dy < 0 else "+1"
+            self._fist_arms.pop(hand_features.hand_id, None)
+            return self._hyprland_intent_if_ready(
+                key=f"{hand_features.hand_id}:workspace:{direction}",
+                timestamp=timestamp,
+                name=f"workspace_{direction}",
+                command="workspace",
+                args=[direction],
+                hand_id=hand_features.hand_id,
+                reason=f"fist vertical motion from anchor dy={dy:.3f}",
+            )
+
+        if horizontal_ready:
+            direction = "+1" if dx < 0 or hand_features.palm_zone == "left" else "-1"
+            self._fist_arms.pop(hand_features.hand_id, None)
+            return self._hyprland_intent_if_ready(
+                key=f"{hand_features.hand_id}:move_window:{direction}",
+                timestamp=timestamp,
+                name=f"move_window_{direction}",
+                command="movetoworkspace",
+                args=[direction],
+                hand_id=hand_features.hand_id,
+                reason=(
+                    "fist horizontal motion from anchor "
+                    f"dx={dx:.3f} zone={hand_features.palm_zone}"
+                ),
+            )
+
+        self.last_diagnostics.append(
+            f"{hand_features.hand_id}: fist armed but below motion thresholds "
+            f"dx={dx:.3f} dy={dy:.3f}"
+        )
+        return []
 
     def _click_intent_if_tap(
         self,
@@ -446,12 +533,9 @@ class ControlGrammar:
         self._last_fired[key] = timestamp
         return [intent]
 
-    def _window_move_is_armed(self, hand_id: str, timestamp: float) -> bool:
-        return self._window_move_armed_until.get(hand_id, 0.0) >= timestamp
-
-    def _expire_window_move_arms(self, timestamp: float) -> None:
-        self._window_move_armed_until = {
-            hand_id: expires_at
-            for hand_id, expires_at in self._window_move_armed_until.items()
-            if expires_at >= timestamp
+    def _expire_fist_arms(self, timestamp: float) -> None:
+        self._fist_arms = {
+            hand_id: arm
+            for hand_id, arm in self._fist_arms.items()
+            if arm.expires_at >= timestamp
         }

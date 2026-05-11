@@ -426,6 +426,10 @@ def control_run(
         float,
         typer.Option(help="Normalized fist up/down movement needed to switch workspace."),
     ] = 0.10,
+    move_window_motion_threshold: Annotated[
+        float,
+        typer.Option(help="Normalized fist left/right movement needed to move a window."),
+    ] = 0.12,
     left_zone_max: Annotated[
         float,
         typer.Option(help="Palm x at or below this value counts as the left side zone."),
@@ -501,7 +505,10 @@ def control_run(
             fist_fold_threshold=fist_fold_threshold,
         ),
         grammar=ControlGrammar(
-            ControlGrammarConfig(workspace_motion_threshold=workspace_motion_threshold)
+            ControlGrammarConfig(
+                workspace_motion_threshold=workspace_motion_threshold,
+                move_window_motion_threshold=move_window_motion_threshold,
+            )
         ),
         event_writer=event_writer,
         config=ControlRuntimeConfig(
