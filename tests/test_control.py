@@ -105,7 +105,16 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     )
 
     assert workspace[0].request.command == "workspace"
-    assert workspace[0].request.parameters["args"] == ["+1"]
+    assert workspace[0].request.parameters["args"] == ["-1"]
+
+    move_window = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "fist", "held", 2.8, duration=0.4)],
+        timestamp=2.8,
+    )
+
+    assert move_window[0].request.command == "movetoworkspace"
+    assert move_window[0].request.parameters["args"] == ["-1"]
 
     close = grammar.update(
         features=side_features,

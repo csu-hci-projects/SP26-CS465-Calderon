@@ -93,7 +93,7 @@ class ControlGrammar:
                             )
                         )
                 if event.pose in {"sideways_open_palm_left", "sideways_open_palm_right"}:
-                    direction = "-1" if event.pose.endswith("left") else "+1"
+                    direction = "+1" if event.pose.endswith("left") else "-1"
                     intents.extend(
                         self._hyprland_intent_if_ready(
                             key=f"{event.hand_id}:workspace:{direction}",
@@ -106,7 +106,7 @@ class ControlGrammar:
                         )
                     )
                 elif event.pose == "fist" and hand_features.palm_zone in {"left", "right"}:
-                    direction = "-1" if hand_features.palm_zone == "left" else "+1"
+                    direction = "+1" if hand_features.palm_zone == "left" else "-1"
                     intents.extend(
                         self._hyprland_intent_if_ready(
                             key=f"{event.hand_id}:move_window:{direction}",
