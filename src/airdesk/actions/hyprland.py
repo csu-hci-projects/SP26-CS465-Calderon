@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -60,6 +61,27 @@ class HyprlandActionTarget:
             command_preview=command,
         )
 
+    def active_window_title(self) -> str | None:
+        """Return the active Hyprland window title when available."""
+        completed = self.runner(
+            ["hyprctl", "activewindow", "-j"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0 or not completed.stdout.strip():
+            return None
+        data = json.loads(completed.stdout)
+        if not isinstance(data, dict):
+            return None
+        title = data.get("title")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+        app_class = data.get("class")
+        if isinstance(app_class, str) and app_class.strip():
+            return app_class.strip()
+        return None
+
     @staticmethod
     def build_command(request: ActionRequest) -> list[str]:
         args = request.parameters.get("args", [])
@@ -95,3 +117,7 @@ class GuardedHyprlandActionTarget:
                 command_preview=HyprlandActionTarget.build_command(request),
             )
         return self.inner.execute(request)
+
+    def active_window_title(self) -> str | None:
+        """Return the guarded target's active window title, if Hyprland reports one."""
+        return self.inner.active_window_title()

@@ -25,13 +25,13 @@ Immediate next-session checklist:
 - [x] Add the new live-control path side-by-side, preferably under
       `src/airdesk/control/` and `airdesk control run`; do not overload the old
       learned/dynamic `gestures` stack.
-- [ ] Add primitive logic features for stable open palm, fist, sideways open
+- [x] Add primitive logic features for stable open palm, fist, sideways open
       palm, index pinch, middle pinch, palm zone, and simple vertical motion.
 - [x] Add a stable-pose debouncer that emits enter/held/release events rather
       than per-frame spam.
 - [x] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
       matching, event consumption, and cooldown.
-- [ ] Implement MVP grammar in dry-run first:
+- [x] Implement MVP grammar in dry-run first:
       open/relaxed cursor move; index pinch left click; middle pinch right click;
       pinch-hold vertical scroll; sideways palm workspace left/right; fist
       move-window left/right; open palm -> sideways palm launcher; open palm ->
@@ -64,11 +64,11 @@ Immediate next-session checklist:
 
 First logic-control slice note: `airdesk control run` exists and is dry-run by
 default. The current grammar covers open-hand relative cursor movement, index
-pinch left click, middle pinch right click, sideways-palm workspace switching,
-fist side-zone move-window, launcher combo, and deliberate close-window combo.
-The missing MVP pieces are explicit vertical-motion features, pinch-hold scroll,
-and richer live overlay labels for `Armed`, `Target window`, `Executed`, and
-`Suppressed`.
+pinch left click, middle pinch right click, index-pinch-hold vertical scroll,
+sideways-palm workspace switching, fist side-zone move-window, launcher combo,
+and deliberate close-window combo. The remaining MVP polish is richer live
+overlay/preview rendering beyond the current status line and JSONL fields for
+`Armed`, `Target window`, `Executed`, and `Suppressed`.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,

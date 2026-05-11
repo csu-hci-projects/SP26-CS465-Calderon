@@ -408,6 +408,14 @@ def control_run(
         int,
         typer.Option(help="Ignore cursor movements below this pixel size."),
     ] = 3,
+    scroll_motion_threshold: Annotated[
+        float,
+        typer.Option(help="Normalized vertical palm movement needed per scroll tick."),
+    ] = 0.045,
+    scroll_amount_per_step: Annotated[
+        int,
+        typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
+    ] = 1,
     mirror_x: Annotated[
         bool,
         typer.Option(help="Mirror hand X movement for webcam control."),
@@ -462,6 +470,8 @@ def control_run(
             cursor_gain=cursor_gain,
             cursor_smoothing_alpha=cursor_smoothing_alpha,
             cursor_dead_zone_px=cursor_dead_zone_px,
+            scroll_motion_threshold=scroll_motion_threshold,
+            scroll_amount_per_step=scroll_amount_per_step,
             mirror_x=mirror_x,
         ),
         monitor=monitor,

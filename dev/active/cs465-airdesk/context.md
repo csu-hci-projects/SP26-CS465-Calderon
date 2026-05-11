@@ -712,6 +712,11 @@ The first deterministic control slice is now in place:
 - The first action boundary includes dry-run pointer button/scroll requests,
   guarded Hyprland dispatches for the demo grammar, and open-hand relative
   cursor movement through the existing cursor target abstraction.
+- Pinch behavior is now split so quick index/middle pinch releases become
+  left/right clicks, while index-pinch hold plus vertical palm motion emits
+  dry-run scroll ticks and suppresses the tap.
+- Guarded Hyprland move/close actions can query the active window title so the
+  status/log surface can show a target window before real testing.
 - Real pointer click/scroll injection is still intentionally not enabled. The
   dry-run input target is in place so a future `uinput`/`evdev` adapter can be
   added behind focused tests.

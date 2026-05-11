@@ -52,6 +52,26 @@ def test_hyprland_builds_dispatch_command_with_injected_runner() -> None:
     assert result.command_preview == calls[0]
 
 
+def test_hyprland_reads_active_window_title_with_injected_runner() -> None:
+    def runner(
+        command: Sequence[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"title": "Demo Window", "class": "demo"}\n',
+            stderr="",
+        )
+
+    target = HyprlandActionTarget(runner=runner)
+
+    assert target.active_window_title() == "Demo Window"
+
+
 def test_guarded_hyprland_blocks_non_allowlisted_dispatcher() -> None:
     target = GuardedHyprlandActionTarget()
     request = ActionRequest(

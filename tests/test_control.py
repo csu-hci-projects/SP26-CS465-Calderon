@@ -65,12 +65,18 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     grammar = ControlGrammar(ControlGrammarConfig(command_cooldown_seconds=0.0))
     features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
 
-    click = grammar.update(
+    pressed = grammar.update(
         features=features,
         events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
         timestamp=1.0,
     )
+    click = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.1, duration=0.1)],
+        timestamp=1.1,
+    )
 
+    assert pressed == []
     assert click[0].request.action_type == POINTER_ACTION
     assert click[0].request.parameters["button"] == "left"
 
@@ -99,6 +105,36 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     assert close[0].name == "close_window"
     assert close[0].request.command == "killactive"
     assert close[0].high_risk is True
+
+
+def test_control_grammar_scrolls_on_index_pinch_hold_and_suppresses_tap(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(ControlGrammarConfig(scroll_cooldown_seconds=0.0))
+    features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+
+    grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    scroll = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "held", 1.4, duration=0.4)],
+        timestamp=1.4,
+        scroll_delta_by_hand={"hand-0": -1},
+    )
+    click = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.5, duration=0.5)],
+        timestamp=1.5,
+    )
+
+    assert scroll[0].name == "scroll"
+    assert scroll[0].request.parameters["amount_y"] == -1
+    assert click == []
 
 
 def _move_hand(hand: NormalizedHand, *, x: float) -> NormalizedHand:

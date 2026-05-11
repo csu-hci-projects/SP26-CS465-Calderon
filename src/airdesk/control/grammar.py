@@ -31,6 +31,8 @@ class ControlGrammarConfig:
     command_cooldown_seconds: float = 0.75
     click_cooldown_seconds: float = 0.25
     close_cooldown_seconds: float = 2.0
+    tap_max_seconds: float = 0.30
+    scroll_cooldown_seconds: float = 0.12
 
 
 @dataclass
@@ -40,6 +42,7 @@ class ControlGrammar:
     config: ControlGrammarConfig = ControlGrammarConfig()
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
+    _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
 
     def update(
         self,
@@ -47,9 +50,11 @@ class ControlGrammar:
         features: list[ControlPoseFeatures],
         events: list[PoseEvent],
         timestamp: float,
+        scroll_delta_by_hand: dict[str, int] | None = None,
     ) -> list[ControlIntent]:
         intents: list[ControlIntent] = []
         feature_by_hand = {item.hand_id: item for item in features}
+        scroll_delta_by_hand = scroll_delta_by_hand or {}
 
         for event in events:
             self.combo_buffer.add(event)
@@ -60,45 +65,33 @@ class ControlGrammar:
                 continue
             if event.event_type == "entered":
                 if event.pose == "index_pinch":
-                    intents.extend(
-                        self._intent_if_ready(
-                            key=f"{event.hand_id}:left_click",
-                            timestamp=timestamp,
-                            cooldown=self.config.click_cooldown_seconds,
-                            intent=ControlIntent(
-                                name="left_click",
-                                request=ActionRequest(
-                                    action_type=POINTER_ACTION,
-                                    command="button",
-                                    parameters={"button": "left", "action": "click"},
-                                    source="control",
-                                ),
-                                hand_id=event.hand_id,
-                                reason="index pinch tap",
-                            ),
-                        )
-                    )
+                    self._pending_taps[(event.hand_id, "index_pinch")] = True
                 elif event.pose == "middle_pinch":
-                    intents.extend(
-                        self._intent_if_ready(
-                            key=f"{event.hand_id}:right_click",
-                            timestamp=timestamp,
-                            cooldown=self.config.click_cooldown_seconds,
-                            intent=ControlIntent(
-                                name="right_click",
-                                request=ActionRequest(
-                                    action_type=POINTER_ACTION,
-                                    command="button",
-                                    parameters={"button": "right", "action": "click"},
-                                    source="control",
-                                ),
-                                hand_id=event.hand_id,
-                                reason="thumb/middle pinch tap",
-                            ),
-                        )
-                    )
+                    self._pending_taps[(event.hand_id, "middle_pinch")] = True
 
             if event.event_type == "held":
+                if event.pose == "index_pinch":
+                    scroll_delta = scroll_delta_by_hand.get(event.hand_id, 0)
+                    if scroll_delta != 0:
+                        self._pending_taps[(event.hand_id, "index_pinch")] = False
+                        intents.extend(
+                            self._intent_if_ready(
+                                key=f"{event.hand_id}:scroll",
+                                timestamp=timestamp,
+                                cooldown=self.config.scroll_cooldown_seconds,
+                                intent=ControlIntent(
+                                    name="scroll",
+                                    request=ActionRequest(
+                                        action_type=POINTER_ACTION,
+                                        command="scroll",
+                                        parameters={"amount_y": scroll_delta},
+                                        source="control",
+                                    ),
+                                    hand_id=event.hand_id,
+                                    reason="index pinch hold with vertical motion",
+                                ),
+                            )
+                        )
                 if event.pose in {"sideways_open_palm_left", "sideways_open_palm_right"}:
                     direction = "-1" if event.pose.endswith("left") else "+1"
                     intents.extend(
@@ -123,6 +116,30 @@ class ControlGrammar:
                             args=[direction],
                             hand_id=event.hand_id,
                             reason="fist held in side zone",
+                        )
+                    )
+
+            if event.event_type == "released":
+                if event.pose == "index_pinch":
+                    intents.extend(
+                        self._click_intent_if_tap(
+                            hand_id=event.hand_id,
+                            pose="index_pinch",
+                            button="left",
+                            timestamp=timestamp,
+                            duration=event.duration,
+                            reason="index pinch tap",
+                        )
+                    )
+                elif event.pose == "middle_pinch":
+                    intents.extend(
+                        self._click_intent_if_tap(
+                            hand_id=event.hand_id,
+                            pose="middle_pinch",
+                            button="right",
+                            timestamp=timestamp,
+                            duration=event.duration,
+                            reason="thumb/middle pinch tap",
                         )
                     )
 
@@ -192,6 +209,37 @@ class ControlGrammar:
                 hand_id=hand_id,
                 reason=reason,
                 high_risk=high_risk,
+            ),
+        )
+
+    def _click_intent_if_tap(
+        self,
+        *,
+        hand_id: str,
+        pose: str,
+        button: str,
+        timestamp: float,
+        duration: float,
+        reason: str,
+    ) -> list[ControlIntent]:
+        pending_key = (hand_id, pose)
+        pending = self._pending_taps.pop(pending_key, False)
+        if not pending or duration > self.config.tap_max_seconds:
+            return []
+        return self._intent_if_ready(
+            key=f"{hand_id}:{button}_click",
+            timestamp=timestamp,
+            cooldown=self.config.click_cooldown_seconds,
+            intent=ControlIntent(
+                name=f"{button}_click",
+                request=ActionRequest(
+                    action_type=POINTER_ACTION,
+                    command="button",
+                    parameters={"button": button, "action": "click"},
+                    source="control",
+                ),
+                hand_id=hand_id,
+                reason=reason,
             ),
         )
 

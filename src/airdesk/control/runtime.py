@@ -30,6 +30,8 @@ class ControlRuntimeConfig:
     cursor_smoothing_alpha: float = 0.35
     cursor_dead_zone_px: int = 3
     mirror_x: bool = True
+    scroll_motion_threshold: float = 0.045
+    scroll_amount_per_step: int = 1
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,8 @@ class ControlRuntime:
     session_id: str = field(default_factory=lambda: str(uuid4()))
     paused: bool = False
     _last_hand_point: tuple[str, float, float] | None = None
+    _pinch_scroll_anchor_y: dict[str, float] = field(default_factory=dict)
+    _last_status: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.paused = self.config.pause_on_start
@@ -104,7 +108,13 @@ class ControlRuntime:
                             active_poses=hand_features.poses,
                         )
                     )
-                self._emit_frame_status(features, events, timestamp=frame.timestamp)
+                scroll_delta_by_hand = self._scroll_delta_by_hand(features)
+                self._emit_frame_status(
+                    features,
+                    events,
+                    timestamp=frame.timestamp,
+                    scroll_delta_by_hand=scroll_delta_by_hand,
+                )
 
                 if self.paused:
                     continue
@@ -125,12 +135,19 @@ class ControlRuntime:
                         cursor_moves += 1
 
                 for intent in self.grammar.update(
-                    features=features, events=events, timestamp=frame.timestamp
+                    features=features,
+                    events=events,
+                    timestamp=frame.timestamp,
+                    scroll_delta_by_hand=scroll_delta_by_hand,
                 ):
                     action_requests += 1
                     result = self._execute_intent(intent)
                     if result.ok:
                         action_successes += 1
+                        self._last_status["executed"] = intent.name
+                        self._last_status["suppressed"] = "none"
+                    else:
+                        self._last_status["suppressed"] = result.message
                     self._emit(
                         "control_action_result",
                         {
@@ -169,9 +186,20 @@ class ControlRuntime:
     def status_text(self) -> str:
         prefix = "paused | " if self.paused else ""
         combo = self.grammar.combo_buffer.summary(now=utc_timestamp())
-        return f"{prefix}Seeing control poses | Combo: {combo or 'empty'}"
+        seeing = self._last_status.get("seeing", "none")
+        armed = self._last_status.get("armed", "none")
+        executed = self._last_status.get("executed", "none")
+        suppressed = self._last_status.get("suppressed", "none")
+        target_window = self._last_status.get("target_window", "active")
+        return (
+            f"{prefix}Seeing: {seeing} | Combo: {combo or 'empty'} | "
+            f"Armed: {armed} | Target window: {target_window} | "
+            f"Executed: {executed} | Suppressed: {suppressed}"
+        )
 
     def _execute_intent(self, intent: ControlIntent) -> ActionResult:
+        if intent.request.command in {"killactive", "movetoworkspace"}:
+            self._last_status["target_window"] = self._active_window_title()
         self._emit(
             "control_action_requested",
             {
@@ -181,6 +209,7 @@ class ControlRuntime:
                 "high_risk": intent.high_risk,
             },
         )
+        self._last_status["armed"] = intent.name
         if intent.request.action_type == POINTER_ACTION:
             if intent.request.command == "button":
                 return self.pointer_target.button(
@@ -194,6 +223,13 @@ class ControlRuntime:
                     PointerScrollEvent(amount_y=int(intent.request.parameters["amount_y"]))
                 )
         return self.hyprland_target.execute(intent.request)
+
+    def _active_window_title(self) -> str:
+        title_getter = getattr(self.hyprland_target, "active_window_title", None)
+        if title_getter is None:
+            return "active"
+        title = title_getter()
+        return title or "active"
 
     def _move_cursor_from_features(
         self,
@@ -235,21 +271,62 @@ class ControlRuntime:
             return None
         return smoothed
 
+    def _scroll_delta_by_hand(self, features: list[ControlPoseFeatures]) -> dict[str, int]:
+        deltas: dict[str, int] = {}
+        active_hand_ids = {feature.hand_id for feature in features}
+        for hand_id in list(self._pinch_scroll_anchor_y):
+            if hand_id not in active_hand_ids:
+                self._pinch_scroll_anchor_y.pop(hand_id, None)
+        for feature in features:
+            if "index_pinch" not in feature.poses:
+                self._pinch_scroll_anchor_y.pop(feature.hand_id, None)
+                continue
+            anchor = self._pinch_scroll_anchor_y.setdefault(feature.hand_id, feature.palm_y)
+            dy = feature.palm_y - anchor
+            if abs(dy) < self.config.scroll_motion_threshold:
+                continue
+            deltas[feature.hand_id] = (
+                -self.config.scroll_amount_per_step
+                if dy < 0
+                else self.config.scroll_amount_per_step
+            )
+            self._pinch_scroll_anchor_y[feature.hand_id] = feature.palm_y
+        return deltas
+
     def _emit_frame_status(
         self,
         features: list[ControlPoseFeatures],
         events: list[PoseEvent],
         *,
         timestamp: float,
+        scroll_delta_by_hand: dict[str, int],
     ) -> None:
+        seeing = [feature.sees() for feature in features]
+        event_summaries = [f"{event.hand_id}:{event.pose}:{event.event_type}" for event in events]
+        suppressed = "paused" if self.paused else "none"
+        if not features:
+            suppressed = "no hands"
+        self._last_status.update(
+            {
+                "seeing": "; ".join(seeing) if seeing else "none",
+                "suppressed": suppressed,
+                "target_window": "active",
+            }
+        )
         if self.event_writer is None:
             return
         self._emit(
             "control_seen",
             {
-                "seeing": [feature.sees() for feature in features],
+                "seeing": seeing,
                 "events": [event.__dict__ for event in events],
+                "event_summaries": event_summaries,
                 "combo": self.grammar.combo_buffer.summary(now=timestamp),
+                "armed": self._last_status.get("armed", "none"),
+                "target_window": self._last_status.get("target_window", "active"),
+                "executed": self._last_status.get("executed", "none"),
+                "suppressed": suppressed,
+                "scroll_delta_by_hand": scroll_delta_by_hand,
             },
         )
 

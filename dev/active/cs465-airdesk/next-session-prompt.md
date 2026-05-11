@@ -120,8 +120,11 @@ Current implementation status:
   is seeing, stable pose events, combo state, cursor moves, requested actions,
   and action results.
 - The current dry-run grammar covers open-hand relative cursor movement, index
-  pinch left click, middle pinch right click, sideways-palm workspace switching,
-  fist side-zone move-window, launcher combo, and deliberate close-window combo.
+  pinch-tap left click, middle-pinch-tap right click, index-pinch-hold vertical
+  scroll, sideways-palm workspace switching, fist side-zone move-window,
+  launcher combo, and deliberate close-window combo.
+- Guarded move/close actions can query the active window title for target-window
+  feedback.
 - Pointer button/scroll real execution is still not enabled. The dry-run input
   adapter is present for tests and future `uinput`/`evdev` work.
 - Focused tests cover primitive control poses, debouncing, combo
@@ -130,12 +133,14 @@ Current implementation status:
 
 Recommended next implementation slice:
 
-1. Add explicit vertical-motion history for index-pinch-hold scroll.
-2. Add the dry-run scroll grammar over that vertical motion.
-3. Improve live status/dashboard language so it clearly shows `Seeing`,
+1. Run live dry-run testing with:
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
+   from the JSONL log and live feel.
+3. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
-4. If live dry-run feels plausible, add active-window title lookup for the
-   close/move-window arming state before any real `killactive` testing.
+4. Only after dry-run feels stable, consider guarded real Hyprland movement
+   with pointer button/scroll still dry-run.
 5. Keep running `uv run ruff check .` and `uv run pytest` after changes.
 
 Safety stance:
