@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 4.5 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 7.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -163,11 +163,12 @@ side-by-side with the older `airdesk run`, `airdesk cursor run`, and
 `airdesk gesture ...` surfaces. Dry-run remains the default. The first slice
 adds primitive control pose facts, stable pose events, a short per-hand combo
 buffer, dry-run pointer button/scroll routing, guarded Hyprland command mapping,
-open-hand relative cursor movement, pinch-tap click vs pinch-hold scroll
-separation, active-window title lookup for guarded move/close status, and JSONL
-control logs. Real pointer button/scroll execution is available through an
-explicit `--pointer-execute` flag using `/dev/uinput`; without that flag,
-pointer button/scroll events remain dry-run even when `--execute` is enabled.
+open-hand relative cursor movement, index-pinch tap/hold for left click and
+select/drag, middle-pinch tap/hold for right click and scroll, active-window
+title lookup for guarded move/close status, and JSONL control logs. Real pointer
+button/scroll execution is available through an explicit `--pointer-execute`
+flag using `/dev/uinput`; without that flag, pointer button/scroll events remain
+dry-run even when `--execute` is enabled.
 
 Control poses are intentionally prioritized rather than treated as independent
 booleans. Fist suppresses pinch artifacts, sideways-open-palm suppresses pinch

@@ -188,8 +188,9 @@ Current MVP grammar candidate:
 | --- | --- | --- |
 | Open hand / relaxed tracked hand in cursor mode | Move cursor | Cursor movement should be modeful and visible. |
 | Index pinch tap | Left click | Requires pointer-button injection through an input adapter. |
+| Index pinch hold | Hold left button for select/drag | Press on hold threshold, release when pinch releases. |
 | Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
-| Index pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
+| Thumb/middle pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
 | Fist held in center | Arm one fist command | Show target window title before any move-window action. |
 | Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace -1` / `movetoworkspace +1`; cooldown to avoid repeated moves. |
 | Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace -1` / `workspace +1`; consume the arm after one switch. |

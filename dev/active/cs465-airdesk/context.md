@@ -263,8 +263,9 @@ MVP grammar candidate:
 
 - Open/relaxed hand in cursor mode: move cursor through Hyprland `movecursor`.
 - Index pinch tap: left click through a future input target.
+- Index pinch hold: hold left button for select/drag through a future input target.
 - Thumb/middle pinch tap: right click through a future input target.
-- Index pinch hold plus vertical movement: scroll through a future input target.
+- Thumb/middle pinch hold plus vertical movement: scroll through a future input target.
 - Fist held center: arm one fist command and show active window title.
 - Fist moved left/right zone: `hyprctl dispatch movetoworkspace -1` / `+1`.
 - Fist moved up/down zone: `hyprctl dispatch workspace -1` / `+1`.
@@ -713,8 +714,9 @@ The first deterministic control slice is now in place:
   guarded Hyprland dispatches for the demo grammar, and open-hand relative
   cursor movement through the existing cursor target abstraction.
 - Pinch behavior is now split so quick index/middle pinch releases become
-  left/right clicks, while index-pinch hold plus vertical palm motion emits
-  dry-run scroll ticks and suppresses the tap.
+  left/right clicks, index-pinch hold presses and holds left button for
+  select/drag, and middle-pinch hold plus vertical palm motion emits scroll
+  ticks and suppresses the tap.
 - Control pose facts are prioritized to reduce overlap from noisy sideways/fist
   tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
   artifacts, and clean pinch suppresses plain open-palm.
@@ -731,7 +733,7 @@ The first deterministic control slice is now in place:
   longer triggers workspace changes.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
   and vertical zones use `top <= 0.30`, `bottom >= 0.70`. Cursor gain defaults
-  to `4.5` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
+  to `7.0` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
   `airdesk control run` for live tuning.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release.

@@ -107,10 +107,9 @@ class UInputPointerInputTarget:
             )
         try:
             fd = self._ensure_device()
-            self._emit(fd, EV_KEY, code, 1)
-            self._emit(fd, EV_SYN, SYN_REPORT, 0)
-            self._emit(fd, EV_KEY, code, 0)
-            self._emit(fd, EV_SYN, SYN_REPORT, 0)
+            for value in _button_values(event.action):
+                self._emit(fd, EV_KEY, code, value)
+                self._emit(fd, EV_SYN, SYN_REPORT, 0)
         except OSError as exc:
             return self._result(
                 ok=False,
@@ -182,6 +181,14 @@ class UInputPointerInputTarget:
 
 def _button_code(button: str) -> int | None:
     return {"left": BTN_LEFT, "right": BTN_RIGHT}.get(button)
+
+
+def _button_values(action: str) -> tuple[int, ...]:
+    if action == "press":
+        return (1,)
+    if action == "release":
+        return (0,)
+    return (1, 0)
 
 
 def _uinput_user_dev() -> bytes:

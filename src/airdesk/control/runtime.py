@@ -26,7 +26,7 @@ class ControlRuntimeConfig:
 
     execute: bool = False
     pause_on_start: bool = False
-    cursor_gain: float = 4.5
+    cursor_gain: float = 7.0
     cursor_smoothing_alpha: float = 0.25
     cursor_dead_zone_px: int = 1
     mirror_x: bool = True
@@ -282,7 +282,7 @@ class ControlRuntime:
             if hand_id not in active_hand_ids:
                 self._pinch_scroll_anchor_y.pop(hand_id, None)
         for feature in features:
-            if "index_pinch" not in feature.poses:
+            if "middle_pinch" not in feature.poses:
                 self._pinch_scroll_anchor_y.pop(feature.hand_id, None)
                 continue
             anchor = self._pinch_scroll_anchor_y.setdefault(feature.hand_id, feature.palm_y)

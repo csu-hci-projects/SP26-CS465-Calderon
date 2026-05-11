@@ -44,6 +44,7 @@ class ControlGrammar:
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
+    _held_buttons: dict[tuple[str, str], str] = field(default_factory=dict)
     _window_move_armed_until: dict[str, float] = field(default_factory=dict)
 
     def update(
@@ -84,9 +85,20 @@ class ControlGrammar:
 
             if event.event_type == "held":
                 if event.pose == "index_pinch":
+                    if event.duration > self.config.tap_max_seconds:
+                        self._pending_taps[(event.hand_id, "index_pinch")] = False
+                        intents.extend(
+                            self._button_hold_intent_if_needed(
+                                hand_id=event.hand_id,
+                                pose="index_pinch",
+                                button="left",
+                                reason="index pinch hold",
+                            )
+                        )
+                elif event.pose == "middle_pinch":
                     scroll_delta = scroll_delta_by_hand.get(event.hand_id, 0)
                     if scroll_delta != 0:
-                        self._pending_taps[(event.hand_id, "index_pinch")] = False
+                        self._pending_taps[(event.hand_id, "middle_pinch")] = False
                         intents.extend(
                             self._intent_if_ready(
                                 key=f"{event.hand_id}:scroll",
@@ -101,7 +113,7 @@ class ControlGrammar:
                                         source="control",
                                     ),
                                     hand_id=event.hand_id,
-                                    reason="index pinch hold with vertical motion",
+                                    reason="middle pinch hold with vertical motion",
                                 ),
                             )
                         )
@@ -155,17 +167,27 @@ class ControlGrammar:
                 if event.pose == "fist":
                     self._window_move_armed_until.pop(event.hand_id, None)
                 if event.pose == "index_pinch":
-                    intents.extend(
-                        self._click_intent_if_tap(
-                            current_features=hand_features,
-                            hand_id=event.hand_id,
-                            pose="index_pinch",
-                            button="left",
-                            timestamp=timestamp,
-                            duration=event.duration,
-                            reason="index pinch tap",
+                    if self._button_is_held(event.hand_id, "index_pinch"):
+                        intents.extend(
+                            self._button_release_intent(
+                                hand_id=event.hand_id,
+                                pose="index_pinch",
+                                button="left",
+                                reason="index pinch hold release",
+                            )
                         )
-                    )
+                    else:
+                        intents.extend(
+                            self._click_intent_if_tap(
+                                current_features=hand_features,
+                                hand_id=event.hand_id,
+                                pose="index_pinch",
+                                button="left",
+                                timestamp=timestamp,
+                                duration=event.duration,
+                                reason="index pinch tap",
+                            )
+                        )
                 elif event.pose == "middle_pinch":
                     intents.extend(
                         self._click_intent_if_tap(
@@ -269,6 +291,13 @@ class ControlGrammar:
         duration: float,
     ) -> list[ControlIntent]:
         if pose == "index_pinch":
+            if self._button_is_held(hand_id, pose):
+                return self._button_release_intent(
+                    hand_id=hand_id,
+                    pose=pose,
+                    button="left",
+                    reason="index pinch hold release after tracking dropout",
+                )
             return self._click_intent_if_tap(
                 current_features=None,
                 hand_id=hand_id,
@@ -289,6 +318,60 @@ class ControlGrammar:
                 reason="thumb/middle pinch tap after tracking dropout",
             )
         return []
+
+    def _button_hold_intent_if_needed(
+        self,
+        *,
+        hand_id: str,
+        pose: str,
+        button: str,
+        reason: str,
+    ) -> list[ControlIntent]:
+        held_key = (hand_id, pose)
+        if held_key in self._held_buttons:
+            return []
+        self._held_buttons[held_key] = button
+        return [
+            ControlIntent(
+                name=f"{button}_button_down",
+                request=ActionRequest(
+                    action_type=POINTER_ACTION,
+                    command="button",
+                    parameters={"button": button, "action": "press"},
+                    source="control",
+                ),
+                hand_id=hand_id,
+                reason=reason,
+            )
+        ]
+
+    def _button_release_intent(
+        self,
+        *,
+        hand_id: str,
+        pose: str,
+        button: str,
+        reason: str,
+    ) -> list[ControlIntent]:
+        held_key = (hand_id, pose)
+        if self._held_buttons.pop(held_key, None) is None:
+            return []
+        return [
+            ControlIntent(
+                name=f"{button}_button_up",
+                request=ActionRequest(
+                    action_type=POINTER_ACTION,
+                    command="button",
+                    parameters={"button": button, "action": "release"},
+                    source="control",
+                ),
+                hand_id=hand_id,
+                reason=reason,
+            )
+        ]
+
+    def _button_is_held(self, hand_id: str, pose: str) -> bool:
+        return (hand_id, pose) in self._held_buttons
 
     def _click_intent_if_tap(
         self,

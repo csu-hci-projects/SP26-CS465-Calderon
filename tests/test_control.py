@@ -245,12 +245,12 @@ def test_fist_workspace_arm_expires_and_clears_on_release(
     assert cleared == []
 
 
-def test_control_grammar_scrolls_on_index_pinch_hold_and_suppresses_tap(
+def test_control_grammar_holds_left_button_on_index_pinch_hold(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
-    grammar = ControlGrammar(ControlGrammarConfig(scroll_cooldown_seconds=0.0))
+    grammar = ControlGrammar()
     features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
 
     grammar.update(
@@ -258,15 +258,47 @@ def test_control_grammar_scrolls_on_index_pinch_hold_and_suppresses_tap(
         events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
         timestamp=1.0,
     )
+    button_down = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "held", 1.5, duration=0.5)],
+        timestamp=1.5,
+    )
+    button_up = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.6, duration=0.6)],
+        timestamp=1.6,
+    )
+
+    assert button_down[0].name == "left_button_down"
+    assert button_down[0].request.parameters == {"button": "left", "action": "press"}
+    assert button_up[0].name == "left_button_up"
+    assert button_up[0].request.parameters == {"button": "left", "action": "release"}
+
+
+def test_control_grammar_scrolls_on_middle_pinch_hold_and_suppresses_tap(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(ControlGrammarConfig(scroll_cooldown_seconds=0.0))
+    features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+
+    grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
     scroll = grammar.update(
         features=features,
-        events=[PoseEvent("hand-0", "index_pinch", "held", 1.4, duration=0.4)],
+        events=[PoseEvent("hand-0", "middle_pinch", "held", 1.4, duration=0.4)],
         timestamp=1.4,
         scroll_delta_by_hand={"hand-0": -1},
     )
     click = grammar.update(
         features=features,
-        events=[PoseEvent("hand-0", "index_pinch", "released", 1.5, duration=0.5)],
+        events=[PoseEvent("hand-0", "middle_pinch", "released", 1.5, duration=0.5)],
         timestamp=1.5,
     )
 

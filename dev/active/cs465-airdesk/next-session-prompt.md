@@ -91,8 +91,9 @@ MVP grammar:
 | --- | --- |
 | Open/relaxed hand in cursor mode | Move cursor |
 | Index pinch tap | Left click |
+| Index pinch hold | Hold left button for select/drag |
 | Thumb/middle pinch tap | Right click |
-| Index pinch hold + vertical movement | Scroll |
+| Thumb/middle pinch hold + vertical movement | Scroll |
 | Fist held center | Arm one fist command and show target window |
 | Fist moved left/right zone | Move active/window-under-cursor to workspace left/right |
 | Fist moved up/down zone | Switch workspace up/down without moving a window |
@@ -120,9 +121,10 @@ Current implementation status:
   is seeing, stable pose events, combo state, cursor moves, requested actions,
   and action results.
 - The current grammar covers open-hand relative cursor movement, index
-  pinch-tap left click, middle-pinch-tap right click, index-pinch-hold vertical
-  scroll, center-fist armed move-window/workspace switching, launcher combo, and
-  deliberate close-window combo.
+  pinch-tap left click, index-pinch-hold left-button drag/select,
+  middle-pinch-tap right click, middle-pinch-hold vertical scroll, center-fist
+  armed move-window/workspace switching, launcher combo, and deliberate
+  close-window combo.
 - Control pose facts are prioritized to reduce accidental overlap: fist
   suppresses pinch artifacts, sideways-open-palm suppresses pinch artifacts, and
   clean pinch suppresses plain open-palm.
@@ -133,9 +135,11 @@ Current implementation status:
   `workspace` switch. Open palm no longer triggers workspace changes during
   cursor use. Side zones default to `left <= 0.30` and `right >= 0.70`; vertical
   zones default to `top <= 0.30` and `bottom >= 0.70`; cursor gain defaults to
-  `4.5` with smoother `0.25` alpha and a `1px` dead zone.
+  `7.0` with smoother `0.25` alpha and a `1px` dead zone.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
-  release can still click if tracking briefly drops on release.
+  release can still click if tracking briefly drops on release. Holding an index
+  pinch past the tap window presses and holds the left button until release;
+  middle-pinch hold is reserved for scrolling.
 - Pointer button/scroll real execution is available with explicit
   `--pointer-execute` through `/dev/uinput`.
 - Focused tests cover primitive control poses, debouncing, combo
@@ -145,7 +149,7 @@ Current implementation status:
 Recommended next implementation slice:
 
 1. Run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 4.5 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 7.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
    from the JSONL log and live feel.
 3. Improve live status/dashboard rendering so it clearly shows `Seeing`,

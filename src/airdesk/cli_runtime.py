@@ -404,7 +404,7 @@ def control_run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
-    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 4.5,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 7.0,
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),

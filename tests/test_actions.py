@@ -186,3 +186,25 @@ def test_uinput_pointer_target_creates_device_and_emits_click() -> None:
     assert (UI_DEV_CREATE, 0) in ioctls
     assert len(writes) >= 5
     assert closed == [42]
+
+
+def test_uinput_pointer_target_can_press_and_release_without_click_pulse() -> None:
+    writes: list[bytes] = []
+
+    target = UInputPointerInputTarget(
+        opener=lambda _path, _flags: 42,
+        writer=lambda _fd, data: writes.append(data) or len(data),
+        ioctl=lambda _fd, _request, _arg: 0,
+        closer=lambda _fd: None,
+    )
+
+    press = target.button(PointerButtonEvent(button="left", action="press"))
+    writes_after_press = len(writes)
+    release = target.button(PointerButtonEvent(button="left", action="release"))
+
+    assert press.ok is True
+    assert release.ok is True
+    assert press.command_preview == ["uinput.button", "left", "press"]
+    assert release.command_preview == ["uinput.button", "left", "release"]
+    assert writes_after_press >= 3
+    assert len(writes) == writes_after_press + 2
