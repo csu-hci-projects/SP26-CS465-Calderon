@@ -256,6 +256,20 @@ def test_evaluate_tcn_v2_help_exposes_decoder_controls() -> None:
     assert "--device" in result.stdout
 
 
+def test_evaluate_tcn_v2_heads_help_exposes_final_frame_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "evaluate-tcn-v2-heads", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--threshold" in result.stdout
+    assert "--batch-size" in result.stdout
+    assert "--device" in result.stdout
+
+
 def test_diagnose_tcn_events_help_exposes_decoder_controls() -> None:
     result = CliRunner().invoke(
         app,
@@ -1346,6 +1360,81 @@ def test_gesture_holdout_tcn_v2_cli_writes_split_summary(
     assert payload["split"]["train_manifest"].endswith("holdout-train-manifest.json")
     assert payload["summary"]["matched_events"] == 1
     assert model.exists()
+
+
+def test_gesture_evaluate_tcn_v2_heads_cli_writes_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    model = tmp_path / "model.pt"
+    output = tmp_path / "head-metrics.json"
+    manifest.write_text("{}", encoding="utf-8")
+    model.write_bytes(b"fake checkpoint")
+
+    def fake_evaluate_tcn_v2_head_manifest(**kwargs: object) -> dict[str, object]:
+        assert kwargs["threshold"] == 0.5
+        assert kwargs["batch_size"] == 8
+        assert kwargs["device"] == "cpu"
+        return {
+            "recognizer": "tcn_v2_final_frame_heads",
+            "window_count": 3,
+            "evidence_targets": ["intentional_motion", "ipn_g01", "start", "end"],
+            "threshold_source": "fixed",
+            "macro": {"precision": 0.5, "recall": 0.5, "f1": 0.5},
+            "micro": {
+                "true_positive": 1,
+                "false_positive": 1,
+                "false_negative": 1,
+                "precision": 0.5,
+                "recall": 0.5,
+                "f1": 0.5,
+            },
+            "gesture_macro": {"precision": 0.25, "recall": 0.25, "f1": 0.25},
+            "gesture_micro": {
+                "true_positive": 1,
+                "false_positive": 1,
+                "false_negative": 1,
+                "precision": 0.5,
+                "recall": 0.5,
+                "f1": 0.5,
+            },
+            "per_head": {},
+            "gesture_confusion": {"labels": [], "matrix": {}, "top_confusions": []},
+        }
+
+    monkeypatch.setattr(
+        cli_tcn,
+        "evaluate_tcn_v2_head_manifest",
+        fake_evaluate_tcn_v2_head_manifest,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "evaluate-tcn-v2-heads",
+            "--manifest",
+            str(manifest),
+            "--model",
+            str(model),
+            "--out",
+            str(output),
+            "--threshold",
+            "0.5",
+            "--batch-size",
+            "8",
+            "--device",
+            "cpu",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=tcn_v2_final_frame_heads windows=3 heads=4" in result.stdout
+    assert "gesture_macro_f1=0.250" in result.stdout
+    assert "wrote head_metrics=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["recognizer"] == "tcn_v2_final_frame_heads"
 
 
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:

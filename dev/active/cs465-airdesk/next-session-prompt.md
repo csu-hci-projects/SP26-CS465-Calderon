@@ -218,6 +218,14 @@ files in `data/public/ipn/videos/`. The importer now supports the official Drive
 annotation filenames directly, and a one-video 120-frame smoke conversion
 succeeded.
 
+All-IPN pre-launch update: the generated all-IPN labels/manifests have now had
+a staff-level review pass. Labels match the official non-`D0X` annotation events
+and keep `D0X` as background; manifests use `stream-invariant-v2` and only
+`data/public/ipn/...` artifacts. The correct held-out quality metric for the
+all-IPN checkpoint is `airdesk gesture evaluate-tcn-v2-heads`, not the older
+AirDesk left/right `evaluate-tcn-v2` event decoder. The reviewed launch script
+is `scripts/train-ipn-all-tcn-v2.sh`, but no all-IPN model has been trained yet.
+
 Next-session assignment:
 
 Continue from the new public-dataset / atomic-gesture planning pivot. The
@@ -244,17 +252,18 @@ Architectural stance:
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. Inspect the generated IPN smoke recording, labels, features, mapping CSV, and
-   manifest under `data/public/ipn/airdesk-smoke/`.
-3. Convert the selected IPN train/validation videos into
-   ignored `data/public/ipn/airdesk/` artifacts.
-4. Train/evaluate IPN-only TCN v2 atomic models before mixing them with AirDesk
-   data. The first checkpoint was IPN-only, trained from
-   `data/public/ipn/airdesk-train/tcn-v2-ipn-train-manifest.json`, and maps
-   `G05` / `G06` throw-left/right to AirDesk left/right atomic evidence as a
-   proxy.
-5. Then compare AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or
-   hybrid training on the AirDesk source-held-out V2 recordings.
+2. Do not start training unless Caden explicitly confirms. If confirmed, launch
+   the reviewed overnight script with durable logging:
+   `LOG_PATH=data/logs/tcn-v2-ipn-all-80ep-h64-l4-overnight.log nohup bash scripts/train-ipn-all-tcn-v2.sh >/dev/null 2>&1 &`.
+3. After training completes, review
+   `data/evaluations/ipn-all/tcn-v2-ipn-all-80ep-h64-l4-final-frame-heads.json`
+   for per-head precision/recall/F1, macro/micro scores, and gesture-head
+   confusions.
+4. Then decide which IPN heads are useful as AirDesk priors and compare
+   AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or hybrid training
+   on the AirDesk source-held-out V2 recordings.
+5. Keep the old atomic `G05` / `G06` checkpoint interpretation narrow: it was
+   IPN-only lateral evidence, not an AirDesk swipe model.
 6. Preserve current behavior unless a bug is found and fixed intentionally. Keep
    live desktop actions disabled/dry-run by default.
 7. Update README/context/tasks/tracking-samples/next-session docs with whatever

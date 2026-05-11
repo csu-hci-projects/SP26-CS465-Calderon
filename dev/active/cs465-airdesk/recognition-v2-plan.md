@@ -537,6 +537,13 @@ Map only IPN `G05` / `G06` to AirDesk `swipe_left` / `swipe_right`; leave other
 IPN gesture classes as background/negative until AirDesk adds explicit heads for
 click/select or push. Do not train combo labels from public data.
 
+Update: that throw-proxy model was diagnostic only; the all-IPN pivot now trains
+all non-`D0X` IPN classes as named custom evidence heads. Judge that model with
+`airdesk gesture evaluate-tcn-v2-heads`, which scores final-frame per-head
+precision/recall/F1 on held-out causal windows. The old `evaluate-tcn-v2`
+command remains an AirDesk left/right event decoder and is not the right metric
+for all-IPN custom heads.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:

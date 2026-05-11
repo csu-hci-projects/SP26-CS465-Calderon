@@ -308,6 +308,12 @@ Current TCN v2 implementation state:
   stroke scores / raises background for release. It is still replay/evaluation
   tooling only. It supports `--early-match-tolerance-seconds` for causal peaks
   that fire slightly before hand-labeled event starts.
+- `airdesk gesture evaluate-tcn-v2-heads` is the held-out metric for custom
+  evidence-head manifests such as all-IPN. It scores each evidence head on the
+  final frame of each causal window and writes per-head precision/recall/F1,
+  macro/micro summaries, and a gesture-head confusion table. Use this for the
+  all-IPN model; the older `evaluate-tcn-v2` command is still the AirDesk
+  left/right swipe event-decoder view.
 - `airdesk gesture diagnose-tcn-v2-events` now writes the detailed v2 replay
   diagnostics that the summary lacks: matches, misses, false activations,
   repeated fires, nearest candidate/event timing, decoder scores, and raw
@@ -577,7 +583,13 @@ existing tracked IPN recordings without rerunning MediaPipe:
 `data/public/ipn/airdesk-train-ipn-all/tcn-v2-ipn-all-train-manifest.json`
 has 148 sources, 3,117 labeled gesture events, and 99,510 windows; the held-out
 test manifest has 52 sources, 1,101 labeled events, and 35,706 windows. This is
-the right overnight training target.
+the right overnight training target. A pre-launch review on this checkout
+confirmed the generated labels match the official non-`D0X` annotation events,
+`D0X` remains background, the manifests use `stream-invariant-v2`, and CUDA sees
+the NVIDIA T550. The reviewed launch script is
+`scripts/train-ipn-all-tcn-v2.sh`; it trains the all-IPN model and then runs
+`evaluate-tcn-v2-heads` on the held-out test manifest. Do not launch it until
+Caden explicitly confirms.
 
 ## Current Roadmap
 

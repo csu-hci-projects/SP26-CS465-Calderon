@@ -19,7 +19,11 @@ from airdesk.analysis.evaluation import (
     save_holdout_json,
 )
 from airdesk.analysis.recording import RecordingAnalysis, analyze_recording, format_analysis
-from airdesk.analysis.tcn_v2 import diagnose_tcn_v2_manifest_events, evaluate_tcn_v2_manifest
+from airdesk.analysis.tcn_v2 import (
+    diagnose_tcn_v2_manifest_events,
+    evaluate_tcn_v2_head_manifest,
+    evaluate_tcn_v2_manifest,
+)
 
 __all__ = [
     "GestureEvaluation",
@@ -31,6 +35,7 @@ __all__ = [
     "diagnose_dtw_recording",
     "diagnose_tcn_manifest_events",
     "diagnose_tcn_v2_manifest_events",
+    "evaluate_tcn_v2_head_manifest",
     "evaluate_dtw_holdout",
     "evaluate_dtw_recognizer",
     "evaluate_motion_recognizer",

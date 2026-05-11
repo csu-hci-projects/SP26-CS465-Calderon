@@ -160,3 +160,20 @@ recordings without rerunning MediaPipe:
 - held-out test:
   `data/public/ipn/airdesk-test-ipn-all/tcn-v2-ipn-all-test-manifest.json`
   with 52 sources, 1,101 labeled IPN gesture events, and 35,706 windows.
+
+Pre-launch review notes:
+
+- Generated all-IPN labels match the official non-`D0X` annotation events:
+  3,117 train events and 1,101 held-out test events. `D0X` does not appear as a
+  label or feature event.
+- A small number of labeled events have no tracked MediaPipe hand rows, so
+  manifest `start` / `end` evidence counts are lower than annotation event
+  counts: 3,115 train and 1,095 test. Keep those as background-only tracking
+  gaps rather than moving boundaries onto unrelated later motion.
+- The all-IPN manifests use `stream-invariant-v2` and contain only
+  `data/public/ipn/...` feature/label paths.
+- Use `airdesk gesture evaluate-tcn-v2-heads` after training. The existing
+  `evaluate-tcn-v2` command decodes AirDesk `swipe_left` / `swipe_right` events
+  and is not the right quality metric for `ipn_g01` ... `ipn_g11`.
+- The reviewed launch script is `scripts/train-ipn-all-tcn-v2.sh`; do not run it
+  until Caden explicitly confirms the overnight launch.

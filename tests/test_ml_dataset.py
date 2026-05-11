@@ -11,6 +11,7 @@ from airdesk.analysis import (
     diagnose_candidate_events,
     diagnose_tcn_v2_manifest_events,
     evaluate_tcn_manifest,
+    evaluate_tcn_v2_head_manifest,
     evaluate_tcn_v2_manifest,
 )
 from airdesk.analysis.evaluation import evaluate_candidates
@@ -864,6 +865,129 @@ def test_tcn_v2_manifest_accepts_custom_evidence_heads(tmp_path: Path) -> None:
         manifest.windows[0],
         evidence_targets=manifest.evidence_targets,
     )[1] == [1.0, 1.0, 0.0, 1.0, 0.0]
+
+
+def test_tcn_v2_head_evaluation_scores_custom_final_frame_heads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    features = tmp_path / "ipn.csv"
+    labels_dir = tmp_path / "labels"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event=""),
+            _row(timestamp=1.1, frame_index=1, event="ipn_g01"),
+            _row(timestamp=1.2, frame_index=2, event="ipn_g01"),
+            _row(timestamp=1.3, frame_index=3, event=""),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="ipn_g01",
+                    start_time=1.1,
+                    end_time=1.2,
+                ),
+            ),
+        ),
+        labels_dir / "ipn.labels.json",
+    )
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.1,
+        stride_seconds=0.1,
+        min_rows=2,
+        min_gesture_fraction=0.25,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+        evidence_targets=("intentional_motion", "ipn_g01", "ipn_g02", "start", "end"),
+    )
+    manifest_path = tmp_path / "manifest.json"
+    save_tcn_dataset_manifest(manifest, manifest_path)
+
+    def fake_predict_causal_tcn_v2_manifest(**_kwargs: object) -> list[CausalTcnEvidencePrediction]:
+        return [
+            CausalTcnEvidencePrediction(
+                sample_id=manifest.windows[0].sample_id,
+                feature_path=str(features),
+                label_path=str(labels_dir / "ipn.labels.json"),
+                hand_id="hand-0",
+                timestamp=1.1,
+                window_start=1.0,
+                window_end=1.1,
+                evidence={
+                    "intentional_motion": 0.9,
+                    "ipn_g01": 0.9,
+                    "ipn_g02": 0.1,
+                    "start": 0.9,
+                    "end": 0.1,
+                },
+            ),
+            CausalTcnEvidencePrediction(
+                sample_id=manifest.windows[1].sample_id,
+                feature_path=str(features),
+                label_path=str(labels_dir / "ipn.labels.json"),
+                hand_id="hand-0",
+                timestamp=1.2,
+                window_start=1.1,
+                window_end=1.2,
+                evidence={
+                    "intentional_motion": 0.8,
+                    "ipn_g01": 0.2,
+                    "ipn_g02": 0.8,
+                    "start": 0.1,
+                    "end": 0.1,
+                },
+            ),
+            CausalTcnEvidencePrediction(
+                sample_id=manifest.windows[2].sample_id,
+                feature_path=str(features),
+                label_path=str(labels_dir / "ipn.labels.json"),
+                hand_id="hand-0",
+                timestamp=1.3,
+                window_start=1.2,
+                window_end=1.3,
+                evidence={
+                    "intentional_motion": 0.1,
+                    "ipn_g01": 0.1,
+                    "ipn_g02": 0.1,
+                    "start": 0.1,
+                    "end": 0.1,
+                },
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "airdesk.analysis.tcn_v2.predict_causal_tcn_v2_manifest",
+        fake_predict_causal_tcn_v2_manifest,
+    )
+
+    payload = evaluate_tcn_v2_head_manifest(
+        manifest_path=manifest_path,
+        model_path=tmp_path / "model.pt",
+        threshold=0.5,
+        device="cpu",
+    )
+
+    assert payload["recognizer"] == "tcn_v2_final_frame_heads"
+    assert payload["window_count"] == 3
+    assert payload["per_head"]["ipn_g01"]["true_positive"] == 1
+    assert payload["per_head"]["ipn_g01"]["false_negative"] == 1
+    assert payload["per_head"]["ipn_g02"]["false_positive"] == 1
+    assert payload["gesture_confusion"]["matrix"]["ipn_g01"]["ipn_g02"] == 1
+    assert payload["gesture_confusion"]["matrix"]["background"]["background"] == 1
 
 
 def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path) -> None:

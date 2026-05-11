@@ -214,6 +214,15 @@ Current Sprint 4 dataset/evidence:
   `49` false activations. Interpretation: IPN-only teaches useful left/right
   lateral evidence, but the current two-head decoder fires on other dynamic IPN
   gestures. Treat it as pretraining signal, not an AirDesk swipe model.
+- All-IPN pre-launch update: the next public-data target trains all non-`D0X`
+  IPN gestures as named evidence heads. A review pass confirmed generated labels
+  match the official non-`D0X` annotations, `D0X` remains background, manifests
+  use `stream-invariant-v2`, and CUDA sees the NVIDIA T550. The held-out metric
+  for this model is `airdesk gesture evaluate-tcn-v2-heads`, which scores final
+  causal-window frames per evidence head; the old `evaluate-tcn-v2` path is only
+  the AirDesk left/right swipe decoder. The reviewed overnight script is
+  `scripts/train-ipn-all-tcn-v2.sh`, but no all-IPN model has been trained yet
+  and the script must not be launched until Caden explicitly confirms.
 - CLI cleanup has continued without changing `airdesk.cli:app`: offline TCN commands are in `src/airdesk/cli_tcn.py`, replay/offline gesture diagnostics are in `src/airdesk/cli_gesture_replay.py`, label/features commands are in `src/airdesk/cli_labeling.py`, small camera/profile/Hyprland commands are in `src/airdesk/cli_system.py`, shared helpers are in `src/airdesk/cli_support.py`, live preview/status helpers are in `src/airdesk/cli_live.py`, live tracking/watch diagnostics are in `src/airdesk/cli_live_commands.py`, recording/collection/chart-prompt ownership is in `src/airdesk/cli_recording.py`, runtime/live-action commands and guarded execution policy are in `src/airdesk/cli_runtime.py`, and tracker construction is in `src/airdesk/cli_tracking.py`. `src/airdesk/cli.py` is now about 60 LOC of app wiring plus `doctor` / `analyze`. TCN v2 frame-evidence target construction now lives in `src/airdesk/ml/tcn_v2_evidence.py`, sequence-evidence training/prediction lives in `src/airdesk/ml/tcn_v2_train.py`, replay decoder/evaluation glue lives in `src/airdesk/analysis/tcn_v2.py`, and generic manifest/window construction remains in `src/airdesk/ml/dataset.py`. The next session should keep pushing the review/refactor before recording targeted V2 data; the best target is likely focused test cleanup or a smaller production audit if `tests/test_cli.py` remains the clearest maintainability drag. Preserve public command behavior, test help/output surfaces, and keep dry-run safety intact.
 
 Current Sprint 5 direction:

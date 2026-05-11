@@ -453,6 +453,31 @@ evidence, but the current two-stroke-head decoder is too broad when all other
 dynamic IPN gestures are treated as background. This is pretraining evidence,
 not a deployable AirDesk swipe recognizer.
 
+## All-IPN Overnight Training Gate
+
+The all-IPN manifests train every non-`D0X` IPN gesture as a named evidence
+head instead of treating those gestures as background:
+
+- train manifest:
+  `data/public/ipn/airdesk-train-ipn-all/tcn-v2-ipn-all-train-manifest.json`;
+- held-out test manifest:
+  `data/public/ipn/airdesk-test-ipn-all/tcn-v2-ipn-all-test-manifest.json`.
+
+Use the reviewed script only after Caden explicitly confirms the launch:
+
+```bash
+LOG_PATH=data/logs/tcn-v2-ipn-all-80ep-h64-l4-overnight.log \
+  nohup bash scripts/train-ipn-all-tcn-v2.sh >/dev/null 2>&1 &
+```
+
+The script checks that CUDA sees the NVIDIA T550, trains
+`data/models/gestures/tcn-v2-ipn-all-80ep-h64-l4.pt`, and then writes held-out
+final-frame head metrics to
+`data/evaluations/ipn-all/tcn-v2-ipn-all-80ep-h64-l4-final-frame-heads.json`.
+Use `airdesk gesture evaluate-tcn-v2-heads` for all-IPN model quality; the
+older `evaluate-tcn-v2` command is still the AirDesk left/right event-decoder
+view and is not a meaningful all-IPN score.
+
 ## Notes Template
 
 For each sample, write:

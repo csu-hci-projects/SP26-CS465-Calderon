@@ -12,6 +12,7 @@ from airdesk.analysis import (
     diagnose_tcn_manifest_events,
     diagnose_tcn_v2_manifest_events,
     evaluate_tcn_manifest,
+    evaluate_tcn_v2_head_manifest,
     evaluate_tcn_v2_manifest,
     holdout_totals,
 )
@@ -428,6 +429,62 @@ def gesture_evaluate_tcn_v2(
     )
     if out is not None:
         typer.echo(f"wrote evaluation={out}")
+
+
+def gesture_evaluate_tcn_v2_heads(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 evidence manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 checkpoint path."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON metrics output path.")] = None,
+    threshold: Annotated[
+        float | None,
+        typer.Option(
+            help=(
+                "Fixed probability threshold for every evidence head. Omit to use "
+                "checkpoint calibration thresholds."
+            ),
+        ),
+    ] = None,
+    batch_size: Annotated[int, typer.Option(help="Prediction batch size.")] = 64,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
+) -> None:
+    """Evaluate final-frame TCN v2 evidence heads without the AirDesk swipe decoder."""
+    try:
+        payload = evaluate_tcn_v2_head_manifest(
+            manifest_path=manifest,
+            model_path=model,
+            threshold=threshold,
+            batch_size=batch_size,
+            device=device,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    macro = payload["macro"]
+    micro = payload["micro"]
+    gesture_macro = payload["gesture_macro"]
+    typer.echo(
+        "recognizer=tcn_v2_final_frame_heads "
+        f"windows={payload['window_count']} heads={len(payload['evidence_targets'])} "
+        f"threshold_source={payload['threshold_source']} "
+        f"macro_f1={float(macro['f1']):.3f} micro_f1={float(micro['f1']):.3f} "
+        f"gesture_macro_f1={float(gesture_macro['f1']):.3f} device={device}"
+    )
+    if out is not None:
+        typer.echo(f"wrote head_metrics={out}")
 
 
 def gesture_diagnose_tcn_events(
@@ -1123,6 +1180,7 @@ def register_tcn_commands(gesture_app: typer.Typer) -> None:
     gesture_app.command("train-tcn-v2")(gesture_train_tcn_v2)
     gesture_app.command("evaluate-tcn")(gesture_evaluate_tcn)
     gesture_app.command("evaluate-tcn-v2")(gesture_evaluate_tcn_v2)
+    gesture_app.command("evaluate-tcn-v2-heads")(gesture_evaluate_tcn_v2_heads)
     gesture_app.command("diagnose-tcn-events")(gesture_diagnose_tcn_events)
     gesture_app.command("diagnose-tcn-v2-events")(gesture_diagnose_tcn_v2_events)
     gesture_app.command("holdout-tcn")(gesture_holdout_tcn)

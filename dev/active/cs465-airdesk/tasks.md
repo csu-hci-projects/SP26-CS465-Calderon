@@ -158,6 +158,8 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Download IPN Hand official annotations/video archives into ignored `data/public/ipn/`, extract 200 videos, and smoke the official annotation converter path
 - [x] Train an IPN-only TCN v2 atomic gesture model on IPN `G05` / `G06` throw-left/right proxy labels and evaluate held-out IPN replay before hybridizing datasets
 - [x] Add custom v2 evidence heads and generate IPN-all manifests so all 13 non-background IPN gestures are trained as named heads instead of background
+- [x] Add an all-IPN final-frame evidence-head evaluator so held-out IPN quality is measured per head instead of through the old AirDesk swipe decoder
+- [x] Add a reviewed overnight all-IPN TCN v2 launch script with durable ignored logging, CUDA preflight, and held-out head-metric evaluation
 - [ ] Train and evaluate an IPN-only all-gesture TCN v2 model before deciding which IPN gestures map cleanly into AirDesk commands
 - [ ] Compare AirDesk-only, public-pretrained/fine-tuned, and hybrid training on AirDesk source-held-out recordings
 - [ ] Add a command-grammar layer for combos over atomic emitted events instead of training every combo as its own TCN class
