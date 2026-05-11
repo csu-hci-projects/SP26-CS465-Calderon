@@ -11,6 +11,9 @@ from airdesk.state.types import ActionRequest, ActionResult, utc_timestamp
 
 HYPRLAND_DISPATCH = "hyprland.dispatch"
 SAFE_HYPRLAND_DISPATCHERS = frozenset({"workspace", "movefocus"})
+CONTROL_HYPRLAND_DISPATCHERS = frozenset(
+    {"global", "workspace", "movetoworkspace", "killactive"}
+)
 
 
 class CommandRunner(Protocol):

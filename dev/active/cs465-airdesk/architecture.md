@@ -170,6 +170,11 @@ Add:
   `tests/test_control_debounce.py`, `tests/test_control_combos.py`,
   `tests/test_control_grammar.py`, and `tests/test_input_actions.py`.
 
+Implementation status: the first side-by-side control slice is now present in
+`src/airdesk/control/`, with combined focused tests in `tests/test_control.py`
+plus action/CLI coverage. The runtime is dry-run-first and keeps pointer
+button/scroll real execution behind a future input adapter.
+
 Do not do in the first implementation slice:
 
 - Do not move large learned/DTW/TCN files just to make the tree look cleaner.

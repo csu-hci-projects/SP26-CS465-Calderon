@@ -695,6 +695,27 @@ do not remove the need for AirDesk-specific mode/negative handling.
 
 ## Current Roadmap
 
+## Logic-Control Implementation Update
+
+The first deterministic control slice is now in place:
+
+- `src/airdesk/control/` owns primitive control pose facts, stable pose
+  debouncing, a per-hand combo buffer, the first dry-run grammar, and a runtime
+  loop.
+- `airdesk control run` is registered as the side-by-side class-demo surface.
+  It defaults to dry-run and writes JSONL events for what the system is seeing,
+  stable pose events, combo state, requested actions, cursor moves, and action
+  results.
+- Existing `airdesk run`, `airdesk cursor run`, and `airdesk gesture ...`
+  commands remain stable. The new control runtime does not import DTW, motion,
+  learned-filter, TCN, or IPN modules.
+- The first action boundary includes dry-run pointer button/scroll requests,
+  guarded Hyprland dispatches for the demo grammar, and open-hand relative
+  cursor movement through the existing cursor target abstraction.
+- Real pointer click/scroll injection is still intentionally not enabled. The
+  dry-run input target is in place so a future `uinput`/`evdev` adapter can be
+  added behind focused tests.
+
 ### Sprint 3: Pilot-Safe Live Command Mode
 
 Build the live command loop:

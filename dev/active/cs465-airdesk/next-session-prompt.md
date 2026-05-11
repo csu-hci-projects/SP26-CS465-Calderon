@@ -40,10 +40,11 @@ stable timing, visible feedback, and dry-run-first safety.
 Separation/cleanup decision:
 
 Build this as a side-by-side live-control path, not as more code inside the old
-learned/dynamic gesture stack. Prefer a new `src/airdesk/control/` package and
-an `airdesk control run` command. Keep `airdesk gesture ...`, old `airdesk run`,
-and old `airdesk cursor run` stable as diagnostic/legacy surfaces until the new
-control runtime is proven.
+learned/dynamic gesture stack. The first side-by-side slice now exists in
+`src/airdesk/control/`, with `airdesk control run` registered as the new dry-run
+surface. Keep `airdesk gesture ...`, old `airdesk run`, and old
+`airdesk cursor run` stable as diagnostic/legacy surfaces until the new control
+runtime is proven live.
 
 Why the pivot happened:
 
@@ -110,33 +111,32 @@ Caden's Hyprland setup:
 - No external pointer helper (`ydotool`, `dotool`, `wtype`) is installed.
 - Python `evdev` is not installed as of the planning pass.
 
-Recommended first implementation slice:
+Current implementation status:
 
-1. Review existing:
-   - `src/airdesk/gestures/primitives.py`
-   - `src/airdesk/modes/cursor.py`
-   - `src/airdesk/actions/hyprland.py`
-   - `src/airdesk/actions/cursor.py`
-   - `src/airdesk/cli_runtime.py`
-   - existing cursor/action/runtime tests.
-2. Add the new live-control package/CLI boundary:
-   - `src/airdesk/control/`
-   - `airdesk control run`
-   - dry-run by default.
-3. Add primitive logic features for:
-   - stable open palm
-   - stable fist
-   - sideways open palm
-   - index pinch
-   - middle pinch
-   - palm zone
-   - pinch vertical motion for scroll.
-4. Add the stable-event debouncer and combo buffer.
-5. Implement the grammar in dry-run first.
-6. Expand guarded action adapters only as needed.
-7. Add dashboard/status and JSONL logging for pose/combo/action state.
-8. Add focused tests for primitives, debouncing, combo matching/expiry,
-   grammar conflicts, cooldown, dry-run routing, and guarded Hyprland allowlist.
+- `src/airdesk/control/` contains primitive control pose facts, stable pose
+  debouncing, a per-hand combo buffer, the first dry-run grammar, and a runtime
+  loop.
+- `airdesk control run` exists and defaults to dry-run. It logs what the system
+  is seeing, stable pose events, combo state, cursor moves, requested actions,
+  and action results.
+- The current dry-run grammar covers open-hand relative cursor movement, index
+  pinch left click, middle pinch right click, sideways-palm workspace switching,
+  fist side-zone move-window, launcher combo, and deliberate close-window combo.
+- Pointer button/scroll real execution is still not enabled. The dry-run input
+  adapter is present for tests and future `uinput`/`evdev` work.
+- Focused tests cover primitive control poses, debouncing, combo
+  matching/consumption, grammar routing/cooldown, dry-run pointer routing,
+  guarded Hyprland command allowlisting, and `airdesk control run`.
+
+Recommended next implementation slice:
+
+1. Add explicit vertical-motion history for index-pinch-hold scroll.
+2. Add the dry-run scroll grammar over that vertical motion.
+3. Improve live status/dashboard language so it clearly shows `Seeing`,
+   `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
+4. If live dry-run feels plausible, add active-window title lookup for the
+   close/move-window arming state before any real `killactive` testing.
+5. Keep running `uv run ruff check .` and `uv run pytest` after changes.
 
 Safety stance:
 

@@ -212,6 +212,16 @@ def test_cursor_run_help_exposes_cursor_controls() -> None:
     assert "--events-out" in result.stdout
 
 
+def test_control_run_help_exposes_control_controls() -> None:
+    result = CliRunner().invoke(app, ["control", "run", "--help"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0
+    assert "--execute" in result.stdout
+    assert "--cursor-gain" in result.stdout
+    assert "--events-out" in result.stdout
+    assert "--pause-on-start" in result.stdout
+
+
 def test_train_tcn_help_exposes_optional_training_controls() -> None:
     result = CliRunner().invoke(app, ["gesture", "train-tcn", "--help"], env={"COLUMNS": "200"})
 
@@ -2119,6 +2129,39 @@ def test_cursor_run_defaults_to_dry_run_target(tmp_path: Path) -> None:
     ]
     assert events[0].payload["execute"] is False
     assert events[0].payload["target"] == "cursor-dry-run"
+
+
+def test_control_run_defaults_to_dry_run_targets(tmp_path: Path) -> None:
+    output = tmp_path / "control-events.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "control",
+            "run",
+            "--backend",
+            "replay",
+            "--recording",
+            "tests/fixtures/replay-one-frame.jsonl",
+            "--events-out",
+            str(output),
+            "--max-frames",
+            "1",
+            "--no-show",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "control frames=1" in result.stdout
+    events = [record.payload for record in iter_recording(output) if record.kind == "event"]
+    assert [event.event_type for event in events] == [
+        "control_session_start",
+        "control_seen",
+        "control_session_finish",
+    ]
+    assert events[0].payload["execute"] is False
+    assert events[0].payload["cursor_target"] == "cursor-dry-run"
+    assert events[0].payload["pointer_target"] == "pointer-dry-run"
 
 
 def test_replay_reports_frame_event_and_recognizer_counts() -> None:

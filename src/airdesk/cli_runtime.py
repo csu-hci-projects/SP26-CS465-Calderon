@@ -11,12 +11,15 @@ import typer
 from airdesk.actions.cursor import CursorTarget, DryRunCursorTarget, HyprlandCursorTarget
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import (
+    CONTROL_HYPRLAND_DISPATCHERS,
     HYPRLAND_DISPATCH,
     SAFE_HYPRLAND_DISPATCHERS,
     GuardedHyprlandActionTarget,
 )
+from airdesk.actions.input import DryRunPointerInputTarget
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_tracking import _make_tracker
+from airdesk.control.runtime import ControlRuntime, ControlRuntimeConfig, format_control_summary
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
 from airdesk.recording.jsonl import JsonlRecordingWriter
@@ -353,9 +356,144 @@ def cursor_run(
     typer.echo(f"cursor {mode} complete frames={frame_count} moves={move_count}")
 
 
+def control_run(
+    backend: Annotated[str, typer.Option(help="Tracking backend to run.")] = "mediapipe",
+    recording: Annotated[Path | None, typer.Option(help="Replay JSONL recording path.")] = None,
+    device: Annotated[
+        str,
+        typer.Option(help="Camera path, numeric index, or replay path."),
+    ] = "/dev/video0",
+    execute: Annotated[
+        bool,
+        typer.Option(help="Opt in to guarded real Hyprland cursor/window actions."),
+    ] = False,
+    monitor: Annotated[
+        str | None,
+        typer.Option(help="Hyprland monitor name to constrain cursor movement."),
+    ] = None,
+    width: Annotated[int | None, typer.Option(help="Requested capture width.")] = None,
+    height: Annotated[int | None, typer.Option(help="Requested capture height.")] = None,
+    fps: Annotated[float | None, typer.Option(help="Requested capture FPS.")] = None,
+    fourcc: Annotated[str | None, typer.Option(help="Requested camera FOURCC, e.g. MJPG.")] = None,
+    model_path: Annotated[
+        Path,
+        typer.Option(help="MediaPipe Hand Landmarker .task model path."),
+    ] = DEFAULT_HAND_LANDMARKER_MODEL,
+    max_num_hands: Annotated[
+        int,
+        typer.Option(help="Maximum number of hands for MediaPipe to track."),
+    ] = DEFAULT_HAND_LANDMARKER_MAX_NUM_HANDS,
+    min_detection_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum palm detection confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_presence_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum hand landmark presence confidence."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    min_tracking_confidence: Annotated[
+        float,
+        typer.Option(help="Minimum tracking confidence / box IoU threshold."),
+    ] = DEFAULT_HAND_LANDMARKER_MIN_CONFIDENCE,
+    auto_download_model: Annotated[
+        bool,
+        typer.Option(help="Download the MediaPipe model to --model-path if missing."),
+    ] = True,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 1.0,
+    cursor_smoothing_alpha: Annotated[
+        float,
+        typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
+    ] = 0.35,
+    cursor_dead_zone_px: Annotated[
+        int,
+        typer.Option(help="Ignore cursor movements below this pixel size."),
+    ] = 3,
+    mirror_x: Annotated[
+        bool,
+        typer.Option(help="Mirror hand X movement for webcam control."),
+    ] = True,
+    events_out: Annotated[
+        Path | None,
+        typer.Option(help="Write control runtime events as JSONL."),
+    ] = None,
+    pause_on_start: Annotated[
+        bool,
+        typer.Option(help="Start paused; press p in preview to resume."),
+    ] = False,
+    max_frames: Annotated[int | None, typer.Option(help="Stop after this many frames.")] = None,
+    show: Annotated[bool, typer.Option(help="Show an OpenCV landmark debug window.")] = True,
+) -> None:
+    """Run deterministic landmark-logic control.
+
+    Dry-run is default. `--execute` enables guarded Hyprland cursor/window
+    dispatches, while pointer buttons/scroll remain dry-run until a real input
+    injection target is installed and tested.
+    """
+    source = str(recording) if recording is not None else device
+    tracker = _make_tracker(
+        backend=backend,
+        device=source,
+        max_frames=max_frames,
+        show=show,
+        camera_settings=CameraSettings(width=width, height=height, fps=fps, fourcc=fourcc),
+        model_path=model_path,
+        auto_download_model=auto_download_model,
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_presence_confidence=min_presence_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+    cursor_target: CursorTarget = HyprlandCursorTarget() if execute else DryRunCursorTarget()
+    hyprland_target = (
+        GuardedHyprlandActionTarget(allowed_dispatchers=CONTROL_HYPRLAND_DISPATCHERS)
+        if execute
+        else DryRunActionTarget()
+    )
+    event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
+    runtime = ControlRuntime(
+        tracker=tracker,
+        cursor_target=cursor_target,
+        hyprland_target=hyprland_target,
+        pointer_target=DryRunPointerInputTarget(),
+        event_writer=event_writer,
+        config=ControlRuntimeConfig(
+            execute=execute,
+            pause_on_start=pause_on_start,
+            cursor_gain=cursor_gain,
+            cursor_smoothing_alpha=cursor_smoothing_alpha,
+            cursor_dead_zone_px=cursor_dead_zone_px,
+            mirror_x=mirror_x,
+        ),
+        monitor=monitor,
+    )
+    _attach_control_preview_controls(tracker, runtime)
+    try:
+        typer.echo(format_control_summary(runtime.run()))
+    finally:
+        if event_writer is not None:
+            event_writer.close()
+
+
 def _attach_runtime_preview_controls(
     tracker: HandTrackerBackend,
     runtime: AirdeskRuntime,
+) -> None:
+    if not isinstance(tracker, MediaPipeHandTrackerBackend):
+        return
+    tracker.preview_status_provider = runtime.status_text
+
+    def handle_key(key: int) -> bool:
+        if key == ord("p"):
+            runtime.toggle_pause()
+            return True
+        return False
+
+    tracker.preview_key_handler = handle_key
+
+
+def _attach_control_preview_controls(
+    tracker: HandTrackerBackend,
+    runtime: ControlRuntime,
 ) -> None:
     if not isinstance(tracker, MediaPipeHandTrackerBackend):
         return
@@ -401,7 +539,10 @@ def _make_runtime_action_target(
     return GuardedHyprlandActionTarget()
 
 
-def register_runtime_commands(app: typer.Typer, cursor_app: typer.Typer) -> None:
+def register_runtime_commands(
+    app: typer.Typer, cursor_app: typer.Typer, control_app: typer.Typer
+) -> None:
     """Register live runtime commands while keeping `airdesk.cli:app` stable."""
     app.command()(run)
     cursor_app.command("run")(cursor_run)
+    control_app.command("run")(control_run)

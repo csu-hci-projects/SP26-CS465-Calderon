@@ -22,25 +22,25 @@ Immediate next-session checklist:
       `public-dataset-survey.md`, `tracking-samples.md`, and this file.
 - [ ] Review existing `StaticHandPoseRecognizer`, `PinchCursorController`,
       Hyprland actions, cursor actions, runtime preview hooks, and tests.
-- [ ] Add the new live-control path side-by-side, preferably under
+- [x] Add the new live-control path side-by-side, preferably under
       `src/airdesk/control/` and `airdesk control run`; do not overload the old
       learned/dynamic `gestures` stack.
 - [ ] Add primitive logic features for stable open palm, fist, sideways open
       palm, index pinch, middle pinch, palm zone, and simple vertical motion.
-- [ ] Add a stable-pose debouncer that emits enter/held/release events rather
+- [x] Add a stable-pose debouncer that emits enter/held/release events rather
       than per-frame spam.
-- [ ] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
+- [x] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
       matching, event consumption, and cooldown.
 - [ ] Implement MVP grammar in dry-run first:
       open/relaxed cursor move; index pinch left click; middle pinch right click;
       pinch-hold vertical scroll; sideways palm workspace left/right; fist
       move-window left/right; open palm -> sideways palm launcher; open palm ->
       fist -> open palm close-window combo.
-- [ ] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
+- [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
       and pointer button/scroll injection. Execution must stay guarded.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
       `Target window`, `Executed`, and `Suppressed`.
-- [ ] Add focused tests for primitive pose classification, debouncing, combo
+- [x] Add focused tests for primitive pose classification, debouncing, combo
       expiry/matching, grammar conflicts, cooldown, dry-run action routing, and
       guarded Hyprland command allowlisting.
 - [ ] Keep old `airdesk gesture ...`, `airdesk run`, and `airdesk cursor run`
@@ -61,6 +61,14 @@ Immediate next-session checklist:
 - [ ] Keep learned/DTW/motion gestures out of live desktop actions.
 - [ ] Run `uv run ruff check .` and `uv run pytest`.
 - [ ] Commit meaningful chunks and push to `origin/main`.
+
+First logic-control slice note: `airdesk control run` exists and is dry-run by
+default. The current grammar covers open-hand relative cursor movement, index
+pinch left click, middle pinch right click, sideways-palm workspace switching,
+fist side-zone move-window, launcher combo, and deliberate close-window combo.
+The missing MVP pieces are explicit vertical-motion features, pinch-hold scroll,
+and richer live overlay labels for `Armed`, `Target window`, `Executed`, and
+`Suppressed`.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,
