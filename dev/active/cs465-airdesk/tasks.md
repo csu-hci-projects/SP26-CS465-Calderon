@@ -1,8 +1,36 @@
 # AirDesk Tasks
 
-Current next sprint: shift recognition work toward continuous gesture spotting, then scope the Sprint 5 pilot around whichever recognizer has event-level replay evidence.
+Current next sprint: make recognition mode-aware before any more live-control
+ambition. The all-IPN TCN v2 checkpoint is a useful public-data prior, but live
+preview showed that it is too eager as a global recognizer. Build preview and
+evaluation support for command/cursor/zoom mode groups, per-head thresholds,
+margin/persistence checks, and targeted AirDesk hard negatives.
 
-Current context-reset task: continue the staff-level review/refactor pass before recording new V2 data. Caden wants the next session to be more aggressive about doing the right architectural cleanup, not just cosmetic extraction. This is still pre-training, so do not protect weak legacy TCN code just because it exists: if a cleaner model/training/evaluation architecture makes sense, rewrite it now while the cost is low. Look for bugs, dead code, oversized files/functions, weak boundaries, missing tests, TCN architecture weaknesses, training/loss/calibration issues, and inference-speed problems; keep dry-run/live-action safety intact and leave the repo ready for targeted V2 collection.
+Current context-reset task: implement a mode-aware learned-recognition filter
+around TCN v2 preview/evaluation while keeping actions disabled. Do not treat all
+13 IPN heads as globally available commands. Point/click heads belong in cursor
+mode; zoom heads belong in zoom/media mode; global command mode should start
+with a smaller robust vocabulary after false-positive review.
+
+Immediate next-session checklist:
+
+- [ ] Keep `git status` clean before editing; preserve user changes.
+- [ ] Read `README.md`, `context.md`, `recognition-v2-plan.md`,
+      `public-dataset-survey.md`, `tracking-samples.md`, and this file.
+- [ ] Add a mode/profile vocabulary map for learned/custom TCN v2 heads.
+- [ ] Let live preview show only enabled heads for the selected diagnostic mode,
+      while retaining an all-head debug view.
+- [ ] Add per-head thresholds and top-vs-runner-up margin checks for custom heads.
+- [ ] Add persistence/cooldown logic for the plain-language recognized callout so
+      a single noisy window does not count as "for sure."
+- [ ] Add replay/log evaluation over the latest live calibration JSONL to report
+      which heads would fire under each mode/filter.
+- [ ] Plan or collect a small AirDesk hard-negative set only after the filter
+      surface exists: open hand idle, accidental pointing, reaching, resting,
+      cursor-like motion, and normal desk motion with hands visible.
+- [ ] Keep learned/DTW/motion gestures out of live desktop actions.
+- [ ] Run `uv run ruff check .` and `uv run pytest`.
+- [ ] Commit meaningful chunks and push to `origin/main`.
 
 ## Phase 0: Project Setup
 

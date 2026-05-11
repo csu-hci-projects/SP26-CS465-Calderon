@@ -504,6 +504,27 @@ scores `start_f1=0.455` and `end_f1=0.468` at ±0.5s, rising to about `0.53` at
 clean enough to drive event decoding without a boundary-target or decoder
 tolerance pass.
 
+Live all-IPN preview follow-up:
+
+- `watch-tcn-v2` now displays custom all-IPN heads directly and disables the
+  AirDesk swipe decoder/candidates for custom-head checkpoints.
+- The dashboard shows plain-language callouts such as `Recognized: Throw left`
+  when the top custom head crosses `--evidence-threshold`.
+- Caden's live test showed the model is not safe as a global command recognizer:
+  `Throw up`, `Open twice`, `Zoom out`, and point-like heads can fire during
+  normal open-hand presence or ordinary motion.
+- Parsed calibration log:
+  `data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl`, 328
+  predictions. Top heads above `0.80`: `Open twice` 28, `Throw up` 26,
+  `Throw left` 11, `Throw down` 9, `Point one finger` 8.
+- Interpretation: this is not the earlier unfair two-class false-fire mistake;
+  all non-`D0X` IPN gestures were named heads. The issue is AirDesk deployment
+  semantics. Use mode-aware filters, per-head thresholds/margins,
+  persistence/cooldown, and AirDesk hard negatives before any action binding.
+- Suggested mode grouping: point/click/double-click heads only in cursor mode;
+  zoom heads only in zoom/media mode; global command mode starts with a smaller
+  robust vocabulary after negative testing. Keep learned actions disabled.
+
 ## Notes Template
 
 For each sample, write:

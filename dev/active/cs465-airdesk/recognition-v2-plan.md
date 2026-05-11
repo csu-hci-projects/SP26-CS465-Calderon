@@ -544,6 +544,18 @@ precision/recall/F1 on held-out causal windows. The old `evaluate-tcn-v2`
 command remains an AirDesk left/right event decoder and is not the right metric
 for all-IPN custom heads.
 
+2026-05-11 live update: the best all-IPN checkpoint
+`data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt` is useful as a
+public-data prior, but it is not a global AirDesk command recognizer. Live
+preview showed high-confidence false activations from normal hand presence:
+`Throw up`, `Open twice`, `Zoom out`, and point-like heads can fire without an
+intentional command. The next architecture step is mode-aware recognition:
+command mode, cursor mode, and zoom/media mode should each enable only their
+own heads, with per-head thresholds, top-vs-runner-up margins, persistence, and
+cooldown. Point/click heads belong in cursor mode; zoom heads belong in
+zoom/media mode; fragile heads such as `Throw up` / `Open twice` should remain
+disabled globally until hard-negative AirDesk data says otherwise.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -565,10 +577,15 @@ Expected next-session flow:
 
 1. Read docs and report.
 2. Review current code boundaries.
-3. Refine this plan.
-4. Use the `watch-tcn-v2` dashboard for no-action live feel-tests and log predictions/candidates plus motion features.
-5. Use `holdout-tcn-v2` and TCN v2 diagnostics to keep train/test claims honest before changing thresholds.
-6. Plan or collect the targeted continuous V2 slice above only as a held-out train/test slice with explicit wrist-twist and desk-motion negatives.
+3. Implement a mode-aware custom-head filter around `watch-tcn-v2` and
+   evaluation/log replay before collecting more data.
+4. Preserve an all-head debug view, but make the default diagnostic view show
+   only enabled heads for the selected mode.
+5. Replay the latest live calibration JSONL through candidate mode filters to
+   quantify how many false recognitions each filter would suppress.
+6. Only then plan/collect a small hard-negative AirDesk slice with open-hand
+   idle, accidental pointing, reaching, resting, cursor-like motion, and normal
+   desk motion.
 7. Keep live desktop actions disabled.
 
 If the next agent finds the plan too broad, it should narrow TCN v2 to the

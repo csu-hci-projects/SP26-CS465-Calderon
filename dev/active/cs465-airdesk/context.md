@@ -606,6 +606,37 @@ checkpoint, held-out boundary scores are about `start_f1=0.455` and
 `end_f1=0.468` at ±0.5s, rising to about `0.53` at ±1.0s, so the signal is near
 the annotations but not yet clean enough for event decoding.
 
+2026-05-11 live all-IPN preview update: Caden tested the best all-IPN checkpoint
+live with the no-action dashboard. The preview path now treats custom all-IPN
+heads fairly: it shows named `ipn_*` evidence directly, disables the AirDesk
+left/right swipe decoder for custom-head checkpoints, and displays
+plain-language recognition callouts when the top custom head crosses
+`--evidence-threshold`. The live test exposed the next blocker: the model is a
+useful IPN prior but too eager as a global command recognizer. Open-hand and
+ordinary hand presence can trigger `Throw up`; `Point one finger` / `Point two
+fingers` are easy to do accidentally; `Open twice` and `Zoom out` can spike
+without intentional commands. A parsed calibration run
+(`data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl`) had 328
+predictions; top heads above `0.80` were dominated by `Open twice` (28),
+`Throw up` (26), `Throw left` (11), `Throw down` (9), and `Point one finger`
+(8). This does not invalidate the fair held-out IPN evaluation, but it means
+AirDesk needs mode-aware filtering, per-head thresholds/margins, and targeted
+AirDesk negatives before any learned command binding.
+
+Mode decision from the live test: do not keep all 13 IPN heads globally enabled.
+Point/click/double-click heads belong in cursor mode, where point-like hand
+postures are expected. Zoom heads belong in a separate zoom/media mode. The
+global command mode should start with only robust command gestures after
+AirDesk-specific negative testing; `Throw up`, `Open twice`, and `Zoom out`
+should be disabled globally for now. Live desktop actions remain blocked.
+
+Official IPN model note: the public IPN baselines are RGB/video models such as
+ResNeXt/ResNet variants, not MediaPipe-landmark TCN checkpoints. They are useful
+for comparison or a separate heavier RGB fallback experiment, but they are not a
+drop-in replacement for the current landmark stream. The official continuous
+recognition numbers are also much weaker than isolated classification, so they
+do not remove the need for AirDesk-specific mode/negative handling.
+
 ## Current Roadmap
 
 ### Sprint 3: Pilot-Safe Live Command Mode

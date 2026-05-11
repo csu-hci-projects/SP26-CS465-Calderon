@@ -177,3 +177,25 @@ Pre-launch review notes:
   and is not the right quality metric for `ipn_g01` ... `ipn_g11`.
 - The reviewed launch script is `scripts/train-ipn-all-tcn-v2.sh`; do not run it
   until Caden explicitly confirms the overnight launch.
+
+Post-training update: the best all-IPN checkpoint is
+`data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt`. It scored held-out
+`gesture_macro_f1=0.521`, `gesture_micro_f1=0.742`, top-1 gesture-positive
+final-frame accuracy `0.757`, and top-3 `0.934`. This is a useful public-data
+prior and a much fairer evaluation than the old two-head proxy.
+
+Live-preview caveat: fair held-out IPN evaluation did not imply safe AirDesk
+command use. Caden's live all-gesture test showed that open-hand presence and
+ordinary movement can trigger confident `Throw up`, `Open twice`, `Zoom out`,
+and point-like heads. The all-IPN model should now be treated as a pretraining
+prior and diagnostic surface. Do not enable all 13 heads globally. Use mode
+groups: point/click heads in cursor mode, zoom heads in zoom/media mode, and a
+small command-mode vocabulary only after AirDesk hard-negative testing.
+
+Official IPN model check: the public IPN baselines are heavier RGB/video models
+such as ResNeXt/ResNet variants, including RGB/optical-flow/segmentation inputs.
+They are not MediaPipe-landmark TCN checkpoints and are not drop-in replacements
+for AirDesk's current feature stream. They may be useful as a comparison or
+separate fallback experiment, but the reported continuous-recognition setting is
+substantially harder than isolated classification, so an official IPN model does
+not remove the need for AirDesk-specific mode gating and false-positive data.
