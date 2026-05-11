@@ -254,6 +254,19 @@ class LiveDashboardRenderer:
             thickness=2,
         )
         meter_y = y + 48
+        filter_info = hand.get("filter", {})
+        if isinstance(filter_info, dict):
+            guess = self._recognition_guess(filter_info)
+            if guess is not None:
+                self._draw_recognition_badge(
+                    image,
+                    text=guess["text"],
+                    x=x + 12,
+                    y=meter_y - 10,
+                    width=width - 24,
+                    kind=str(guess["kind"]),
+                )
+                meter_y += 32
         recognized = hand.get("recognized")
         if isinstance(recognized, dict):
             name = str(recognized.get("name", ""))
@@ -263,10 +276,11 @@ class LiveDashboardRenderer:
                     image,
                     text=f"Recognized: {name} {float(score):.2f}",
                     x=x + 12,
-                    y=y + 38,
+                    y=meter_y - 10,
                     width=width - 24,
+                    kind="recognized",
                 )
-                meter_y = y + 72
+                meter_y += 32
         meters = (
             ("L", float(hand.get("left", 0.0)), (80, 170, 255)),
             ("R", float(hand.get("right", 0.0)), (75, 215, 120)),
@@ -299,7 +313,6 @@ class LiveDashboardRenderer:
                 thickness=1,
             )
             meter_y += 20
-        filter_info = hand.get("filter", {})
         if isinstance(filter_info, dict):
             filter_line = self._recognition_filter_line(filter_info)
             if filter_line:
@@ -363,19 +376,52 @@ class LiveDashboardRenderer:
         x: int,
         y: int,
         width: int,
+        kind: str = "recognized",
     ) -> None:
-        self.cv2.rectangle(image, (x, y), (x + width, y + 24), (28, 92, 62), -1)
-        self.cv2.rectangle(image, (x, y), (x + width, y + 24), (86, 210, 142), 1)
+        fills = {
+            "recognized": ((28, 92, 62), (86, 210, 142), (238, 255, 246)),
+            "seeing": ((38, 65, 104), (95, 160, 245), (232, 242, 255)),
+            "suppressed": ((90, 70, 34), (220, 170, 82), (255, 243, 214)),
+        }
+        fill, border, text_color = fills.get(kind, fills["seeing"])
+        self.cv2.rectangle(image, (x, y), (x + width, y + 26), fill, -1)
+        self.cv2.rectangle(image, (x, y), (x + width, y + 26), border, 1)
         self._put_text_fit(
             image=image,
             text=text,
             x=x + 8,
-            y=y + 17,
+            y=y + 18,
             max_width=width - 16,
-            scale=0.38,
-            color=(238, 255, 246),
-            thickness=1,
+            scale=0.42,
+            color=text_color,
+            thickness=2,
         )
+
+    def _recognition_guess(self, filter_info: dict[str, Any]) -> dict[str, str] | None:
+        top = filter_info.get("top")
+        if not isinstance(top, dict):
+            return None
+        name = str(top.get("name") or top.get("target") or "")
+        score = top.get("score")
+        if not name or not isinstance(score, int | float):
+            return None
+        reason = str(filter_info.get("suppressed_reason") or "")
+        if reason in {"", "cooldown"}:
+            return {"text": f"Seeing: {name} {float(score):.2f}", "kind": "seeing"}
+        if reason == "top_head_suppressed_by_mode":
+            return {
+                "text": f"Suppressed: {name} {float(score):.2f}",
+                "kind": "suppressed",
+            }
+        if reason == "persistence_pending":
+            count = filter_info.get("persistence_count")
+            required = filter_info.get("required_persistence")
+            if isinstance(count, int) and isinstance(required, int):
+                return {
+                    "text": f"Seeing: {name} {float(score):.2f} {count}/{required}",
+                    "kind": "seeing",
+                }
+        return {"text": f"Seeing: {name} {float(score):.2f}", "kind": "seeing"}
 
     def _motion_feature_lines(self, features: dict[str, Any]) -> tuple[str, ...]:
         def value(name: str) -> float:

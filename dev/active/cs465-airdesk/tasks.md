@@ -41,6 +41,12 @@ calibration log, default command-mode filtering (`threshold=0.80`, `margin=0.15`
 recognitions, both `ipn_g05` / Throw left; `Throw up`, `Open twice`, and `Zoom
 out` were suppressed by mode rather than shown as global commands.
 
+Live-preview UI note: the dashboard now separates "what the model currently
+sees" from "what the filter accepts." Each hand card shows a prominent
+`Seeing:` or `Suppressed:` badge for the current top custom head, while the
+green `Recognized:` badge is reserved for heads that pass mode, threshold,
+margin, persistence, and cooldown.
+
 ## Phase 0: Project Setup
 
 - [ ] Initialize new repo in `/home/caden/projects/AirDesk` if desired

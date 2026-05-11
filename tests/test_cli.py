@@ -679,6 +679,11 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
                 "hand-0": {
                     "mode": "command",
                     "suppressed_reason": "top_head_suppressed_by_mode",
+                    "top": {
+                        "target": "ipn_g07",
+                        "name": "Open twice",
+                        "score": 0.72,
+                    },
                     "top_enabled": {
                         "target": "ipn_g05",
                         "name": "Throw left",
@@ -724,6 +729,11 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
             "filter": {
                 "mode": "command",
                 "suppressed_reason": "top_head_suppressed_by_mode",
+                "top": {
+                    "target": "ipn_g07",
+                    "name": "Open twice",
+                    "score": 0.72,
+                },
                 "top_enabled": {
                     "target": "ipn_g05",
                     "name": "Throw left",

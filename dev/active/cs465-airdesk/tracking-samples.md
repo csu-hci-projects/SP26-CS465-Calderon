@@ -123,7 +123,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 
 `watch-dtw` uses a live-optimized latest-window scan. Offline DTW evaluation still scans all candidate windows, but live preview only scores windows ending at the newest usable hand frame so it does not repeatedly rescan the whole rolling buffer.
 `watch-tcn-v2` is still no-action preview only; use the dashboard and JSONL logs to inspect evidence bars, emit-vs-peak delay, and motion features such as position, hand scale, normalized dx, peak x velocity, and direction consistency. If a wrist-twist/lightbulb motion fires as a swipe, record that as a targeted V2 negative rather than sweeping thresholds.
-For all-IPN checkpoints, use `--recognition-mode command|cursor|zoom-media|all-ipn` and keep `--debug-all-heads` for diagnosis. The dashboard now shows enabled heads plus filter/suppression reasons so a high raw head such as `Throw up` or `Open twice` does not automatically become a confident recognition.
+For all-IPN checkpoints, use `--recognition-mode command|cursor|zoom-media|all-ipn` and keep `--debug-all-heads` for diagnosis. The dashboard now shows enabled heads plus filter/suppression reasons so a high raw head such as `Throw up` or `Open twice` does not automatically become a confident recognition. During live calibration, look at the large per-hand `Seeing:` / `Suppressed:` badge first; it is the immediate top model guess. The green `Recognized:` badge appears only after the mode-aware filter accepts the guess.
 
 ## Public Dataset Conversion Smoke
 

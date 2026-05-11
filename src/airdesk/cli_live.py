@@ -351,6 +351,7 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
                 hand["filter"] = {
                     "mode": recognition_frame.get("mode"),
                     "suppressed_reason": recognition_frame.get("suppressed_reason"),
+                    "top": recognition_frame.get("top"),
                     "top_enabled": recognition_frame.get("top_enabled"),
                     "margin": recognition_frame.get("margin"),
                     "persistence_count": recognition_frame.get("persistence_count"),
