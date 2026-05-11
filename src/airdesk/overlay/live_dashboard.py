@@ -241,6 +241,9 @@ class LiveDashboardRenderer:
         self.cv2.rectangle(image, (x, y), (x + width, y + height), (36, 40, 49), -1)
         self.cv2.rectangle(image, (x, y), (x + width, y + height), (72, 80, 96), 1)
         label = str(hand.get("hand_id", "hand"))
+        features = hand.get("features", {})
+        if isinstance(features, dict) and features.get("handedness"):
+            label = f"{label} {features['handedness']}"
         dx = hand.get("dx")
         dx_text = "" if dx is None else f" dx={float(dx):.2f}"
         self._put_text_fit(
@@ -327,7 +330,6 @@ class LiveDashboardRenderer:
                     thickness=1,
                 )
                 meter_y += 20
-        features = hand.get("features", {})
         if isinstance(features, dict):
             motion_lines = self._motion_feature_lines(features)
             feature_y = meter_y + 6
@@ -428,12 +430,22 @@ class LiveDashboardRenderer:
             return float(features.get(name, 0.0))
 
         return (
-            f"pos={value('palm_x'):.2f},{value('palm_y'):.2f} scale={value('hand_scale'):.2f}",
+            (
+                f"pos={value('palm_x'):.2f},{value('palm_y'):.2f} "
+                f"scale={value('hand_scale'):.2f} {self._motion_direction_label(value('dx_scale'))}"
+            ),
             (
                 f"dx={value('dx_scale'):.2f} raw={value('dx_raw'):.2f} "
                 f"vx={value('peak_vx'):.2f} c={value('consistency'):.2f}"
             ),
         )
+
+    def _motion_direction_label(self, dx_scale: float) -> str:
+        if dx_scale > 0.15:
+            return "raw +x"
+        if dx_scale < -0.15:
+            return "raw -x"
+        return "raw flat"
 
     def _draw_meter(
         self,

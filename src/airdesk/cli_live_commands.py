@@ -488,6 +488,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         rows: list[FrameFeatureRow] = []
         latest_predictions: dict[str, CausalTcnV2LivePrediction] = {}
         latest_rows_by_hand: dict[str, object] = {}
+        latest_hands_by_id: dict[str, object] = {}
         decoder_frames: list[DecoderFrame] = []
         emitted_candidates: set[tuple[str | None, str, int]] = set()
         state: dict[str, object] = {
@@ -594,6 +595,8 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                 state["stream_count"] = len(hand_streams)
                 state["row_count"] = len(rows)
                 state["status"] = _format_live_tcn_v2_preview_predictions(state)
+                latest_hands_by_id.clear()
+                latest_hands_by_id.update({hand.hand_id: hand for hand in frame.hands})
                 for hand_id, hand_rows in hand_streams.items():
                     latest_rows_by_hand[hand_id] = hand_rows[-1]
                     if len(hand_rows) < min_rows:
@@ -641,7 +644,8 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                             "prediction": prediction.to_dict(),
                             "decoder_scores": decoder_scores,
                             "features": _live_tcn_v2_row_motion_features(
-                                latest_rows_by_hand.get(hand_id)
+                                latest_rows_by_hand.get(hand_id),
+                                hand=latest_hands_by_id.get(hand_id),
                             ),
                             "recognition_filter": recognition_frame.to_dict(),
                             "relative_time_seconds": (

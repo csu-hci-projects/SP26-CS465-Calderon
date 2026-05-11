@@ -1251,6 +1251,10 @@ def gesture_replay_tcn_v2_log(
     suppressed = " ".join(
         f"{reason}={count}" for reason, count in sorted(summary["suppressed"].items())
     )
+    motion = " ".join(
+        f"{target}:{','.join(f'{bucket}={count}' for bucket, count in sorted(counts.items()))}"
+        for target, counts in sorted(summary["raw_top_motion"].items())
+    )
     typer.echo(
         f"tcn_v2_log_replay mode={summary['mode']} "
         f"debug_all_heads={summary['debug_all_heads']} "
@@ -1259,6 +1263,7 @@ def gesture_replay_tcn_v2_log(
     typer.echo(f"enabled_heads={','.join(summary['enabled_heads'])}")
     typer.echo(f"recognition_counts={counts or 'none'}")
     typer.echo(f"raw_top_above_threshold={raw or 'none'}")
+    typer.echo(f"raw_top_motion={motion or 'none'}")
     typer.echo(f"suppressed={suppressed or 'none'}")
     if out is not None:
         typer.echo(f"wrote replay_summary={out}")

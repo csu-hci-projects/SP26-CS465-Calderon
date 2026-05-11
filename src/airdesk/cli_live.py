@@ -418,7 +418,11 @@ def _max_tcn_v2_visible_evidence(evidence: dict[str, float]) -> float:
     return top[0][1] if top else evidence.get("intentional_motion", 0.0)
 
 
-def _live_tcn_v2_row_motion_features(row: object) -> dict[str, float]:
+def _live_tcn_v2_row_motion_features(
+    row: object,
+    *,
+    hand: object | None = None,
+) -> dict[str, float | str]:
     """Return compact motion features that explain live TCN v2 evidence spikes."""
     feature_names = (
         ("palm_x", "palm_x"),
@@ -435,6 +439,12 @@ def _live_tcn_v2_row_motion_features(row: object) -> dict[str, float]:
         value = getattr(row, attr, None)
         if isinstance(value, int | float):
             features[output_name] = float(value)
+    handedness = getattr(hand, "handedness", None)
+    if isinstance(handedness, str) and handedness:
+        features["handedness"] = handedness
+    hand_confidence = getattr(hand, "confidence", None)
+    if isinstance(hand_confidence, int | float):
+        features["hand_confidence"] = float(hand_confidence)
     return features
 
 

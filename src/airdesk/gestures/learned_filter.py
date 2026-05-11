@@ -267,6 +267,7 @@ def evaluate_tcn_v2_live_jsonl(
     predictions = 0
     recognitions: list[dict[str, object]] = []
     raw_top_above_threshold: dict[str, int] = {}
+    raw_top_motion: dict[str, dict[str, int]] = {}
     suppressed: dict[str, int] = {}
     enabled_top_counts: dict[str, int] = {}
     with open(path, encoding="utf-8") as handle:
@@ -294,6 +295,11 @@ def evaluate_tcn_v2_live_jsonl(
                 raw_top_above_threshold[frame.top[0]] = (
                     raw_top_above_threshold.get(frame.top[0], 0) + 1
                 )
+                features = payload.get("features", {})
+                if isinstance(features, dict):
+                    bucket = _dx_bucket(features.get("dx_scale"))
+                    counts = raw_top_motion.setdefault(frame.top[0], {})
+                    counts[bucket] = counts.get(bucket, 0) + 1
             if frame.top_enabled is not None:
                 enabled_top_counts[frame.top_enabled[0]] = (
                     enabled_top_counts.get(frame.top_enabled[0], 0) + 1
@@ -320,6 +326,7 @@ def evaluate_tcn_v2_live_jsonl(
         "recognitions": len(recognitions),
         "recognition_counts": recognition_counts,
         "raw_top_above_threshold": raw_top_above_threshold,
+        "raw_top_motion": raw_top_motion,
         "enabled_top_counts": enabled_top_counts,
         "suppressed": suppressed,
         "events": recognitions,
@@ -366,3 +373,13 @@ def _pair_to_dict(pair: tuple[str, float] | None) -> dict[str, object] | None:
         "name": tcn_v2_evidence_display_name(pair[0]),
         "score": pair[1],
     }
+
+
+def _dx_bucket(value: object) -> str:
+    if not isinstance(value, int | float):
+        return "dx_unknown"
+    if value > 0.15:
+        return "dx_pos"
+    if value < -0.15:
+        return "dx_neg"
+    return "dx_flat"

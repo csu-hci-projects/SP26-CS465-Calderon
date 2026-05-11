@@ -103,6 +103,10 @@ def test_tcn_v2_live_jsonl_replay_scores_filtered_recognitions(tmp_path: Path) -
     assert summary["predictions"] == 3
     assert summary["recognition_counts"] == {"ipn_g05": 1}
     assert summary["raw_top_above_threshold"] == {"ipn_g03": 1, "ipn_g05": 2}
+    assert summary["raw_top_motion"] == {
+        "ipn_g03": {"dx_flat": 1},
+        "ipn_g05": {"dx_pos": 2},
+    }
     assert summary["suppressed"]["persistence_pending"] == 1
     assert summary["suppressed"]["top_head_suppressed_by_mode"] == 1
 
@@ -122,6 +126,7 @@ def _prediction_record(timestamp: float, evidence: dict[str, float]) -> dict[str
             "timestamp": timestamp,
             "session_id": "test",
             "payload": {
+                "features": {"dx_scale": 0.5 if evidence.get("ipn_g05", 0.0) > 0.89 else 0.0},
                 "prediction": {
                     "hand_id": "hand-0",
                     "start_time": timestamp - 0.2,
