@@ -650,6 +650,7 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
             "prediction_count": 1,
             "candidate_count": 0,
             "latest_relative_time": 3.0,
+            "evidence_threshold": 0.8,
             "predictions": {
                 "hand-0": CausalTcnV2LivePrediction(
                     hand_id="hand-0",
@@ -677,11 +678,64 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
             "start": 0.25,
             "end": 0.05,
             "evidence": [
-                {"name": "ipn_g07", "score": 0.72},
-                {"name": "ipn_g01", "score": 0.61},
+                {"name": "ipn_g07", "label": "Open twice", "score": 0.72},
+                {"name": "ipn_g01", "label": "Click one finger", "score": 0.61},
             ],
         }
     ]
+
+
+def test_live_tcn_v2_dashboard_snapshot_marks_high_confidence_custom_head() -> None:
+    snapshot = _live_tcn_v2_dashboard_snapshot(
+        {
+            "status": "TCNv2 s=1 r=20",
+            "stream_count": 1,
+            "row_count": 20,
+            "prediction_count": 1,
+            "candidate_count": 0,
+            "latest_relative_time": 3.0,
+            "evidence_threshold": 0.8,
+            "recent_recognitions": [
+                {
+                    "name": "Throw left",
+                    "target": "ipn_g05",
+                    "hand_id": "hand-0",
+                    "confidence": 0.87,
+                    "emitted": 3.0,
+                }
+            ],
+            "predictions": {
+                "hand-0": CausalTcnV2LivePrediction(
+                    hand_id="hand-0",
+                    start_time=2.2,
+                    end_time=3.0,
+                    evidence={
+                        "intentional_motion": 0.91,
+                        "ipn_g05": 0.87,
+                        "ipn_g06": 0.33,
+                        "start": 0.25,
+                        "end": 0.05,
+                    },
+                ),
+            },
+        },
+        first_timestamp=0.0,
+    )
+
+    assert snapshot["recent_recognitions"] == [
+        {
+            "name": "Throw left",
+            "target": "ipn_g05",
+            "hand_id": "hand-0",
+            "confidence": 0.87,
+            "emitted": 3.0,
+        }
+    ]
+    assert snapshot["hands"][0]["recognized"] == {
+        "target": "ipn_g05",
+        "name": "Throw left",
+        "score": 0.87,
+    }
 
 
 def test_watch_dtw_help_exposes_live_candidate_controls() -> None:

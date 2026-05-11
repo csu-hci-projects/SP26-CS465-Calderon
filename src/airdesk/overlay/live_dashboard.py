@@ -202,7 +202,7 @@ class LiveDashboardRenderer:
         for hand in list(dashboard.get("hands", []))[:2]:
             if not isinstance(hand, dict):
                 continue
-            card_height = 190
+            card_height = 214
             if card_y + card_height > y + height - 74:
                 break
             self._draw_hand_card(
@@ -253,6 +253,20 @@ class LiveDashboardRenderer:
             color=(235, 238, 245),
             thickness=2,
         )
+        meter_y = y + 48
+        recognized = hand.get("recognized")
+        if isinstance(recognized, dict):
+            name = str(recognized.get("name", ""))
+            score = recognized.get("score")
+            if name and isinstance(score, int | float):
+                self._draw_recognition_badge(
+                    image,
+                    text=f"Recognized: {name} {float(score):.2f}",
+                    x=x + 12,
+                    y=y + 38,
+                    width=width - 24,
+                )
+                meter_y = y + 72
         meters = (
             ("L", float(hand.get("left", 0.0)), (80, 170, 255)),
             ("R", float(hand.get("right", 0.0)), (75, 215, 120)),
@@ -260,7 +274,6 @@ class LiveDashboardRenderer:
             ("S", float(hand.get("start", 0.0)), (220, 120, 250)),
             ("E", float(hand.get("end", 0.0)), (120, 210, 235)),
         )
-        meter_y = y + 48
         for name, value, color in meters:
             self._draw_meter(
                 image,
@@ -308,12 +321,34 @@ class LiveDashboardRenderer:
         for item in evidence[:4]:
             if not isinstance(item, dict):
                 continue
-            name = str(item.get("name", ""))
+            name = str(item.get("label") or item.get("name", ""))
             score = item.get("score")
             if not name or not isinstance(score, int | float):
                 continue
             parts.append(f"{name} {float(score):.2f}")
         return "top " + " | ".join(parts) if parts else "top"
+
+    def _draw_recognition_badge(
+        self,
+        image: Any,
+        *,
+        text: str,
+        x: int,
+        y: int,
+        width: int,
+    ) -> None:
+        self.cv2.rectangle(image, (x, y), (x + width, y + 24), (28, 92, 62), -1)
+        self.cv2.rectangle(image, (x, y), (x + width, y + 24), (86, 210, 142), 1)
+        self._put_text_fit(
+            image=image,
+            text=text,
+            x=x + 8,
+            y=y + 17,
+            max_width=width - 16,
+            scale=0.38,
+            color=(238, 255, 246),
+            thickness=1,
+        )
 
     def _motion_feature_lines(self, features: dict[str, Any]) -> tuple[str, ...]:
         def value(name: str) -> float:
@@ -379,9 +414,11 @@ class LiveDashboardRenderer:
     ) -> None:
         self.cv2.rectangle(image, (x, y), (x + width, y + height), (27, 30, 37), -1)
         self.cv2.rectangle(image, (x, y), (x + width, y + height), (58, 64, 76), 1)
+        recognitions = list(dashboard.get("recent_recognitions", []))
+        title = "Recent recognized gestures" if recognitions else "Recent decoded gestures"
         self._put_text_fit(
             image=image,
-            text="Recent decoded gestures",
+            text=title,
             x=x + 14,
             y=y + 28,
             max_width=width - 28,
@@ -389,7 +426,7 @@ class LiveDashboardRenderer:
             color=(238, 242, 248),
             thickness=2,
         )
-        recent = list(dashboard.get("recent_candidates", []))
+        recent = recognitions or list(dashboard.get("recent_candidates", []))
         if not recent:
             self._put_text_fit(
                 image=image,
@@ -406,13 +443,20 @@ class LiveDashboardRenderer:
         for item in recent[-4:]:
             if not isinstance(item, dict):
                 continue
-            line = (
-                f"emit={float(item.get('emitted', 0.0)):6.2f}s "
-                f"peak={float(item.get('peak', 0.0)):6.2f}s "
-                f"delay={float(item.get('delay', 0.0)):4.2f}s "
-                f"{item.get('hand_id', 'hand')} {item.get('name', '')} "
-                f"{float(item.get('confidence', 0.0)):.2f}"
-            )
+            if recognitions:
+                line = (
+                    f"t={float(item.get('emitted', 0.0)):6.2f}s "
+                    f"{item.get('hand_id', 'hand')} {item.get('name', '')} "
+                    f"{float(item.get('confidence', 0.0)):.2f}"
+                )
+            else:
+                line = (
+                    f"emit={float(item.get('emitted', 0.0)):6.2f}s "
+                    f"peak={float(item.get('peak', 0.0)):6.2f}s "
+                    f"delay={float(item.get('delay', 0.0)):4.2f}s "
+                    f"{item.get('hand_id', 'hand')} {item.get('name', '')} "
+                    f"{float(item.get('confidence', 0.0)):.2f}"
+                )
             self._put_text_fit(
                 image=image,
                 text=line,

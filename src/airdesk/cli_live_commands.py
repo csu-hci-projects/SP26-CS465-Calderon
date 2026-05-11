@@ -28,6 +28,7 @@ from airdesk.cli_live import (
     _live_tcn_v2_preview_status,
     _live_tcn_v2_row_motion_features,
     _max_tcn_v2_visible_evidence,
+    _recognized_tcn_v2_custom_evidence,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_tracking import _make_tracker
@@ -436,12 +437,14 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             "predictions": latest_predictions,
             "rows_by_hand": latest_rows_by_hand,
             "show_motion": show_motion,
+            "evidence_threshold": evidence_threshold,
             "stream_count": 0,
             "row_count": 0,
             "prediction_count": 0,
             "candidate_count": 0,
             "latest_relative_time": None,
             "recent_candidates": [],
+            "recent_recognitions": [],
         }
         session_id = str(uuid4())
         event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
@@ -449,6 +452,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         next_prediction_time_by_hand: dict[str, float] = {}
         prediction_count = 0
         candidate_count = 0
+        last_custom_alert_by_hand: dict[str, tuple[str, float]] = {}
         decoder_history_seconds = (
             predictor.window_seconds
             + decoder_config.recovery_seconds
@@ -567,6 +571,38 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         _max_tcn_v2_visible_evidence(prediction.evidence)
                         >= evidence_threshold
                     )
+                    custom_recognition = _recognized_tcn_v2_custom_evidence(
+                        prediction.evidence,
+                        threshold=evidence_threshold,
+                    )
+                    if custom_recognition is not None:
+                        now = monotonic()
+                        target = str(custom_recognition["target"])
+                        name = str(custom_recognition["name"])
+                        score = float(custom_recognition["score"])
+                        last_target, last_at = last_custom_alert_by_hand.get(
+                            hand_id,
+                            ("", -999.0),
+                        )
+                        if target != last_target or now - last_at >= 1.5:
+                            state["alert"] = f"{hand_id} {name} {score:.2f}"
+                            state["alert_until"] = now + 1.5
+                            last_custom_alert_by_hand[hand_id] = (target, now)
+                            recent_recognitions = list(state.get("recent_recognitions", []))
+                            recent_recognitions.append(
+                                {
+                                    "name": name,
+                                    "target": target,
+                                    "hand_id": hand_id,
+                                    "confidence": score,
+                                    "emitted": (
+                                        prediction.end_time - first_timestamp
+                                        if first_timestamp is not None
+                                        else prediction.end_time
+                                    ),
+                                }
+                            )
+                            state["recent_recognitions"] = recent_recognitions[-8:]
                     if profile_timing and visible_evidence:
                         typer.echo(
                             f"tcn_v2_predict_ms={prediction_ms:.2f} hand={hand_id} "

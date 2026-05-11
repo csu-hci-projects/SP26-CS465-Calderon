@@ -11,6 +11,22 @@ from airdesk.ml import CausalTcnLivePrediction, CausalTcnV2LivePrediction
 from airdesk.state.types import GestureCandidate
 from airdesk.tracking.interfaces import HandTrackerBackend
 
+_TCN_V2_EVIDENCE_DISPLAY_NAMES = {
+    "ipn_b0a": "Point one finger",
+    "ipn_b0b": "Point two fingers",
+    "ipn_g01": "Click one finger",
+    "ipn_g02": "Click two fingers",
+    "ipn_g03": "Throw up",
+    "ipn_g04": "Throw down",
+    "ipn_g05": "Throw left",
+    "ipn_g06": "Throw right",
+    "ipn_g07": "Open twice",
+    "ipn_g08": "Double click one finger",
+    "ipn_g09": "Double click two fingers",
+    "ipn_g10": "Zoom in",
+    "ipn_g11": "Zoom out",
+}
+
 
 def _format_tracker_timing(tracker: HandTrackerBackend) -> str:
     samples = getattr(tracker, "timing_samples", None)
@@ -279,6 +295,7 @@ def _live_tcn_v2_dashboard_snapshot(
         "summary_lines": summary_lines,
         "hands": hands,
         "recent_candidates": list(state.get("recent_candidates", [])),
+        "recent_recognitions": list(state.get("recent_recognitions", [])),
         "alert": alert,
         "first_timestamp": first_timestamp,
         "timing": _live_timing_dashboard_summary(timing_samples or []),
@@ -288,6 +305,10 @@ def _live_tcn_v2_dashboard_snapshot(
 def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, object]]:
     predictions = state.get("predictions", {})
     rows_by_hand = state.get("rows_by_hand", {})
+    threshold_value = state.get("evidence_threshold", 0.35)
+    evidence_threshold = (
+        float(threshold_value) if isinstance(threshold_value, int | float) else 0.35
+    )
     if not isinstance(predictions, dict):
         return []
     hands: list[dict[str, object]] = []
@@ -306,9 +327,19 @@ def _live_tcn_v2_dashboard_hands(state: dict[str, object]) -> list[dict[str, obj
         }
         if top_evidence:
             hand["evidence"] = [
-                {"name": name, "score": score}
+                {
+                    "name": name,
+                    "label": _tcn_v2_evidence_display_name(name),
+                    "score": score,
+                }
                 for name, score in top_evidence
             ]
+            recognized = _recognized_tcn_v2_custom_evidence(
+                evidence,
+                threshold=evidence_threshold,
+            )
+            if recognized is not None:
+                hand["recognized"] = recognized
         if isinstance(rows_by_hand, dict):
             row = rows_by_hand.get(hand_id)
             features = _live_tcn_v2_row_motion_features(row)
@@ -335,6 +366,33 @@ def _top_tcn_v2_evidence(
         if target not in hidden
     ]
     return sorted(scored, key=lambda item: (-item[1], item[0]))[:limit]
+
+
+def _tcn_v2_evidence_display_name(target: str) -> str:
+    if target in _TCN_V2_EVIDENCE_DISPLAY_NAMES:
+        return _TCN_V2_EVIDENCE_DISPLAY_NAMES[target]
+    cleaned = target.removeprefix("ipn_").replace("_", " ").strip()
+    return cleaned.title() if cleaned else target
+
+
+def _recognized_tcn_v2_custom_evidence(
+    evidence: dict[str, float],
+    *,
+    threshold: float,
+) -> dict[str, object] | None:
+    if _has_tcn_v2_stroke_heads(evidence):
+        return None
+    top = _top_tcn_v2_evidence(evidence, limit=1)
+    if not top:
+        return None
+    target, score = top[0]
+    if score < threshold:
+        return None
+    return {
+        "target": target,
+        "name": _tcn_v2_evidence_display_name(target),
+        "score": score,
+    }
 
 
 def _max_tcn_v2_visible_evidence(evidence: dict[str, float]) -> float:
