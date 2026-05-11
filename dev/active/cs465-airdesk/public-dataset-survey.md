@@ -25,10 +25,12 @@ Keep the current AirDesk recognizer contract:
 - interpret combos in a later command-grammar layer over emitted atomic events;
 - keep public data as a training aid, not the authority for AirDesk success.
 
-For the first IPN pass, map only IPN `G05` / `G06` into positive AirDesk
-`swipe_left` / `swipe_right` labels. Keep IPN click, double-click, zoom, point,
-open, and non-gesture intervals as background/negative evidence until AirDesk
-adds explicit heads for click/select, push, or other atomic gestures.
+For the first IPN pass, map only IPN `G05 Throw left` / `G06 Throw right` into
+AirDesk's existing left/right atomic evidence labels. This is a proxy for
+lateral motion evidence, not a claim that IPN contains AirDesk swipe gestures.
+Keep IPN click, double-click, zoom, point, open, and non-gesture intervals as
+background/negative evidence until AirDesk adds explicit heads for click/select,
+push, or other atomic gestures.
 
 ## Dataset Comparison
 
@@ -96,6 +98,39 @@ fixture.
    MediaPipe path and output shape quickly.
 3. Convert the full IPN train/validation splits into ignored `data/public/ipn/`.
 4. Build an IPN-only `stream-invariant-v2` / `v2-evidence` manifest.
-5. Train an IPN-only schema-2 TCN v2 and evaluate replay feel.
+5. Train an IPN-only schema-2 TCN v2 on the `G05` / `G06` throw-left/right proxy
+   mapping and evaluate replay feel.
 6. Compare AirDesk-only, IPN-only, IPN-pretrain/AirDesk-fine-tune, and hybrid
    training on the AirDesk source-held-out `data/recordings/v2-*` recordings.
+
+## First IPN-Only TCN V2 Result
+
+The first IPN-only model was trained from
+`data/public/ipn/airdesk-train/tcn-v2-ipn-train-manifest.json`; no AirDesk local
+recordings were mixed into this checkpoint. The model path is
+`data/models/gestures/tcn-v2-ipn-train-atomic-10ep.pt`.
+
+Training used the full converted IPN train split: 148 source videos, 4,039 IPN
+segments, 296 mapped `G05` / `G06` left/right throw segments, and 99,510 TCN v2
+windows. The held-out converted IPN test split contains 52 source videos, 1,610
+IPN segments, 104 mapped left/right throw segments, and 35,706 windows.
+
+Evaluation confirms the proxy is useful but noisy:
+
+- low decoder thresholds (`activation=0.35`, `release=0.2`, `min_peak=0.35`)
+  matched `99/104` held-out throw-left/right events, but produced `2,183` false
+  activations from `2,374` decoded candidates;
+- default thresholds matched `91/104`, with `915` false activations;
+- stricter `0.80/0.45/0.80` thresholds matched `88/104`, with `247` false
+  activations;
+- very strict `0.90/0.50/0.90` thresholds matched `52/104`, with `49` false
+  activations.
+
+Interpretation: the IPN-only model learns strong left/right lateral motion
+evidence, but treating all other dynamic IPN gesture classes as plain background
+makes the current two-head decoder fire on lots of non-left/right gesture
+motion. Do not treat this as an AirDesk swipe model. The next useful experiment
+is either better public-data target design, for example an explicit
+`intentional_non_left_right_motion` / richer atomic heads, or IPN pretraining
+followed by AirDesk fine-tuning and evaluation on AirDesk source-held-out V2
+recordings.

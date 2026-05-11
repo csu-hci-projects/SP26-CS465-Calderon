@@ -228,6 +228,7 @@ def test_train_tcn_v2_help_exposes_evidence_training_controls() -> None:
     assert "--hidden-channels" in result.stdout
     assert "--positive-weight-cap" in result.stdout
     assert "--focal-gamma" in result.stdout
+    assert "--device" in result.stdout
 
 
 def test_evaluate_tcn_help_exposes_optional_evaluation_controls() -> None:
@@ -251,6 +252,7 @@ def test_evaluate_tcn_v2_help_exposes_decoder_controls() -> None:
     assert "--activation-threshold" in result.stdout
     assert "--early-match-tolerance-seconds" in result.stdout
     assert "--min-peak-confidence" in result.stdout
+    assert "--device" in result.stdout
 
 
 def test_diagnose_tcn_events_help_exposes_decoder_controls() -> None:
@@ -278,6 +280,7 @@ def test_diagnose_tcn_v2_events_help_exposes_decoder_controls() -> None:
     assert "--activation-threshold" in result.stdout
     assert "--early-match-tolerance-seconds" in result.stdout
     assert "--min-peak-confidence" in result.stdout
+    assert "--device" in result.stdout
 
 
 def test_watch_tcn_help_exposes_live_classifier_controls() -> None:

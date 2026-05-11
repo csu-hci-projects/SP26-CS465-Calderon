@@ -206,6 +206,10 @@ def gesture_train_tcn_v2(
         float,
         typer.Option(help="Focal loss gamma for hard evidence frames; 0 disables focal scaling."),
     ] = 1.0,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
 ) -> None:
     """Train a TCN v2 sequence model for decoder-facing evidence heads."""
     config = CausalTcnV2TrainingConfig(
@@ -221,6 +225,7 @@ def gesture_train_tcn_v2(
         positive_weight_cap=positive_weight_cap,
         boundary_positive_weight_multiplier=boundary_positive_weight_multiplier,
         focal_gamma=focal_gamma,
+        device=device,
     )
     try:
         result = train_causal_tcn_v2(manifest_path=manifest, out_path=out, config=config)
@@ -236,7 +241,7 @@ def gesture_train_tcn_v2(
         f"wrote tcn_v2_model={out} samples={result.samples} train={result.train_samples} "
         f"validation={result.validation_samples} final_loss={result.final_train_loss:.4f} "
         f"train_frame_accuracy={result.train_accuracy:.3f} "
-        f"validation_frame_accuracy={validation} heads={','.join(result.targets)}"
+        f"validation_frame_accuracy={validation} device={device} heads={','.join(result.targets)}"
     )
 
 
@@ -370,6 +375,10 @@ def gesture_evaluate_tcn_v2(
         float,
         typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
     ] = 0.5,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
 ) -> None:
     """Evaluate TCN v2 evidence heads through the replay event decoder."""
     decoder_config = EventDecoderConfig(
@@ -386,6 +395,7 @@ def gesture_evaluate_tcn_v2(
             match_tolerance_seconds=match_tolerance_seconds,
             early_match_tolerance_seconds=early_match_tolerance_seconds,
             event_decoder_config=decoder_config,
+            device=device,
         )
     except (MissingMlDependencyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -398,6 +408,7 @@ def gesture_evaluate_tcn_v2(
         "match_tolerance_seconds": match_tolerance_seconds,
         "early_match_tolerance_seconds": early_match_tolerance_seconds,
         "event_decoder": decoder_config.to_dict(),
+        "device": device,
         "summary": summary,
         "evaluations": [evaluation.to_dict() for evaluation in evaluations],
     }
@@ -525,6 +536,10 @@ def gesture_diagnose_tcn_v2_events(
         float,
         typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
     ] = 0.5,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
 ) -> None:
     """Write per-event decoded TCN v2 evidence diagnostics."""
     decoder_config = EventDecoderConfig(
@@ -541,6 +556,7 @@ def gesture_diagnose_tcn_v2_events(
             match_tolerance_seconds=match_tolerance_seconds,
             early_match_tolerance_seconds=early_match_tolerance_seconds,
             event_decoder_config=decoder_config,
+            device=device,
         )
     except (MissingMlDependencyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -867,6 +883,10 @@ def gesture_holdout_tcn_v2(
         float,
         typer.Option(help="Decoder same-gesture separation/cooldown in seconds."),
     ] = 0.5,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
 ) -> None:
     """Train/evaluate TCN v2 on a deterministic filename-ordered holdout split."""
     train_features, test_features = _split_tcn_feature_holdout(
@@ -920,6 +940,7 @@ def gesture_holdout_tcn_v2(
         positive_weight_cap=positive_weight_cap,
         boundary_positive_weight_multiplier=boundary_positive_weight_multiplier,
         focal_gamma=focal_gamma,
+        device=device,
     )
     decoder_config = EventDecoderConfig(
         activation_threshold=activation_threshold,
@@ -940,6 +961,7 @@ def gesture_holdout_tcn_v2(
             match_tolerance_seconds=match_tolerance_seconds,
             early_match_tolerance_seconds=early_match_tolerance_seconds,
             event_decoder_config=decoder_config,
+            device=device,
         )
     except (MissingMlDependencyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -957,6 +979,7 @@ def gesture_holdout_tcn_v2(
         },
         "training": train_result.to_dict(),
         "event_decoder": decoder_config.to_dict(),
+        "device": device,
         "match_tolerance_seconds": match_tolerance_seconds,
         "early_match_tolerance_seconds": early_match_tolerance_seconds,
         "summary": summary,

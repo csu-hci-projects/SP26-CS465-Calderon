@@ -27,6 +27,7 @@ def evaluate_tcn_v2_manifest(
     event_decoder_config: EventDecoderConfig,
     match_tolerance_seconds: float = 0.5,
     early_match_tolerance_seconds: float = 0.0,
+    device: str = "auto",
 ) -> tuple[GestureEvaluation, ...]:
     """Evaluate TCN v2 decoder-facing evidence against labeled manifest sources."""
     manifest = load_tcn_dataset_manifest(manifest_path)
@@ -35,6 +36,7 @@ def evaluate_tcn_v2_manifest(
             model_path=model_path,
             manifest_path=manifest_path,
             emit_all_rows=True,
+            device=device,
         )
     )
     predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
@@ -74,6 +76,7 @@ def diagnose_tcn_v2_manifest_events(
     event_decoder_config: EventDecoderConfig,
     match_tolerance_seconds: float = 0.5,
     early_match_tolerance_seconds: float = 0.0,
+    device: str = "auto",
 ) -> dict[str, object]:
     """Write detailed TCN v2 decoded-event diagnostics for replay review."""
     manifest = load_tcn_dataset_manifest(manifest_path)
@@ -82,6 +85,7 @@ def diagnose_tcn_v2_manifest_events(
             model_path=model_path,
             manifest_path=manifest_path,
             emit_all_rows=True,
+            device=device,
         )
     )
     predictions_by_source: dict[tuple[str, str], list[CausalTcnEvidencePrediction]] = {}
@@ -131,6 +135,7 @@ def diagnose_tcn_v2_manifest_events(
         "match_tolerance_seconds": match_tolerance_seconds,
         "early_match_tolerance_seconds": early_match_tolerance_seconds,
         "event_decoder": event_decoder_config.to_dict(),
+        "device": device,
         "summary": holdout_totals(tuple(evaluations)),
         "evaluations": [evaluation.to_dict() for evaluation in evaluations],
         "sources": diagnostics,

@@ -1301,14 +1301,16 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
             positive_weight_cap=12.0,
             boundary_positive_weight_multiplier=2.0,
             focal_gamma=0.5,
+            device="cpu",
         ),
     )
     checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
     predictions = predict_causal_tcn_v2_manifest(
         model_path=model_path,
         manifest_path=manifest_path,
+        device="cpu",
     )
-    live_prediction = CausalTcnV2LivePredictor.load(model_path).predict_rows(
+    live_prediction = CausalTcnV2LivePredictor.load(model_path, device="cpu").predict_rows(
         load_feature_rows_csv(features)
     )
     evaluations = evaluate_tcn_v2_manifest(
@@ -1321,10 +1323,13 @@ def test_tcn_v2_training_prediction_and_evaluation_smoke_when_torch_is_installed
             cooldown_seconds=0.0,
             min_event_separation_seconds=0.0,
         ),
+        device="cpu",
     )
 
     assert result.targets == TCN_V2_EVIDENCE_TARGETS
     assert checkpoint["metadata"]["schema_version"] == 2
+    assert checkpoint["metadata"]["training_device"] == "cpu"
+    assert checkpoint["metadata"]["training_config"]["device"] == "cpu"
     assert checkpoint["model_config"]["architecture"] == "residual_dilated_causal_tcn_v2"
     assert checkpoint["model_config"]["normalization"] == "layer_norm"
     assert checkpoint["metadata"]["receptive_field_frames"] == tcn_v2_receptive_field_frames(
@@ -1684,6 +1689,7 @@ def test_tcn_v2_prediction_loads_schema_v1_checkpoints_when_torch_is_installed(
     predictions = predict_causal_tcn_v2_manifest(
         model_path=model_path,
         manifest_path=manifest_path,
+        device="cpu",
     )
 
     assert len(predictions) == len(manifest.windows)

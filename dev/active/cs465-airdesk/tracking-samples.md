@@ -422,6 +422,37 @@ visible. Do not collect broad combo data in this pass.
 
 Do not wire any recognizer into live desktop actions based on these recordings alone. Use them to evaluate false activations, missed gestures, repeated fires, and latency in replay.
 
+## Public IPN-Only Check
+
+The first IPN-only model is
+`data/models/gestures/tcn-v2-ipn-train-atomic-10ep.pt`. It was trained only from
+`data/public/ipn/airdesk-train/tcn-v2-ipn-train-manifest.json`; no AirDesk
+recordings were mixed into this checkpoint.
+
+Important semantic caveat: IPN has `G05 Throw left` and `G06 Throw right`, not
+AirDesk swipe gestures. The importer maps those throw classes into AirDesk's
+existing left/right atomic evidence labels so the TCN can learn lateral motion
+evidence through the same heads: `intentional_motion`, `stroke_left`,
+`stroke_right`, `start`, and `end`.
+
+Held-out IPN replay over
+`data/public/ipn/airdesk-test/tcn-v2-ipn-test-manifest.json`:
+
+- permissive decoder (`activation=0.35`, `release=0.2`, `min_peak=0.35`):
+  `99/104` matched, `5` missed, `2,374` candidates, `2,183` false activations,
+  `15` repeated fires, mean latency about `0.82 s`;
+- default decoder: `91/104` matched, `13` missed, `1,059` candidates, `915`
+  false activations, `8` repeated fires, mean latency about `0.88 s`;
+- strict `0.80/0.45/0.80`: `88/104` matched, `16` missed, `359` candidates,
+  `247` false activations, `1` repeated fire, mean latency about `0.92 s`;
+- strict `0.90/0.50/0.90`: `52/104` matched, `52` missed, `111` candidates,
+  `49` false activations, `0` repeated fires, mean latency about `0.94 s`.
+
+Interpretation: the IPN-only checkpoint learned useful left/right lateral
+evidence, but the current two-stroke-head decoder is too broad when all other
+dynamic IPN gestures are treated as background. This is pretraining evidence,
+not a deployable AirDesk swipe recognizer.
+
 ## Notes Template
 
 For each sample, write:

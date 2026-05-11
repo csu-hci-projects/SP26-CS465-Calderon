@@ -273,10 +273,11 @@ Current recognition strategy update:
 - Public datasets are now a serious branch to explore. IPN Hand is the first
   candidate because it is continuous and includes thousands of hand-gesture
   examples plus natural non-gesture motion. Jester is much larger and webcam-like
-  but mostly clip-classification shaped. The next session should survey
-  alternatives, then build an IPN-only TCN v2 experiment through the same
-  MediaPipe -> `FrameFeatureRow` -> `stream-invariant-v2` path before deciding
-  between AirDesk-only, public-pretrained, or hybrid training.
+  but mostly clip-classification shaped. The first IPN experiment maps only
+  IPN `G05 Throw left` / `G06 Throw right` into AirDesk's existing left/right
+  atomic evidence labels as a lateral-motion proxy. It is not an AirDesk swipe
+  dataset, and AirDesk-only / hybrid comparisons should happen only after the
+  IPN-only result is understood.
 - AirDesk recordings remain the authority for pass/fail because the final task
   is Hyprland desktop control under Caden's camera/setup, not benchmark accuracy
   on public videos.
@@ -540,18 +541,32 @@ uv run airdesk public-data ipn-convert \
 ```
 
 It runs downloaded IPN MP4s through MediaPipe, writes AirDesk replay JSONL,
-exports feature CSVs, maps only IPN `G05` / `G06` into `swipe_left` /
-`swipe_right` labels, and can build a `stream-invariant-v2` / `v2-evidence`
-manifest. Other IPN classes remain background/negative examples for the first
-left/right atomic pass. Keep raw public datasets and generated artifacts in
-ignored `data/public/`.
+exports feature CSVs, maps only IPN `G05 Throw left` / `G06 Throw right` into
+AirDesk's left/right atomic evidence labels, and can build a
+`stream-invariant-v2` / `v2-evidence` manifest. That mapping is a proxy for
+lateral throw motion, not a claim that IPN contains AirDesk swipe gestures. Other
+IPN classes remain background/negative examples for the first left/right atomic
+pass. Keep raw public datasets and generated artifacts in ignored `data/public/`.
 
 2026-05-10 local acquisition update: the official IPN Hand Drive annotations
 and all five video archives are now present under ignored `data/public/ipn/`.
 Extraction produced 200 `.avi` videos in `data/public/ipn/videos/`, and a
 bounded one-video smoke conversion succeeded with 26 segments, 2 mapped atomic
-left/right swipe segments, 1 replay recording, 1 feature CSV, and a
+left/right throw-proxy segments, 1 replay recording, 1 feature CSV, and a
 `stream-invariant-v2` / `v2-evidence` smoke manifest.
+
+2026-05-10 IPN-only training update: the first IPN-only TCN v2 checkpoint was
+trained from `data/public/ipn/airdesk-train/tcn-v2-ipn-train-manifest.json`
+only; no AirDesk recordings were mixed in. The checkpoint is
+`data/models/gestures/tcn-v2-ipn-train-atomic-10ep.pt`. Training covered 148 IPN
+train videos and 296 mapped `G05` / `G06` throw-left/right segments. Held-out
+IPN evaluation on 52 test videos / 104 mapped throw-left/right segments shows
+the model learned left/right lateral evidence but the current decoder is too
+chatty on other IPN gesture motion: `99/104` matched at permissive thresholds
+with `2,183` false activations; `91/104` at default thresholds with `915` false
+activations; `88/104` at stricter `0.80/0.45/0.80` thresholds with `247` false
+activations; and `52/104` at `0.90/0.50/0.90` with `49` false activations.
+Interpretation: useful pretraining signal, not a deployable AirDesk swipe model.
 
 ## Current Roadmap
 

@@ -181,9 +181,11 @@ Latest public-dataset update:
 The primary-source survey is now in
 `dev/active/cs465-airdesk/public-dataset-survey.md`. Recommendation: start with
 IPN Hand because it is continuous, RGB-webcam based, CC BY 4.0, includes natural
-non-gesture hand motion, and has direct left/right gesture classes. Jester is
-still useful later for large clip-level pretraining but is less aligned with
-AirDesk's boundary/continuous-spotting problem. EgoGesture and ChaLearn ConGD
+non-gesture hand motion, and has lateral `G05 Throw left` / `G06 Throw right`
+classes that can proxy AirDesk left/right atomic evidence. IPN does not contain
+AirDesk swipe gestures. Jester is still useful later for large clip-level
+pretraining but is less aligned with AirDesk's boundary/continuous-spotting
+problem. EgoGesture and ChaLearn ConGD
 are continuous alternatives, but EgoGesture is egocentric RGB-D and requires an
 agreement, while ChaLearn is broad RGB-D challenge data with less direct desktop
 gesture mapping. IPN HandS may be valuable if its refined skeleton annotations
@@ -203,11 +205,12 @@ uv run airdesk public-data ipn-convert \
 ```
 
 It runs downloaded IPN MP4 videos through MediaPipe, writes AirDesk replay JSONL,
-maps only IPN `G05` / `G06` to atomic `swipe_left` / `swipe_right` labels,
-exports normal `FrameFeatureRow` CSVs, and can build a `stream-invariant-v2`
-`v2-evidence` manifest. Other IPN classes stay background/negative for the first
-left/right TCN pass. Raw public dataset downloads and generated artifacts should
-stay ignored under `data/public/`.
+maps only IPN `G05 Throw left` / `G06 Throw right` to AirDesk's left/right
+atomic evidence labels as a lateral-motion proxy, exports normal
+`FrameFeatureRow` CSVs, and can build a `stream-invariant-v2` `v2-evidence`
+manifest. Other IPN classes stay background/negative for the first left/right
+TCN pass. Raw public dataset downloads and generated artifacts should stay
+ignored under `data/public/`.
 
 2026-05-10 update: official IPN Hand annotations and all five video archives are
 downloaded under ignored `data/public/ipn/`; extraction produced 200 `.avi`
@@ -245,8 +248,11 @@ Architectural stance:
    manifest under `data/public/ipn/airdesk-smoke/`.
 3. Convert the selected IPN train/validation videos into
    ignored `data/public/ipn/airdesk/` artifacts.
-4. Train an IPN-only TCN v2 atomic model and evaluate it in replay/live-preview
-   form before mixing it with AirDesk data.
+4. Train/evaluate IPN-only TCN v2 atomic models before mixing them with AirDesk
+   data. The first checkpoint was IPN-only, trained from
+   `data/public/ipn/airdesk-train/tcn-v2-ipn-train-manifest.json`, and maps
+   `G05` / `G06` throw-left/right to AirDesk left/right atomic evidence as a
+   proxy.
 5. Then compare AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or
    hybrid training on the AirDesk source-held-out V2 recordings.
 6. Preserve current behavior unless a bug is found and fixed intentionally. Keep
