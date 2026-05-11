@@ -11,7 +11,7 @@ Start here:
 - `dev/active/cs465-airdesk/context.md` - current state and project framing
 - `dev/active/cs465-airdesk/plan.md` - research plan, prototype scope, study design
 - `dev/active/cs465-airdesk/architecture.md` - proposed system architecture and package boundaries
-- `dev/active/cs465-airdesk/recognition-v2-plan.md` - current recognizer architecture pivot and next-session plan
+- `dev/active/cs465-airdesk/recognition-v2-plan.md` - learned recognizer architecture notes and diagnostic lane
 - `dev/active/cs465-airdesk/dynamic-gesture-research.md` - dynamic gesture recognition research and model strategy
 - `dev/active/cs465-airdesk/public-dataset-survey.md` - public dynamic gesture dataset survey and IPN-first importer plan
 - `dev/active/cs465-airdesk/tracking-samples.md` - local tracking sample protocol
@@ -20,6 +20,13 @@ Start here:
 
 Historical sprint plans and stale handoff prompts are archived under
 `dev/archive/cs465-airdesk/2026-05-11/`.
+
+Current 2026-05-11 product pivot: learned/DTW/motion gestures remain
+preview/replay/evaluation tools only. The next class-demo implementation should
+use deterministic MediaPipe landmark logic for a small "mid-air mouse plus
+window manager" grammar: open/relaxed hand cursor control, pinch click/scroll,
+sideways palm workspace switching, fist-based window move, launcher combo, and a
+deliberate open-palm/fist/open-palm close-window combo.
 
 ## Development
 
@@ -141,7 +148,7 @@ Cursor control is also dry-run by default. Real cursor movement is opt-in and us
 uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --execute --events-out data/logs/cursor-execute.jsonl
 ```
 
-In cursor mode, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Mouse click/drag injection is intentionally not enabled yet because this machine does not currently have a pointer-button injector installed.
+In the current shipped cursor command, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. The next logic-control pass should revise this so open/relaxed hand movement controls the pointer while pinch becomes click/scroll/drag. Mouse click/drag injection is not enabled yet. The current machine has `/dev/uinput` access for `caden`, but no external helper such as `ydotool`, `dotool`, or `wtype` is installed.
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture chart-record` is the structured "Guitar Hero for swipes" collection path. It takes compact charts such as `RR | rest | RL | rest | RRR`, shows an on-screen colored chart HUD with a default 3-second lead-in, a smooth progress bar for the current cue, and fixed upcoming cards for get-ready/stroke/reset/rest prompts, records the replayable landmark stream, and writes coarse chart-derived stroke/recovery/event labels by default. Combo blocks such as `RRR` are shown as one active prompt so the swipes can happen at a natural pace inside that block. Chart recording now defaults to two tracked hands and should remain the recommended combo path; treat the generated labels as prompt-timing labels that may still need manual refinement before final training.
@@ -163,7 +170,7 @@ For custom evidence-head manifests such as all-IPN, use `airdesk gesture evaluat
 `airdesk gesture spot-motion` and `airdesk gesture evaluate-motion` provide the first Recognition V2 deterministic per-hand motion-event baseline. The baseline consumes the same exported/live `FrameFeatureRow` evidence as DTW/TCN, groups rows by `hand_id`, emits `GestureCandidate`-compatible `swipe_left` / `swipe_right` events with motion evidence metadata, and writes replay JSON before any live preview or desktop action path. Use `--positive-dx-gesture swipe_left` only when verifying a mirrored-preview/raw-camera direction flip.
 `airdesk gesture spot-motion` also writes `motion_diagnostics`, a compact list of the strongest per-hand motion rows and rejection reasons. Add `--labels ...` when inspecting misses so diagnostic rows include `phase` / `event` label context.
 `airdesk gesture diagnose-features` compares feature, timing, and tracking-quality summaries across the same filename-ordered holdout split. Use it before changing the feature export or recognizer thresholds; on `sprint4-swipes-001`, it confirms that held-out left swipes are weaker/slower than train-left examples while label alignment is roughly consistent.
-The current learned-recognizer direction is continuous gesture spotting, not fixed-window classification. Use `dynamic-gesture-research.md` as the source of truth: the next model work should prioritize position-invariant features, phase/event labels, event decoding, and explicit non-gesture handling before any live desktop action wiring.
+The learned-recognizer lane remains continuous gesture spotting, not fixed-window classification. Use `dynamic-gesture-research.md` as the source of truth for future model work: that lane should prioritize position-invariant features, phase/event labels, event decoding, and explicit non-gesture handling before any live desktop action wiring. The current implementation target, however, is the deterministic logic-control path described above.
 `airdesk gesture calibrate --kind dtw` builds a dependency-free personalized template model for replay evaluation; keep it in dry-run/evaluation workflows until false activations are low on negative recordings.
 `airdesk gesture holdout-dtw` runs a deterministic train/test replay evaluation for a collection batch and writes closest-window diagnostics for rejected DTW matches. The first `sprint4-swipes-001` holdout matched 2/4 held-out swipes, missed both held-out left swipes, and produced 0 false activations on two held-out negative recordings, so the same-batch DTW result should still be treated as optimistic. An optional calibrated horizontal-displacement gate is available through `--min-palm-dx-fraction`; the first gated variant matched 4/4 held-out swipes with 0 held-out false activations, but it still needs a fresh chained recording before live-control use.
 `airdesk gesture spot-dtw` runs a DTW model over an unlabeled continuous recording and exports candidate timestamps for review.

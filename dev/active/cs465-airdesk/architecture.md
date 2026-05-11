@@ -33,11 +33,18 @@ camera / sensor
   -> tracking backend
   -> normalized hand/body state
   -> smoothing and calibration
-  -> gesture recognizers
-  -> mode/profile state machine
+  -> primitive pose / motion recognizers
+  -> stable event and combo grammar
+  -> mode/profile safety state machine
   -> action router
   -> Hyprland / media / cursor / overlay / logs
 ```
+
+For the crunch-time prototype, the live-control lane should be deterministic:
+MediaPipe landmarks become primitive pose and movement facts, those facts become
+stable per-hand events, and a small grammar decides whether an OS action is
+allowed. Learned recognizers stay in preview/replay/evaluation lanes until
+their false activation rate is low enough for guarded actions.
 
 ## Runtime Surfaces
 
@@ -116,6 +123,17 @@ Sprint 0 implementation status:
 - `src/airdesk/recording/` stores replayable JSONL tracking/event records.
 - `src/airdesk/gestures/` contains the first static rule recognizers for open palm, fist, and pinch.
 - `configs/profiles/` contains the initial `study-safe` and `window-manager` profiles.
+
+Near-term logic-control additions should preserve these boundaries:
+
+- `gestures` should own primitive landmark facts such as pinch distance, stable
+  open palm, fist, sideways open palm, finger count, and palm zone.
+- `modes` should own stateful behavior such as combo buffers, hold windows,
+  action grammar, cooldown, and whether an event is currently armed.
+- `actions` should own the OS adapters: Hyprland dispatch, cursor movement, and
+  future `uinput` pointer-button/scroll injection.
+- `overlay` / live preview should explain what is being seen, what combo is
+  pending, which window is targeted, and what was executed or suppressed.
 
 Potential top-level project layout:
 
@@ -400,6 +418,18 @@ Actions should be routed through typed adapters:
 
 Hyprland should be the first real desktop target through `hyprctl dispatch`.
 
+Caden's current Hyprland setup supports the core class-demo actions directly:
+
+- launcher: `hyprctl dispatch global caelestia:launcher`
+- switch workspace: `hyprctl dispatch workspace -1` / `+1`
+- move focused/window-under-cursor to workspace: `hyprctl dispatch movetoworkspace -1` / `+1`
+- close active window: `hyprctl dispatch killactive`
+- move cursor: `hyprctl dispatch movecursor <x> <y>`
+
+Close-window and move-window commands should remain guarded. The grammar should
+show the focused/target window title from `hyprctl activewindow -j` before a
+destructive or disruptive action, and execution should remain dry-run-first.
+
 Longer term, AirDesk may use Hyprland IPC sockets for events/state and lower-latency control. The wrapper must handle socket lifecycle carefully because compositor IPC misuse can affect desktop responsiveness.
 
 Cursor control should be isolated behind an input driver because Wayland input injection has multiple possible paths:
@@ -408,6 +438,14 @@ Cursor control should be isolated behind an input driver because Wayland input i
 - Wayland virtual pointer protocols
 - Linux `uinput` / `ydotool`
 - fake cursor overlay for safe testing
+
+As of the 2026-05-11 planning pass, `hyprctl` is installed, Caden has write
+access to `/dev/uinput`, and no external pointer helper such as `ydotool`,
+`dotool`, or `wtype` is installed. The next implementation should therefore add
+an internal input target behind tests rather than depending on an unavailable
+binary. The Python `evdev` package was not installed during planning; either
+add it deliberately or implement the minimal `uinput` path with clear setup
+docs.
 
 ## Logging and Study Instrumentation
 
@@ -421,6 +459,8 @@ Log:
 - tracking backend
 - gesture candidates
 - gesture confirmations
+- stable pose events and combo-buffer contents
+- armed action and target window/workspace when available
 - confidence
 - action requested
 - action executed/failed

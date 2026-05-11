@@ -127,6 +127,72 @@ per-hand normalized feature streams
   -> mode/profile/safety policy
 ```
 
+### Crunch-Time Logic-Control Pivot
+
+2026-05-11 update: live all-IPN testing showed that the learned model is not
+safe enough for a class-demo global command recognizer. The near-term AirDesk
+pilot should pivot away from semantic learned gestures and toward deterministic
+landmark logic that recreates the core mouse/window-manager affordances:
+pointer movement, left/right click, scroll, launcher, workspace switching,
+moving windows between workspaces, and closing windows.
+
+This is not a rejection of the learned-recognition work. TCN/IPN remains useful
+as a preview/evaluation/pretraining lane, but live desktop actions should now
+come from simple observable pose/motion facts:
+
+- thumb/index and thumb/middle pinch distances;
+- stable open palm, fist, and sideways-open-palm poses;
+- palm position relative to screen/camera zones;
+- palm velocity and hold time;
+- per-hand stable-pose transitions stored in a short combo buffer.
+
+Target logic-control shape:
+
+```text
+MediaPipe landmarks
+  -> per-hand primitive pose features
+  -> stable pose debouncer
+  -> pose transition events
+  -> rolling combo buffer, max 4 events / about 2 seconds
+  -> mode/action grammar
+  -> guarded Hyprland and input adapters
+  -> overlay and JSONL action logs
+```
+
+The combo buffer should record stable events, not every frame. Example event
+stream:
+
+```text
+hand-0 open_palm entered
+hand-0 open_palm held 400ms
+hand-0 fist entered
+hand-0 fist held 350ms
+combo matched: open_palm -> fist -> open_palm
+```
+
+Combos should be same-hand by default, consume matched events, expire after
+about two seconds, and carry cooldowns. High-risk commands need clearer grammar
+than ordinary movement. For example, closing a window should be a combo such as
+`open_palm -> fist -> open_palm`, not a raw fist pose, so it does not conflict
+with fist-held window movement.
+
+Current MVP grammar candidate:
+
+| Input pattern | Intended action | Safety notes |
+| --- | --- | --- |
+| Open hand / relaxed tracked hand in cursor mode | Move cursor | Cursor movement should be modeful and visible. |
+| Index pinch tap | Left click | Requires pointer-button injection through an input adapter. |
+| Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
+| Index pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
+| Sideways open palm held left/right | Switch workspace left/right | Dispatch `workspace -1` / `workspace +1`. |
+| Fist held in center | Arm window move | Show target window title before any move. |
+| Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace -1` / `movetoworkspace +1`; cooldown to avoid repeated moves. |
+| Open palm -> sideways open palm | Open launcher | Dispatch `global caelestia:launcher` on Caden's setup. |
+| Open palm -> fist -> open palm | Close active window | Dispatch `killactive`; show "close armed" and focused window before firing. |
+
+The goal is not a large vocabulary. The goal is a small "mid-air mouse plus
+window manager" grammar that strings together without accidental overlap.
+
 ## Interaction Modes
 
 AirDesk should be designed as a set of explicit modes. This is both a product-design decision and a research decision: modes make accidental activation easier to reason about, and they let the study compare specific interaction techniques rather than one vague "gesture control" bucket.
@@ -164,9 +230,10 @@ Purpose:
 
 Activation:
 
-- pinch thumb + index finger to take control of the cursor
-- hand movement controls pointer while pinch is held
-- release pinch to drop cursor control
+- explicit cursor/control mode is visible and pauseable
+- open or relaxed hand movement controls the pointer
+- pinch becomes a button/scroll primitive rather than the pointer-move clutch
+- release/idle returns to neutral without clicking
 
 Important design constraints:
 
@@ -174,14 +241,16 @@ Important design constraints:
 - show a visible cursor-mode indicator
 - use smoothing and configurable gain
 - support a dead zone to avoid jitter
-- begin with click/drag in a safe test surface before controlling the real cursor globally
+- route real clicks/scroll through an isolated input adapter, with dry-run and
+  visible event logs before global execution
 
 Possible implementation path:
 
-1. Log pointer coordinates in a debug window.
-2. Move a fake cursor overlay.
-3. Move the real cursor using a Linux input/uinput path or compositor-compatible tool.
-4. Add pinch click and pinch-drag.
+1. Reuse the current Hyprland `movecursor` path for real pointer movement.
+2. Add a dry-run input target for click/scroll/drag events and tests.
+3. Add a Linux `uinput` target if dependency and permission checks pass.
+4. Add index-pinch click, middle-pinch right click, and pinch-drag scroll.
+5. Keep a fake/diagnostic overlay view for tuning thresholds safely.
 
 ### Text Mode / Virtual Keyboard
 
@@ -227,9 +296,14 @@ Hyprland is a strong research platform because it exposes window-management acti
 - media control
 - volume control
 
-## Initial Gesture Vocabulary
+## Gesture Vocabulary
 
 Keep the first vocabulary small. Better to evaluate a reliable small set than a flashy unreliable one.
+
+The current class-demo vocabulary is the deterministic logic-control grammar in
+the crunch-time pivot section above. The older dynamic command vocabulary below
+is historical planning context and should not drive the next implementation
+slice unless Caden explicitly pivots back to learned/dynamic gesture work.
 
 ### Core Safety Gesture
 
@@ -280,14 +354,17 @@ These are more visually impressive but riskier. Treat as stretch goals after the
 
 ## Cursor and Text Feature Plan
 
-Cursor and text features are allowed in the prototype, but they should be staged after reliable command gestures.
+Cursor and text features are now central to the crunch-time prototype because
+the live demo is a "mid-air mouse plus window manager" loop rather than a
+learned semantic gesture recognizer. Text entry remains future work.
 
 ### Cursor Mode MVP
 
-- pinch starts cursor takeover
-- release ends cursor takeover
-- hand movement maps to pointer movement
-- optional second pinch or sustained pinch triggers click
+- explicit cursor/control mode is visible and pauseable
+- open/relaxed hand movement maps to pointer movement
+- index pinch tap triggers left click
+- thumb/middle pinch tap triggers right click
+- index pinch hold plus vertical movement triggers scroll
 - visible overlay indicates cursor mode is active
 - configurable gain/smoothing/dead-zone
 

@@ -1,24 +1,45 @@
 # AirDesk Tasks
 
-Current next sprint: make recognition mode-aware before any more live-control
-ambition. The all-IPN TCN v2 checkpoint is a useful public-data prior, but live
-preview showed that it is too eager as a global recognizer. Build preview and
-evaluation support for command/cursor/zoom mode groups, per-head thresholds,
-margin/persistence checks, and targeted AirDesk hard negatives.
+Current next sprint: crunch-time deterministic logic-control pivot. The all-IPN
+TCN v2 checkpoint is a useful public-data prior, and the mode-aware learned
+filter exists for preview/replay diagnostics, but live preview showed that the
+model is not safe enough for global desktop commands. For the class-ready demo,
+build a direct MediaPipe-landmark control path that recreates the practical
+mouse/window-manager loop: move pointer, click, scroll, open launcher, switch
+workspaces, move active/window-under-cursor to workspaces, and close windows
+with deliberate combos.
 
-Current context-reset task: implement a mode-aware learned-recognition filter
-around TCN v2 preview/evaluation while keeping actions disabled. Do not treat all
-13 IPN heads as globally available commands. IPN point heads are suppressed from
-learned preview/replay because direct MediaPipe pose logic is cleaner for
-pointing. Cursor mode keeps click/double-click plus zoom heads; zoom-media
-isolates zoom heads; global command mode should start with a smaller robust
-vocabulary after false-positive review.
+Current context-reset task: implement the logic-control architecture, not another
+learned-recognizer pass. Keep learned/DTW/motion gestures out of live Hyprland
+actions. Use stable pose events, a short per-hand combo buffer, hold windows,
+hysteresis, cooldowns, dry-run-first execution, overlay feedback, and JSONL logs.
+The first vocabulary should be small and adjustable after live feel testing.
 
 Immediate next-session checklist:
 
 - [ ] Keep `git status` clean before editing; preserve user changes.
 - [ ] Read `README.md`, `context.md`, `recognition-v2-plan.md`,
       `public-dataset-survey.md`, `tracking-samples.md`, and this file.
+- [ ] Review existing `StaticHandPoseRecognizer`, `PinchCursorController`,
+      Hyprland actions, cursor actions, runtime preview hooks, and tests.
+- [ ] Add primitive logic features for stable open palm, fist, sideways open
+      palm, index pinch, middle pinch, palm zone, and simple vertical motion.
+- [ ] Add a stable-pose debouncer that emits enter/held/release events rather
+      than per-frame spam.
+- [ ] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
+      matching, event consumption, and cooldown.
+- [ ] Implement MVP grammar in dry-run first:
+      open/relaxed cursor move; index pinch left click; middle pinch right click;
+      pinch-hold vertical scroll; sideways palm workspace left/right; fist
+      move-window left/right; open palm -> sideways palm launcher; open palm ->
+      fist -> open palm close-window combo.
+- [ ] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
+      and pointer button/scroll injection. Execution must stay guarded.
+- [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
+      `Target window`, `Executed`, and `Suppressed`.
+- [ ] Add focused tests for primitive pose classification, debouncing, combo
+      expiry/matching, grammar conflicts, cooldown, dry-run action routing, and
+      guarded Hyprland command allowlisting.
 - [x] Add a mode/profile vocabulary map for learned/custom TCN v2 heads.
 - [x] Let live preview show only enabled heads for the selected diagnostic mode,
       while retaining an all-head debug view.
@@ -27,14 +48,13 @@ Immediate next-session checklist:
       a single noisy window does not count as "for sure."
 - [x] Add replay/log evaluation over the latest live calibration JSONL to report
       which heads would fire under each mode/filter.
-- [ ] Plan or collect a small AirDesk hard-negative set only after the filter
-      surface exists: open hand idle, accidental pointing, reaching, resting,
-      cursor-like motion, and normal desk motion with hands visible.
+- [ ] Defer learned-model hard-negative collection unless Caden explicitly pivots
+      back to the model lane. It is no longer the next class-demo blocker.
 - [ ] Keep learned/DTW/motion gestures out of live desktop actions.
 - [ ] Run `uv run ruff check .` and `uv run pytest`.
 - [ ] Commit meaningful chunks and push to `origin/main`.
 
-Implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
+Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,
 `--persistence-frames`, and `--recognition-cooldown-seconds`. The same filter is
 available offline through `airdesk gesture replay-tcn-v2-log`. On the latest
@@ -48,6 +68,20 @@ sees" from "what the filter accepts." Each hand card shows a prominent
 `Seeing:` or `Suppressed:` badge for the current top custom head, while the
 green `Recognized:` badge is reserved for heads that pass mode, threshold,
 margin, persistence, and cooldown.
+
+Logic-control implementation note: Caden's current Hyprland setup exposes the
+needed OS commands directly:
+
+- `hyprctl dispatch global caelestia:launcher`
+- `hyprctl dispatch workspace -1` / `+1`
+- `hyprctl dispatch movetoworkspace -1` / `+1`
+- `hyprctl dispatch killactive`
+- `hyprctl dispatch movecursor <x> <y>`
+
+As of the planning pass, `hyprctl` is installed, `/dev/uinput` is writable by
+`caden`, no external pointer helper (`ydotool`, `dotool`, `wtype`) is installed,
+and the Python `evdev` package is not installed. Prefer an isolated input action
+target behind tests rather than assuming an unavailable binary.
 
 ## Phase 0: Project Setup
 

@@ -558,6 +558,16 @@ click/double-click plus zoom heads; zoom/media diagnostics isolate zoom heads;
 fragile heads such as `Throw up` / `Open twice` should remain disabled globally
 until hard-negative AirDesk data says otherwise.
 
+2026-05-11 crunch-time pivot: the mode-aware learned-recognition filter is now
+implemented for preview/replay diagnostics, and the live-control target has
+changed. Do not spend the next class-demo session trying to rescue IPN/TCN as
+the action recognizer. Build a deterministic landmark-logic grammar instead:
+stable open palm, fist, sideways open palm, index/middle pinch, palm zones,
+hold timing, cooldown, and a short same-hand combo buffer over stable pose
+events. Learned/DTW/motion recognizers remain useful evidence lanes, but direct
+Hyprland actions should come from the logic-control path until a future model
+beats it on AirDesk-specific negatives.
+
 ## Evaluation Metrics
 
 Use interaction-style metrics, not clip accuracy alone:
@@ -573,23 +583,25 @@ Use interaction-style metrics, not clip accuracy alone:
 
 ## Next-Session Stop Rule
 
-The next session should not immediately dive into code unless the plan survives review.
+The next session should not collect more learned-gesture data or wire learned
+gestures to actions. It should implement the deterministic logic-control lane
+behind tests and dry-run execution first.
 
 Expected next-session flow:
 
 1. Read docs and report.
-2. Review current code boundaries.
-3. Implement a mode-aware custom-head filter around `watch-tcn-v2` and
-   evaluation/log replay before collecting more data.
-4. Preserve an all-head debug view, but make the default diagnostic view show
-   only enabled heads for the selected mode.
-5. Replay the latest live calibration JSONL through candidate mode filters to
-   quantify how many false recognitions each filter would suppress.
-6. Only then plan/collect a small hard-negative AirDesk slice with open-hand
-   idle, accidental pointing, reaching, resting, cursor-like motion, and normal
-   desk motion.
-7. Keep live desktop actions disabled.
+2. Review current code boundaries for primitives, cursor mode, Hyprland actions,
+   runtime preview hooks, and tests.
+3. Implement stable primitive pose features for open palm, fist, sideways open
+   palm, index pinch, middle pinch, palm zone, and vertical pinch motion.
+4. Implement a debounced stable-event stream and short per-hand combo buffer.
+5. Implement the first grammar in dry-run:
+   cursor move, left/right click, scroll, workspace left/right, move-window
+   left/right, launcher combo, and open-palm/fist/open-palm close-window combo.
+6. Add visible dashboard/status feedback and JSONL logs for seeing, combo,
+   armed target, executed, and suppressed states.
+7. Only then consider guarded real execution for non-destructive Hyprland
+   commands. Keep close-window and pointer injection especially explicit.
 
-If the next agent finds the plan too broad, it should narrow TCN v2 to the
-manifest/target/evaluation surface first rather than jumping straight to live
-preview or broad collection.
+If the next agent finds the plan too broad, it should narrow to the combo-buffer
+and dry-run grammar first, not to another learned-recognition pass.

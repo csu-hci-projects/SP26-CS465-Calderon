@@ -191,7 +191,7 @@ Sprint 2 established a working live and replay foundation:
 - MediaPipe model path, hand count, and confidence thresholds are CLI-tunable.
 - JSONL recording/replay and replay analysis are available.
 - Command-mode policy, profile binding resolution, and dry-run runtime routing are implemented.
-- Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. Click/drag injection is still pending because no pointer-button injector is installed locally.
+- Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. This older cursor model uses pinch as the cursor-move clutch; the crunch-time logic-control pivot should revise that so open/relaxed hand movement controls the pointer and pinch becomes click/scroll/drag. Real pointer button/scroll injection is still pending. The 2026-05-11 planning check found `hyprctl` installed, `/dev/uinput` writable by `caden`, no `ydotool`/`dotool`/`wtype`, and no Python `evdev` package installed.
 - `airdesk label suggest` can bootstrap swipe labels by finding the strongest palm-motion window and applying phase/event labels for review. This is a labeling accelerator, not a final recognizer.
 - `airdesk gesture calibrate --kind dtw` and `airdesk gesture evaluate --recognizer dtw --model ...` now provide a dependency-free personalized DTW/template baseline for replay evaluation.
 - Sprint 4 batch `data/recordings/sprint4-swipes-001` has 24 local takes: 8 left swipes, 8 right swipes, and 8 normal desk-motion negatives. Generated labels/features/evaluations live under ignored `data/labels`, `data/features`, and `data/evaluations`.
@@ -228,24 +228,44 @@ Sprint 2 established a working live and replay foundation:
 
 Current next step:
 
-> The stronger schema-2 TCN v2 contract has now been replay-checked on old data,
-> live-tested, and source-holdout checked. Same-source replay was meaningfully
-> better than the first smoke: with `--early-match-tolerance-seconds 0.25`,
-> isolated swipes scored `16/16` with `5` false activations, and
-> `sprint4-chained-003` scored `8/10` with `3` repeated fires. But the new
-> `airdesk gesture holdout-tcn-v2` source split is much weaker: on
-> `sprint4-swipes-001`, training on takes 001-006 and testing on 007-008 scored
-> `2/4` held-out swipes with `5` false activations. Caden's live wrist-twist
-> false positives fit this: the older schema-2 `stream-invariant` model did not
-> consume absolute `palm_x/y/z`, but projected wrist rotation could still
-> perturb raw image-space motion, hand scale, and unscaled finger-relative
-> motion. That audit is now complete: the new classifier preset for targeted V2
-> collection is `stream-invariant-v2`. It keeps diagnostic absolute/scale fields
-> in exported rows and live dashboard logs, but excludes them from model input.
-> Do not collect broad combo data yet. The next gate is a targeted V2 train/test
-> slice with explicit wrist-twist/desk-motion negatives, near/far and
-> left/center/right frame positions as invariance checks, and held-out files.
-> Keep live actions dry-run/disabled.
+> Crunch-time pivot: stop trying to turn the all-IPN/TCN gesture recognizer into
+> the live command layer. Learned/DTW/motion recognizers should stay in
+> preview/replay/evaluation. The next implementation should build a deterministic
+> landmark-logic control path: stable open palm, fist, sideways open palm, pinch
+> taps/holds, palm zones, hold timing, cooldowns, and a rolling combo buffer over
+> stable pose-transition events. Use that grammar to recreate the practical
+> mouse/window-manager loop: move pointer, left/right click, scroll, open the
+> launcher, switch workspaces, move the focused/window-under-cursor to adjacent
+> workspaces, and close the active window through a deliberate combo. Keep all
+> execution dry-run-first with visible overlay feedback and JSONL logs.
+
+2026-05-11 logic-control architecture decision:
+
+- Do not wire learned all-IPN heads to live Hyprland actions for the class demo.
+- Build a "mid-air mouse plus window manager" grammar from direct MediaPipe
+  landmark facts.
+- Emit stable pose events only after debouncing/hold confirmation; do not treat
+  every frame as a command event.
+- Keep the last about four stable pose events per hand in a two-second combo
+  buffer.
+- Match combos same-hand by default, consume matched events, and apply cooldowns.
+- Avoid grammar overlap: `fist` alone is window-grab/hold state; close window is
+  a deliberate combo such as `open_palm -> fist -> open_palm`.
+- Show `Seeing`, `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`
+  states in preview/dashboard rather than relying on terminal text.
+
+MVP grammar candidate:
+
+- Open/relaxed hand in cursor mode: move cursor through Hyprland `movecursor`.
+- Index pinch tap: left click through a future input target.
+- Thumb/middle pinch tap: right click through a future input target.
+- Index pinch hold plus vertical movement: scroll through a future input target.
+- Sideways open palm held left/right: `hyprctl dispatch workspace -1` / `+1`.
+- Fist held center: arm window move and show active window title.
+- Fist moved left/right zone: `hyprctl dispatch movetoworkspace -1` / `+1`.
+- Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
+- Open palm -> fist -> open palm: close active window via
+  `hyprctl dispatch killactive`, with visible close-armed feedback.
 
 Current learned-recognition filter update:
 

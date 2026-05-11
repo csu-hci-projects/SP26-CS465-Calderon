@@ -4,11 +4,12 @@ You are working with Caden on AirDesk at:
 
 `/home/caden/projects/AirDesk`
 
-This is a context-reset continuation after the all-IPN TCN v2 live-preview
-session. Start with a staff-level review stance, preserve user changes, plan
-before editing, use `apply_patch` for manual edits, add/update tests with code,
-run `uv run ruff check .` and `uv run pytest`, then commit/push meaningful
-chunks to `origin/main`.
+This is a context-reset continuation after the learned all-IPN/TCN live-preview
+lane proved useful but not safe enough for class-demo desktop actions. Start
+with a staff-level review stance, preserve user changes, plan before editing,
+use `apply_patch` for manual edits, add/update tests with code, run
+`uv run ruff check .` and `uv run pytest`, then commit/push meaningful chunks to
+`origin/main`.
 
 Before editing:
 
@@ -26,95 +27,110 @@ Before editing:
    - `dev/active/cs465-airdesk/tracking-samples.md`
 4. Do not discard user changes.
 
-Current code/docs state:
+Current product decision:
 
-- Latest pushed commit at closeout: the docs closeout commit
-  `Refresh AirDesk mode-aware recognition docs`.
-- Historical sprint plans and stale reset/handoff prompts were archived under
-  `dev/archive/cs465-airdesk/2026-05-11/`.
-- Working tree should be clean.
-- No live desktop actions should be wired to learned/DTW/motion gestures.
+Do **not** try to rescue all-IPN/TCN as the live action recognizer for the class
+demo. Keep learned/DTW/motion recognizers in preview/replay/evaluation only.
 
-Best all-IPN checkpoint:
+The next implementation target is a deterministic MediaPipe-landmark
+logic-control lane: a small "mid-air mouse plus window manager" grammar that
+recreates core keyboard/mouse/window affordances with observable pose facts,
+stable timing, visible feedback, and dry-run-first safety.
 
-`data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt`
+Why the pivot happened:
 
-Held-out all-IPN final-frame head eval:
+- Best all-IPN checkpoint:
+  `data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt`.
+- Held-out all-IPN scoring was useful but not live-safe:
+  `gesture_macro_f1=0.521`, `gesture_micro_f1=0.742`, top-1 `0.757`,
+  top-3 `0.934`.
+- Live preview produced high-confidence false activations from ordinary hand
+  presence/motion: `Throw up`, `Open twice`, `Zoom out`, point-like heads, and
+  unstable lateral throw direction.
+- Mode-aware learned filtering is implemented for diagnostics, but live desktop
+  actions should now come from deterministic logic.
 
-- `gesture_macro_f1=0.521`
-- `gesture_micro_f1=0.742`
-- gesture-positive top-1 final-frame accuracy `0.757`
-- top-3 `0.934`
+Architecture to implement:
 
-Boundary eval on the same checkpoint:
+```text
+MediaPipe landmarks
+  -> per-hand primitive pose features
+  -> stable pose debouncer
+  -> pose transition events
+  -> rolling combo buffer, max 4 events / about 2 seconds
+  -> mode/action grammar
+  -> guarded Hyprland and input adapters
+  -> overlay/status and JSONL logs
+```
 
-- about `start_f1=0.455`, `end_f1=0.468` at +/-0.5s
-- about `0.53` at +/-1.0s
+Important design rules:
 
-Important interpretation:
+- Emit stable pose events, not per-frame command spam.
+- Combos should be same-hand by default, consume matched events, expire after
+  about 2 seconds, and have cooldowns.
+- Avoid gesture overlap:
+  - `fist` alone is a window-grab/hold state.
+  - close window should be deliberate, for example
+    `open_palm -> fist -> open_palm`.
+- Keep all execution dry-run-first.
+- Show what AirDesk is seeing and what it is about to do: `Seeing`, `Combo`,
+  `Armed`, `Target window`, `Executed`, and `Suppressed`.
 
-- The all-IPN evaluation is fairer than the old two-head false-fire evaluation:
-  every non-`D0X` IPN gesture is a named evidence head, and `D0X` remains
-  background.
-- Fair IPN held-out scoring does **not** mean safe AirDesk command use.
-- Caden's live preview showed high-confidence false activations from normal hand
-  presence/motion, especially `Throw up`, `Open twice`, `Zoom out`, and
-  point-like heads.
-- Latest parsed live calibration log:
-  `data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl`
-  had 328 predictions. Top heads above `0.80`: `Open twice` 28, `Throw up` 26,
-  `Throw left` 11, `Throw down` 9, `Point one finger` 8.
+MVP grammar:
 
-Current product/architecture decision:
+| Input pattern | Action |
+| --- | --- |
+| Open/relaxed hand in cursor mode | Move cursor |
+| Index pinch tap | Left click |
+| Thumb/middle pinch tap | Right click |
+| Index pinch hold + vertical movement | Scroll |
+| Sideways open palm held left/right | Switch workspace left/right |
+| Fist held center | Arm window move and show target window |
+| Fist moved left/right zone | Move active/window-under-cursor to workspace left/right |
+| Open palm -> sideways open palm | Open launcher |
+| Open palm -> fist -> open palm | Close active window |
 
-Do **not** enable all 13 IPN heads globally.
+Caden's Hyprland setup:
 
-Use mode groups:
+- Launcher: `hyprctl dispatch global caelestia:launcher`
+- Workspace: `hyprctl dispatch workspace -1` / `+1`
+- Move window to workspace: `hyprctl dispatch movetoworkspace -1` / `+1`
+- Close active window: `hyprctl dispatch killactive`
+- Move cursor: `hyprctl dispatch movecursor <x> <y>`
+- `hyprctl` is installed.
+- `/dev/uinput` is writable by `caden`.
+- No external pointer helper (`ydotool`, `dotool`, `wtype`) is installed.
+- Python `evdev` is not installed as of the planning pass.
 
-- all-IPN/debug mode: show everything, no actions.
-- command mode: only robust command gestures after AirDesk negative testing;
-  keep `Throw up`, `Open twice`, and `Zoom out` disabled globally for now.
-- cursor mode: click/double-click plus zoom heads only. IPN point heads are
-  suppressed because direct MediaPipe pose logic is cleaner if pointing is
-  needed later.
-- zoom/media mode: zoom heads only, also disabled globally by default.
+Recommended first implementation slice:
 
-Next implementation target:
-
-Build a mode-aware learned-recognition filter around TCN v2 preview/evaluation.
-
-Recommended first slice:
-
-1. Add a small vocabulary/mode map for custom TCN v2 heads.
-2. Add CLI options to `watch-tcn-v2` for diagnostic recognition mode, while
-   preserving an all-head debug view.
-3. For custom heads, support per-head thresholds, top-vs-runner-up margin, short
-   persistence, and cooldown before showing "Recognized" as confident.
-4. Add a replay/log evaluator for live prediction JSONL so the latest
-   calibration log can be scored under proposed filters without rerunning live.
-5. Update dashboard/history so it shows enabled heads and explains when a head
-   is suppressed by mode/filter.
-6. Add focused tests for mode membership, thresholds, margins, persistence, and
-   JSONL replay scoring.
-
-Only after that:
-
-- Plan or collect a small AirDesk hard-negative set: open-hand idle, accidental
-  pointing, reaching, resting, cursor-like motion, and normal desk motion with
-  hands visible.
-- Consider fine-tuning/retraining with those hard negatives.
-
-Official IPN model note:
-
-The official IPN baselines/checkpoints are RGB/video models such as
-ResNeXt/ResNet variants, not MediaPipe-landmark TCNs. They are useful references
-or a separate heavier fallback experiment, but they are not drop-in replacements
-for AirDesk's current feature stream and do not remove the need for
-AirDesk-specific mode gating and hard negatives.
+1. Review existing:
+   - `src/airdesk/gestures/primitives.py`
+   - `src/airdesk/modes/cursor.py`
+   - `src/airdesk/actions/hyprland.py`
+   - `src/airdesk/actions/cursor.py`
+   - `src/airdesk/cli_runtime.py`
+   - existing cursor/action/runtime tests.
+2. Add primitive logic features for:
+   - stable open palm
+   - stable fist
+   - sideways open palm
+   - index pinch
+   - middle pinch
+   - palm zone
+   - pinch vertical motion for scroll.
+3. Add the stable-event debouncer and combo buffer.
+4. Implement the grammar in dry-run first.
+5. Expand guarded action adapters only as needed.
+6. Add dashboard/status and JSONL logging for pose/combo/action state.
+7. Add focused tests for primitives, debouncing, combo matching/expiry,
+   grammar conflicts, cooldown, dry-run routing, and guarded Hyprland allowlist.
 
 Safety stance:
 
-- Keep learned/DTW/motion gestures out of live Hyprland actions.
-- Keep preview/evaluation no-action unless Caden explicitly asks otherwise.
-- Cursor movement remains its own guarded/dry-run-first path; pointer click/drag
-  injection is not enabled yet.
+- Learned/DTW/motion gestures stay out of live Hyprland actions.
+- `killactive` is high risk: require the close combo and visible close-armed
+  feedback with the active window title.
+- Pointer click/scroll injection must be isolated behind an input action target
+  with dry-run tests before real execution.
+- If scope gets too large, finish the combo buffer and dry-run grammar first.
