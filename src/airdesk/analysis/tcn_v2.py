@@ -243,6 +243,70 @@ def evaluate_tcn_v2_head_manifest(
     }
 
 
+def evaluate_tcn_v2_boundary_manifest(
+    *,
+    manifest_path: Path,
+    model_path: Path,
+    threshold: float | None = None,
+    tolerances_seconds: tuple[float, ...] = (0.1, 0.2, 0.3, 0.5, 0.75, 1.0),
+    batch_size: int = 64,
+    device: str = "auto",
+) -> dict[str, object]:
+    """Evaluate start/end evidence as temporally matched boundary events."""
+    if threshold is not None and not 0 <= threshold <= 1:
+        raise ValueError("threshold must be in [0, 1]")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    if not tolerances_seconds:
+        raise ValueError("at least one boundary tolerance is required")
+    if any(tolerance < 0 for tolerance in tolerances_seconds):
+        raise ValueError("boundary tolerances must be non-negative")
+    manifest = load_tcn_dataset_manifest(manifest_path)
+    if manifest.target_mode != "v2-evidence":
+        raise ValueError("TCN v2 boundary evaluation requires target_mode='v2-evidence'")
+    boundary_heads = tuple(head for head in ("start", "end") if head in manifest.evidence_targets)
+    if not boundary_heads:
+        raise ValueError("TCN v2 boundary evaluation requires start and/or end evidence heads")
+    thresholds, threshold_source = _head_evaluation_thresholds(
+        model_path=model_path,
+        evidence_targets=manifest.evidence_targets,
+        threshold=threshold,
+    )
+    raw_predictions = predict_causal_tcn_v2_manifest(
+        model_path=model_path,
+        manifest_path=manifest_path,
+        emit_all_rows=True,
+        batch_size=batch_size,
+        device=device,
+    )
+    predictions = dedupe_tcn_v2_predictions(raw_predictions)
+    predictions_by_label = _boundary_predictions_by_label_path(predictions)
+    boundary_truth = _boundary_truth_by_label_path(manifest)
+    heads_payload = {
+        head: _boundary_head_metrics(
+            head=head,
+            threshold=thresholds[head],
+            predictions_by_label=predictions_by_label,
+            boundary_truth=boundary_truth,
+            tolerances_seconds=tolerances_seconds,
+        )
+        for head in boundary_heads
+    }
+    return {
+        "recognizer": "tcn_v2_boundary_events",
+        "manifest": str(manifest_path),
+        "model": str(model_path),
+        "device": device,
+        "batch_size": batch_size,
+        "threshold_source": threshold_source,
+        "thresholds": {head: thresholds[head] for head in boundary_heads},
+        "source_count": len(manifest.sources),
+        "raw_prediction_count": len(raw_predictions),
+        "deduped_prediction_count": len(predictions),
+        "boundary_heads": heads_payload,
+    }
+
+
 def decode_tcn_v2_predictions(
     predictions: list[CausalTcnEvidencePrediction],
     config: EventDecoderConfig,
@@ -474,6 +538,178 @@ def _predicted_final_gesture_label(
     if evidence.get(best, 0.0) >= thresholds[best]:
         return best
     return "background"
+
+
+def _boundary_predictions_by_label_path(
+    predictions: list[CausalTcnEvidencePrediction],
+) -> dict[str, list[CausalTcnEvidencePrediction]]:
+    grouped: dict[str, list[CausalTcnEvidencePrediction]] = {}
+    for prediction in predictions:
+        if prediction.label_path is None:
+            continue
+        grouped.setdefault(prediction.label_path, []).append(prediction)
+    return grouped
+
+
+def _boundary_truth_by_label_path(
+    manifest: Any,
+) -> dict[str, dict[str, list[float]]]:
+    truth: dict[str, dict[str, list[float]]] = {}
+    for source in manifest.sources:
+        if source.label_path is None or source.label_path in truth:
+            continue
+        labels = load_label_file(Path(source.label_path))
+        start_times: list[float] = []
+        end_times: list[float] = []
+        for event in labels.event_labels:
+            if not event.gesture:
+                continue
+            start_times.append(float(event.start_time))
+            end_times.append(float(event.end_time))
+        truth[source.label_path] = {"start": start_times, "end": end_times}
+    return truth
+
+
+def _boundary_head_metrics(
+    *,
+    head: str,
+    threshold: float,
+    predictions_by_label: dict[str, list[CausalTcnEvidencePrediction]],
+    boundary_truth: dict[str, dict[str, list[float]]],
+    tolerances_seconds: tuple[float, ...],
+) -> dict[str, object]:
+    predicted_by_label = {
+        label_path: [
+            peak["timestamp"]
+            for peak in _boundary_positive_peaks(predictions, head=head, threshold=threshold)
+        ]
+        for label_path, predictions in predictions_by_label.items()
+    }
+    predicted_count = sum(len(times) for times in predicted_by_label.values())
+    ground_truth_count = sum(len(times.get(head, ())) for times in boundary_truth.values())
+    return {
+        "threshold": threshold,
+        "predicted_events": predicted_count,
+        "ground_truth_events": ground_truth_count,
+        "tolerances": {
+            f"{tolerance:.3f}": _boundary_tolerance_metrics(
+                head=head,
+                tolerance_seconds=tolerance,
+                predicted_by_label=predicted_by_label,
+                boundary_truth=boundary_truth,
+            )
+            for tolerance in tolerances_seconds
+        },
+    }
+
+
+def _boundary_positive_peaks(
+    predictions: list[CausalTcnEvidencePrediction],
+    *,
+    head: str,
+    threshold: float,
+    segment_gap_seconds: float = 0.15,
+) -> list[dict[str, float | int]]:
+    peaks: list[dict[str, float | int]] = []
+    current_segment: list[tuple[float, float]] = []
+    last_timestamp: float | None = None
+    for prediction in sorted(predictions, key=lambda item: item.timestamp):
+        score = float(prediction.evidence.get(head, 0.0))
+        if score >= threshold:
+            if (
+                current_segment
+                and last_timestamp is not None
+                and prediction.timestamp - last_timestamp > segment_gap_seconds
+            ):
+                peaks.append(_boundary_segment_peak(current_segment))
+                current_segment = []
+            current_segment.append((float(prediction.timestamp), score))
+            last_timestamp = float(prediction.timestamp)
+        elif current_segment:
+            peaks.append(_boundary_segment_peak(current_segment))
+            current_segment = []
+            last_timestamp = None
+    if current_segment:
+        peaks.append(_boundary_segment_peak(current_segment))
+    return peaks
+
+
+def _boundary_segment_peak(segment: list[tuple[float, float]]) -> dict[str, float | int]:
+    peak_timestamp, peak_score = max(segment, key=lambda item: item[1])
+    return {
+        "timestamp": peak_timestamp,
+        "score": peak_score,
+        "segment_start": segment[0][0],
+        "segment_end": segment[-1][0],
+        "frames": len(segment),
+    }
+
+
+def _boundary_tolerance_metrics(
+    *,
+    head: str,
+    tolerance_seconds: float,
+    predicted_by_label: dict[str, list[float]],
+    boundary_truth: dict[str, dict[str, list[float]]],
+) -> dict[str, float | int]:
+    true_positive = false_positive = false_negative = 0
+    delays: list[float] = []
+    for label_path in set(boundary_truth) | set(predicted_by_label):
+        predicted_times = predicted_by_label.get(label_path, [])
+        truth_times = boundary_truth.get(label_path, {}).get(head, [])
+        tp, fp, fn, file_delays = _match_boundary_times(
+            truth_times=truth_times,
+            predicted_times=predicted_times,
+            tolerance_seconds=tolerance_seconds,
+        )
+        true_positive += tp
+        false_positive += fp
+        false_negative += fn
+        delays.extend(file_delays)
+    precision = _safe_divide(true_positive, true_positive + false_positive)
+    recall = _safe_divide(true_positive, true_positive + false_negative)
+    f1 = _safe_divide(2 * precision * recall, precision + recall)
+    sorted_delays = sorted(delays)
+    median_delay = sorted_delays[len(sorted_delays) // 2] if sorted_delays else 0.0
+    return {
+        "tolerance_seconds": tolerance_seconds,
+        "true_positive": true_positive,
+        "false_positive": false_positive,
+        "false_negative": false_negative,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "median_delay_seconds": median_delay,
+    }
+
+
+def _match_boundary_times(
+    *,
+    truth_times: list[float],
+    predicted_times: list[float],
+    tolerance_seconds: float,
+) -> tuple[int, int, int, list[float]]:
+    unmatched_predictions = set(range(len(predicted_times)))
+    true_positive = 0
+    delays: list[float] = []
+    for truth_time in sorted(truth_times):
+        candidates = sorted(
+            (
+                (abs(predicted_times[index] - truth_time), index)
+                for index in unmatched_predictions
+                if abs(predicted_times[index] - truth_time) <= tolerance_seconds
+            ),
+            key=lambda item: item[0],
+        )
+        if not candidates:
+            continue
+        _distance, prediction_index = candidates[0]
+        unmatched_predictions.remove(prediction_index)
+        true_positive += 1
+        delays.append(predicted_times[prediction_index] - truth_time)
+    false_positive = len(unmatched_predictions)
+    false_negative = len(truth_times) - true_positive
+    return true_positive, false_positive, false_negative, delays
 
 
 def _top_gesture_confusions(

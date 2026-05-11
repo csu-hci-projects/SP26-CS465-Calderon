@@ -600,6 +600,11 @@ random validation split better but fell back to `gesture_macro_f1=0.503` on the
 official held-out split, so simply widening the TCN is not the next best lever.
 `start` / `end` stayed weak across all runs, which points to boundary target
 design/tolerance rather than CUDA, caching, or basic architecture failure.
+`airdesk gesture evaluate-tcn-v2-boundaries` now evaluates those sparse boundary
+heads as temporally matched peak events. On the current best `w16_h64`
+checkpoint, held-out boundary scores are about `start_f1=0.455` and
+`end_f1=0.468` at ±0.5s, rising to about `0.53` at ±1.0s, so the signal is near
+the annotations but not yet clean enough for event decoding.
 
 ## Current Roadmap
 

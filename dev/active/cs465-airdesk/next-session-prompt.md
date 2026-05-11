@@ -234,7 +234,10 @@ scored held-out `gesture_macro_f1=0.505`, `gesture_micro_f1=0.695`. A controlled
 final-frame accuracy `0.757`, and top-3 `0.934`. A wider 1.6s `h96` run scored
 lower held-out `gesture_macro_f1=0.503`, so do not assume more width is the next
 fix. `start` / `end` stayed weak across runs and should be treated as a boundary
-target/evaluation problem before event-decoder use.
+target/evaluation problem before event-decoder use. The
+`evaluate-tcn-v2-boundaries` command now scores those heads as temporally
+matched peak events; current best all-IPN boundary scores are about
+`start_f1=0.455` and `end_f1=0.468` at ±0.5s.
 
 Next-session assignment:
 
@@ -265,7 +268,8 @@ Architectural stance:
 2. Use the 1.6s `h64/l4` all-IPN checkpoint as the current public-data prior
    candidate unless a new controlled run beats it on the official held-out split.
 3. Review the weak `start` / `end` heads with boundary tolerance or wider target
-   labels before treating all-IPN evidence as an event decoder.
+   labels before treating all-IPN evidence as an event decoder. Use
+   `airdesk gesture evaluate-tcn-v2-boundaries` for this check.
 4. Decide which IPN heads are useful as AirDesk priors and compare
    AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or hybrid training
    on the AirDesk source-held-out V2 recordings.

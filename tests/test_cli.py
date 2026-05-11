@@ -270,6 +270,20 @@ def test_evaluate_tcn_v2_heads_help_exposes_final_frame_controls() -> None:
     assert "--device" in result.stdout
 
 
+def test_evaluate_tcn_v2_boundaries_help_exposes_tolerance_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "evaluate-tcn-v2-boundaries", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--manifest" in result.stdout
+    assert "--tolerance-seconds" in result.stdout
+    assert "--threshold" in result.stdout
+    assert "--device" in result.stdout
+
+
 def test_diagnose_tcn_events_help_exposes_decoder_controls() -> None:
     result = CliRunner().invoke(
         app,
@@ -1435,6 +1449,92 @@ def test_gesture_evaluate_tcn_v2_heads_cli_writes_metrics(
     assert "wrote head_metrics=" in result.stdout
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["recognizer"] == "tcn_v2_final_frame_heads"
+
+
+def test_gesture_evaluate_tcn_v2_boundaries_cli_writes_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    model = tmp_path / "model.pt"
+    output = tmp_path / "boundary-metrics.json"
+    manifest.write_text("{}", encoding="utf-8")
+    model.write_bytes(b"fake checkpoint")
+
+    def fake_evaluate_tcn_v2_boundary_manifest(**kwargs: object) -> dict[str, object]:
+        assert kwargs["threshold"] == 0.5
+        assert kwargs["tolerances_seconds"] == (0.25, 0.5)
+        assert kwargs["batch_size"] == 8
+        assert kwargs["device"] == "cpu"
+        return {
+            "recognizer": "tcn_v2_boundary_events",
+            "threshold_source": "fixed",
+            "deduped_prediction_count": 4,
+            "boundary_heads": {
+                "start": {
+                    "threshold": 0.5,
+                    "predicted_events": 2,
+                    "ground_truth_events": 1,
+                    "tolerances": {
+                        "0.250": {
+                            "tolerance_seconds": 0.25,
+                            "true_positive": 1,
+                            "false_positive": 1,
+                            "false_negative": 0,
+                            "precision": 0.5,
+                            "recall": 1.0,
+                            "f1": 2 / 3,
+                            "median_delay_seconds": 0.1,
+                        },
+                        "0.500": {
+                            "tolerance_seconds": 0.5,
+                            "true_positive": 1,
+                            "false_positive": 1,
+                            "false_negative": 0,
+                            "precision": 0.5,
+                            "recall": 1.0,
+                            "f1": 2 / 3,
+                            "median_delay_seconds": 0.1,
+                        },
+                    },
+                }
+            },
+        }
+
+    monkeypatch.setattr(
+        cli_tcn,
+        "evaluate_tcn_v2_boundary_manifest",
+        fake_evaluate_tcn_v2_boundary_manifest,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "gesture",
+            "evaluate-tcn-v2-boundaries",
+            "--manifest",
+            str(manifest),
+            "--model",
+            str(model),
+            "--out",
+            str(output),
+            "--threshold",
+            "0.5",
+            "--tolerance-seconds",
+            "0.25,0.5",
+            "--batch-size",
+            "8",
+            "--device",
+            "cpu",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "recognizer=tcn_v2_boundary_events" in result.stdout
+    assert "start_f1@0.50s=0.667" in result.stdout
+    assert "wrote boundary_metrics=" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["recognizer"] == "tcn_v2_boundary_events"
 
 
 def test_gesture_holdout_dtw_cli_writes_summary_and_model(tmp_path: Path) -> None:

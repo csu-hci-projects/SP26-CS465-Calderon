@@ -496,6 +496,14 @@ runs, so the next recognizer work should treat boundary evidence as a
 target-design/evaluation-tolerance problem before relying on it for event
 decoding.
 
+Boundary follow-up: `airdesk gesture evaluate-tcn-v2-boundaries` now evaluates
+`start` / `end` as temporally matched peak events instead of exact final-frame
+labels. On the current best `w16_h64` checkpoint, the held-out IPN test split
+scores `start_f1=0.455` and `end_f1=0.468` at ±0.5s, rising to about `0.53` at
+±1.0s. That means boundary evidence is often near the right place, but still not
+clean enough to drive event decoding without a boundary-target or decoder
+tolerance pass.
+
 ## Notes Template
 
 For each sample, write:

@@ -12,6 +12,7 @@ from airdesk.analysis import (
     diagnose_tcn_manifest_events,
     diagnose_tcn_v2_manifest_events,
     evaluate_tcn_manifest,
+    evaluate_tcn_v2_boundary_manifest,
     evaluate_tcn_v2_head_manifest,
     evaluate_tcn_v2_manifest,
     holdout_totals,
@@ -485,6 +486,72 @@ def gesture_evaluate_tcn_v2_heads(
     )
     if out is not None:
         typer.echo(f"wrote head_metrics={out}")
+
+
+def gesture_evaluate_tcn_v2_boundaries(
+    manifest: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 evidence manifest JSON path."),
+    ],
+    model: Annotated[
+        Path,
+        typer.Option(exists=True, readable=True, help="TCN v2 checkpoint path."),
+    ],
+    out: Annotated[Path | None, typer.Option(help="Optional JSON metrics output path.")] = None,
+    threshold: Annotated[
+        float | None,
+        typer.Option(
+            help=(
+                "Fixed probability threshold for start/end heads. Omit to use "
+                "checkpoint calibration thresholds."
+            ),
+        ),
+    ] = None,
+    tolerance_seconds: Annotated[
+        str,
+        typer.Option(help="Comma-separated temporal match tolerances in seconds."),
+    ] = "0.1,0.2,0.3,0.5,0.75,1.0",
+    batch_size: Annotated[int, typer.Option(help="Prediction batch size.")] = 64,
+    device: Annotated[
+        str,
+        typer.Option(help="TCN v2 compute device: auto, cpu, or cuda."),
+    ] = "auto",
+) -> None:
+    """Evaluate start/end TCN v2 heads as temporally matched boundary events."""
+    try:
+        payload = evaluate_tcn_v2_boundary_manifest(
+            manifest_path=manifest,
+            model_path=model,
+            threshold=threshold,
+            tolerances_seconds=_parse_tolerance_seconds(tolerance_seconds),
+            batch_size=batch_size,
+            device=device,
+        )
+    except (MissingMlDependencyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    parts = [
+        "recognizer=tcn_v2_boundary_events",
+        f"threshold_source={payload['threshold_source']}",
+        f"deduped_predictions={payload['deduped_prediction_count']}",
+        f"device={device}",
+    ]
+    for head, metrics in payload["boundary_heads"].items():
+        tolerances = metrics["tolerances"]
+        selected_key = "0.500" if "0.500" in tolerances else next(iter(tolerances))
+        selected = tolerances[selected_key]
+        parts.append(
+            f"{head}_f1@{float(selected['tolerance_seconds']):.2f}s="
+            f"{float(selected['f1']):.3f}"
+        )
+    typer.echo(" ".join(parts))
+    if out is not None:
+        typer.echo(f"wrote boundary_metrics={out}")
 
 
 def gesture_diagnose_tcn_events(
@@ -1171,6 +1238,21 @@ def _format_feature_diagnostics_summary(report: FeatureDiagnosticsReport) -> str
     return "\n".join(lines)
 
 
+def _parse_tolerance_seconds(value: str) -> tuple[float, ...]:
+    tolerances: list[float] = []
+    for raw_part in value.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        tolerance = float(part)
+        if tolerance < 0:
+            raise ValueError("boundary tolerances must be non-negative")
+        tolerances.append(tolerance)
+    if not tolerances:
+        raise ValueError("at least one boundary tolerance is required")
+    return tuple(tolerances)
+
+
 
 
 def register_tcn_commands(gesture_app: typer.Typer) -> None:
@@ -1181,6 +1263,7 @@ def register_tcn_commands(gesture_app: typer.Typer) -> None:
     gesture_app.command("evaluate-tcn")(gesture_evaluate_tcn)
     gesture_app.command("evaluate-tcn-v2")(gesture_evaluate_tcn_v2)
     gesture_app.command("evaluate-tcn-v2-heads")(gesture_evaluate_tcn_v2_heads)
+    gesture_app.command("evaluate-tcn-v2-boundaries")(gesture_evaluate_tcn_v2_boundaries)
     gesture_app.command("diagnose-tcn-events")(gesture_diagnose_tcn_events)
     gesture_app.command("diagnose-tcn-v2-events")(gesture_diagnose_tcn_v2_events)
     gesture_app.command("holdout-tcn")(gesture_holdout_tcn)
