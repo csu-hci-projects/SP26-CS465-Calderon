@@ -101,6 +101,8 @@ Use the same launcher for live previews:
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --hand-delegate gpu --show
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-swipes-001-schema2-regression.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --events-out data/logs/live-tcn-v2-preview.jsonl
+uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
+uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 ```
 
 A successful T550 MediaPipe run prints a startup line like:
@@ -121,6 +123,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 
 `watch-dtw` uses a live-optimized latest-window scan. Offline DTW evaluation still scans all candidate windows, but live preview only scores windows ending at the newest usable hand frame so it does not repeatedly rescan the whole rolling buffer.
 `watch-tcn-v2` is still no-action preview only; use the dashboard and JSONL logs to inspect evidence bars, emit-vs-peak delay, and motion features such as position, hand scale, normalized dx, peak x velocity, and direction consistency. If a wrist-twist/lightbulb motion fires as a swipe, record that as a targeted V2 negative rather than sweeping thresholds.
+For all-IPN checkpoints, use `--recognition-mode command|cursor|zoom-media|all-ipn` and keep `--debug-all-heads` for diagnosis. The dashboard now shows enabled heads plus filter/suppression reasons so a high raw head such as `Throw up` or `Open twice` does not automatically become a confident recognition.
 
 ## Public Dataset Conversion Smoke
 

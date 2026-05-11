@@ -17,13 +17,13 @@ Immediate next-session checklist:
 - [ ] Keep `git status` clean before editing; preserve user changes.
 - [ ] Read `README.md`, `context.md`, `recognition-v2-plan.md`,
       `public-dataset-survey.md`, `tracking-samples.md`, and this file.
-- [ ] Add a mode/profile vocabulary map for learned/custom TCN v2 heads.
-- [ ] Let live preview show only enabled heads for the selected diagnostic mode,
+- [x] Add a mode/profile vocabulary map for learned/custom TCN v2 heads.
+- [x] Let live preview show only enabled heads for the selected diagnostic mode,
       while retaining an all-head debug view.
-- [ ] Add per-head thresholds and top-vs-runner-up margin checks for custom heads.
-- [ ] Add persistence/cooldown logic for the plain-language recognized callout so
+- [x] Add per-head thresholds and top-vs-runner-up margin checks for custom heads.
+- [x] Add persistence/cooldown logic for the plain-language recognized callout so
       a single noisy window does not count as "for sure."
-- [ ] Add replay/log evaluation over the latest live calibration JSONL to report
+- [x] Add replay/log evaluation over the latest live calibration JSONL to report
       which heads would fire under each mode/filter.
 - [ ] Plan or collect a small AirDesk hard-negative set only after the filter
       surface exists: open hand idle, accidental pointing, reaching, resting,
@@ -31,6 +31,15 @@ Immediate next-session checklist:
 - [ ] Keep learned/DTW/motion gestures out of live desktop actions.
 - [ ] Run `uv run ruff check .` and `uv run pytest`.
 - [ ] Commit meaningful chunks and push to `origin/main`.
+
+Implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
+`--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,
+`--persistence-frames`, and `--recognition-cooldown-seconds`. The same filter is
+available offline through `airdesk gesture replay-tcn-v2-log`. On the latest
+calibration log, default command-mode filtering (`threshold=0.80`, `margin=0.15`,
+`persistence=3`) reduced 328 raw predictions to 2 diagnostic command-mode
+recognitions, both `ipn_g05` / Throw left; `Throw up`, `Open twice`, and `Zoom
+out` were suppressed by mode rather than shown as global commands.
 
 ## Phase 0: Project Setup
 

@@ -247,6 +247,23 @@ Current next step:
 > left/center/right frame positions as invariance checks, and held-out files.
 > Keep live actions dry-run/disabled.
 
+Current learned-recognition filter update:
+
+- `watch-tcn-v2` now has mode-aware custom-head filtering for all-IPN checkpoints.
+- Modes are diagnostic only: `command` enables the lateral throw proxy heads,
+  `cursor` enables point/click/double-click heads, `zoom-media` enables zoom
+  heads, and `all-ipn` / `--debug-all-heads` keeps the full debug view.
+- The plain-language "Recognized" callout now requires an enabled head,
+  per-head/default threshold, top-vs-runner-up margin, short persistence, and
+  per-hand cooldown. Suppressed top heads remain visible in dashboard/log
+  diagnostics.
+- Replay the same policy with `airdesk gesture replay-tcn-v2-log` before live
+  tuning. On
+  `data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl`, default
+  command-mode filtering over 328 predictions emitted 2 diagnostic recognitions,
+  both `ipn_g05` / Throw left; the dominant false-fire heads (`Throw up`, `Open
+  twice`, `Zoom out`) were suppressed by mode.
+
 Current V2 feature contract:
 
 - `stream-invariant-v2` is the default preset for new V2 classifier manifests.

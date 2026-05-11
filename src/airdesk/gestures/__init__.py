@@ -7,6 +7,12 @@ from airdesk.gestures.decoder import (
     EventDecoderConfig,
     frames_from_candidates,
 )
+from airdesk.gestures.learned_filter import (
+    LearnedRecognition,
+    LearnedRecognitionFilter,
+    LearnedRecognitionFilterConfig,
+    LearnedRecognitionFrame,
+)
 from airdesk.gestures.motion import (
     MotionEventConfig,
     MotionEventRecognizer,
@@ -27,6 +33,10 @@ __all__ = [
     "GesturePhase",
     "GestureRecognizer",
     "IntentGatedSwipeRecognizer",
+    "LearnedRecognition",
+    "LearnedRecognitionFilter",
+    "LearnedRecognitionFilterConfig",
+    "LearnedRecognitionFrame",
     "MotionEventConfig",
     "MotionEventRecognizer",
     "PhraseRecognizerConfig",

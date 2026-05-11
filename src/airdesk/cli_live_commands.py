@@ -28,13 +28,17 @@ from airdesk.cli_live import (
     _live_tcn_v2_preview_status,
     _live_tcn_v2_row_motion_features,
     _max_tcn_v2_visible_evidence,
-    _recognized_tcn_v2_custom_evidence,
     _show_live_tcn_prediction,
 )
 from airdesk.cli_tracking import _make_tracker
 from airdesk.features import FeatureRowStream, FrameFeatureRow
 from airdesk.gestures.decoder import DecoderFrame, EventDecoder, EventDecoderConfig
 from airdesk.gestures.dtw import DtwGestureModel, DtwTemplateRecognizer
+from airdesk.gestures.learned_filter import (
+    LearnedRecognitionFilter,
+    LearnedRecognitionFilterConfig,
+    parse_head_thresholds,
+)
 from airdesk.gestures.primitives import StaticHandPoseRecognizer
 from airdesk.ml import (
     CausalTcnLivePrediction,
@@ -326,8 +330,50 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         ] = 4,
         evidence_threshold: Annotated[
             float,
-            typer.Option(help="Minimum evidence score before printing a prediction line."),
-        ] = 0.35,
+            typer.Option(help="Default custom-head evidence score required for recognition."),
+        ] = 0.80,
+        head_thresholds: Annotated[
+            str | None,
+            typer.Option(
+                "--head-thresholds",
+                help="Optional comma list of per-head thresholds, e.g. ipn_g05=0.85.",
+            ),
+        ] = None,
+        evidence_margin: Annotated[
+            float,
+            typer.Option(
+                "--evidence-margin",
+                help="Minimum top-vs-runner-up margin for custom-head recognition.",
+            ),
+        ] = 0.15,
+        persistence_frames: Annotated[
+            int,
+            typer.Option(
+                "--persistence-frames",
+                help="Consecutive filtered predictions required before custom-head recognition.",
+            ),
+        ] = 3,
+        recognition_cooldown_seconds: Annotated[
+            float,
+            typer.Option(
+                "--recognition-cooldown-seconds",
+                help="Same-head custom recognition cooldown per hand.",
+            ),
+        ] = 1.5,
+        recognition_mode: Annotated[
+            str,
+            typer.Option(
+                "--recognition-mode",
+                help="Custom-head mode: command, cursor, zoom-media, or all-ipn.",
+            ),
+        ] = "command",
+        debug_all_heads: Annotated[
+            bool,
+            typer.Option(
+                "--debug-all-heads",
+                help="Show/filter all custom IPN heads regardless of recognition mode.",
+            ),
+        ] = False,
         include_background: Annotated[
             bool,
             typer.Option(help="Print low-confidence/background evidence lines as well."),
@@ -365,6 +411,19 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         if not 0 <= evidence_threshold <= 1:
             typer.echo("evidence-threshold must be in [0, 1]", err=True)
             raise typer.Exit(code=1)
+        try:
+            recognition_config = LearnedRecognitionFilterConfig(
+                mode=recognition_mode,
+                score_threshold=evidence_threshold,
+                head_thresholds=parse_head_thresholds(head_thresholds),
+                margin=evidence_margin,
+                persistence_frames=persistence_frames,
+                cooldown_seconds=recognition_cooldown_seconds,
+                debug_all_heads=debug_all_heads,
+            )
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
         if min_rows <= 0:
             typer.echo("min-rows must be positive", err=True)
             raise typer.Exit(code=1)
@@ -386,6 +445,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         if camera_buffer_size < 0:
             typer.echo("camera-buffer-size must be non-negative", err=True)
             raise typer.Exit(code=1)
+        custom_recognizer = LearnedRecognitionFilter(recognition_config)
         decoder_config = EventDecoderConfig(
             activation_threshold=activation_threshold,
             release_threshold=release_threshold,
@@ -445,6 +505,9 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
             "latest_relative_time": None,
             "recent_candidates": [],
             "recent_recognitions": [],
+            "enabled_heads": sorted(recognition_config.enabled_heads),
+            "recognition_mode": recognition_config.mode,
+            "recognition_frames": {},
         }
         session_id = str(uuid4())
         event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
@@ -486,6 +549,16 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                 "preview_layout": preview_layout,
                 "camera_buffer_size": camera_buffer_size or None,
                 "dry_run_only": True,
+                "recognition_filter": {
+                    "mode": recognition_config.mode,
+                    "debug_all_heads": recognition_config.debug_all_heads,
+                    "enabled_heads": sorted(recognition_config.enabled_heads),
+                    "score_threshold": recognition_config.score_threshold,
+                    "head_thresholds": recognition_config.head_thresholds,
+                    "margin": recognition_config.margin,
+                    "persistence_frames": recognition_config.persistence_frames,
+                    "cooldown_seconds": recognition_config.cooldown_seconds,
+                },
             },
         )
         typer.echo(
@@ -500,7 +573,9 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
         ):
             typer.echo(
                 "custom evidence heads detected; displaying top heads only, "
-                "AirDesk swipe decoder/candidates disabled"
+                "AirDesk swipe decoder/candidates disabled; "
+                f"recognition_mode={recognition_config.mode} "
+                f"enabled={','.join(sorted(recognition_config.enabled_heads)) or 'none'}"
             )
         try:
             tracker.start()
@@ -549,6 +624,14 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         for item in decoder_frames
                         if item.timestamp >= prediction.end_time - decoder_history_seconds
                     ]
+                    recognition_frame = custom_recognizer.update(
+                        hand_id=hand_id,
+                        evidence=prediction.evidence,
+                        timestamp=prediction.end_time,
+                    )
+                    recognition_frames = dict(state.get("recognition_frames", {}))
+                    recognition_frames[hand_id] = recognition_frame.to_dict()
+                    state["recognition_frames"] = recognition_frames
                     _write_tcn_v2_live_event(
                         event_writer,
                         event_type="tcn_v2_live_prediction",
@@ -560,6 +643,7 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                             "features": _live_tcn_v2_row_motion_features(
                                 latest_rows_by_hand.get(hand_id)
                             ),
+                            "recognition_filter": recognition_frame.to_dict(),
                             "relative_time_seconds": (
                                 prediction.end_time - first_timestamp
                                 if first_timestamp is not None
@@ -571,9 +655,10 @@ def register_live_tracking_commands(app: typer.Typer, gesture_app: typer.Typer) 
                         _max_tcn_v2_visible_evidence(prediction.evidence)
                         >= evidence_threshold
                     )
-                    custom_recognition = _recognized_tcn_v2_custom_evidence(
-                        prediction.evidence,
-                        threshold=evidence_threshold,
+                    custom_recognition = (
+                        recognition_frame.recognition.to_dict()
+                        if recognition_frame.recognition is not None
+                        else None
                     )
                     if custom_recognition is not None:
                         now = monotonic()

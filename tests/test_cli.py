@@ -344,11 +344,34 @@ def test_watch_tcn_v2_help_exposes_live_evidence_controls() -> None:
     assert "--release-threshold" in result.stdout
     assert "--min-peak-confidence" in result.stdout
     assert "--evidence-threshold" in result.stdout
+    assert "--head-thresholds" in result.stdout
+    assert "--evidence-margin" in result.stdout
+    assert "--persistence-frames" in result.stdout
+    assert "--recognition-cooldown-seconds" in result.stdout
+    assert "--recognition-mode" in result.stdout
+    assert "--debug-all-heads" in result.stdout
     assert "--events-out" in result.stdout
     assert "--preview-layout" in result.stdout
     assert "--preview-width" in result.stdout
     assert "--camera-buffer-size" in result.stdout
     assert "--profile-timing" in result.stdout
+
+
+def test_replay_tcn_v2_log_help_exposes_filter_controls() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["gesture", "replay-tcn-v2-log", "--help"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "--recognition-mode" in result.stdout
+    assert "--evidence-threshold" in result.stdout
+    assert "--head-thresholds" in result.stdout
+    assert "--evidence-margin" in result.stdout
+    assert "--persistence-frames" in result.stdout
+    assert "--recognition-cooldown-seconds" in result.stdout
+    assert "--debug-all-heads" in result.stdout
 
 
 def test_watch_tcn_filters_recovery_by_default() -> None:
@@ -651,6 +674,22 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
             "candidate_count": 0,
             "latest_relative_time": 3.0,
             "evidence_threshold": 0.8,
+            "enabled_heads": ["ipn_g05", "ipn_g06"],
+            "recognition_frames": {
+                "hand-0": {
+                    "mode": "command",
+                    "suppressed_reason": "top_head_suppressed_by_mode",
+                    "top_enabled": {
+                        "target": "ipn_g05",
+                        "name": "Throw left",
+                        "score": 0.62,
+                    },
+                    "margin": 0.12,
+                    "persistence_count": 1,
+                    "required_persistence": 3,
+                    "recognition": None,
+                }
+            },
             "predictions": {
                 "hand-0": CausalTcnV2LivePrediction(
                     hand_id="hand-0",
@@ -669,6 +708,7 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
         first_timestamp=0.0,
     )
 
+    assert snapshot["summary_lines"][-1] == "enabled=Throw left, Throw right"
     assert snapshot["hands"] == [
         {
             "hand_id": "hand-0",
@@ -681,6 +721,18 @@ def test_live_tcn_v2_dashboard_snapshot_contains_custom_head_evidence() -> None:
                 {"name": "ipn_g07", "label": "Open twice", "score": 0.72},
                 {"name": "ipn_g01", "label": "Click one finger", "score": 0.61},
             ],
+            "filter": {
+                "mode": "command",
+                "suppressed_reason": "top_head_suppressed_by_mode",
+                "top_enabled": {
+                    "target": "ipn_g05",
+                    "name": "Throw left",
+                    "score": 0.62,
+                },
+                "margin": 0.12,
+                "persistence_count": 1,
+                "required_persistence": 3,
+            },
         }
     ]
 

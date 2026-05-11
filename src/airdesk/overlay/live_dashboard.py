@@ -299,6 +299,21 @@ class LiveDashboardRenderer:
                 thickness=1,
             )
             meter_y += 20
+        filter_info = hand.get("filter", {})
+        if isinstance(filter_info, dict):
+            filter_line = self._recognition_filter_line(filter_info)
+            if filter_line:
+                self._put_text_fit(
+                    image=image,
+                    text=filter_line,
+                    x=x + 12,
+                    y=meter_y + 2,
+                    max_width=width - 24,
+                    scale=0.34,
+                    color=(188, 196, 212),
+                    thickness=1,
+                )
+                meter_y += 20
         features = hand.get("features", {})
         if isinstance(features, dict):
             motion_lines = self._motion_feature_lines(features)
@@ -327,6 +342,18 @@ class LiveDashboardRenderer:
                 continue
             parts.append(f"{name} {float(score):.2f}")
         return "top " + " | ".join(parts) if parts else "top"
+
+    def _recognition_filter_line(self, filter_info: dict[str, Any]) -> str:
+        reason = str(filter_info.get("suppressed_reason") or "recognized")
+        mode = str(filter_info.get("mode") or "mode")
+        count = filter_info.get("persistence_count")
+        required = filter_info.get("required_persistence")
+        persistence = ""
+        if isinstance(count, int) and isinstance(required, int):
+            persistence = f" p={count}/{required}"
+        margin = filter_info.get("margin")
+        margin_text = f" m={float(margin):.2f}" if isinstance(margin, int | float) else ""
+        return f"{mode}: {reason}{persistence}{margin_text}"
 
     def _draw_recognition_badge(
         self,

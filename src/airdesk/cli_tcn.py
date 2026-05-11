@@ -18,6 +18,11 @@ from airdesk.analysis import (
     holdout_totals,
 )
 from airdesk.gestures.decoder import EventDecoderConfig
+from airdesk.gestures.learned_filter import (
+    LearnedRecognitionFilterConfig,
+    evaluate_tcn_v2_live_jsonl,
+    parse_head_thresholds,
+)
 from airdesk.labels import load_label_file
 from airdesk.ml import (
     CausalTcnTrainingConfig,
@@ -1161,6 +1166,104 @@ def gesture_diagnose_features(
         typer.echo(f"wrote diagnostics={out}")
 
 
+def gesture_replay_tcn_v2_log(
+    log: Annotated[
+        Path,
+        typer.Argument(exists=True, readable=True, help="Live TCN v2 JSONL log to replay."),
+    ],
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Optional summary JSON output path."),
+    ] = None,
+    recognition_mode: Annotated[
+        str,
+        typer.Option(
+            "--recognition-mode",
+            help="Custom-head mode: command, cursor, zoom-media, or all-ipn.",
+        ),
+    ] = "command",
+    evidence_threshold: Annotated[
+        float,
+        typer.Option("--evidence-threshold", help="Default custom-head recognition threshold."),
+    ] = 0.80,
+    head_thresholds: Annotated[
+        str | None,
+        typer.Option(
+            "--head-thresholds",
+            help="Optional comma list of per-head thresholds, e.g. ipn_g05=0.85.",
+        ),
+    ] = None,
+    evidence_margin: Annotated[
+        float,
+        typer.Option(
+            "--evidence-margin",
+            help="Minimum top-vs-runner-up margin for custom-head recognition.",
+        ),
+    ] = 0.15,
+    persistence_frames: Annotated[
+        int,
+        typer.Option(
+            "--persistence-frames",
+            help="Consecutive filtered predictions required before recognition.",
+        ),
+    ] = 3,
+    recognition_cooldown_seconds: Annotated[
+        float,
+        typer.Option(
+            "--recognition-cooldown-seconds",
+            help="Same-head recognition cooldown per hand.",
+        ),
+    ] = 1.5,
+    debug_all_heads: Annotated[
+        bool,
+        typer.Option(
+            "--debug-all-heads",
+            help="Replay all custom IPN heads regardless of selected recognition mode.",
+        ),
+    ] = False,
+) -> None:
+    """Replay live TCN v2 prediction JSONL through the mode-aware head filter."""
+    try:
+        config = LearnedRecognitionFilterConfig(
+            mode=recognition_mode,
+            score_threshold=evidence_threshold,
+            head_thresholds=parse_head_thresholds(head_thresholds),
+            margin=evidence_margin,
+            persistence_frames=persistence_frames,
+            cooldown_seconds=recognition_cooldown_seconds,
+            debug_all_heads=debug_all_heads,
+        )
+        summary = evaluate_tcn_v2_live_jsonl(log, config=config)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    counts = " ".join(
+        f"{target}={count}"
+        for target, count in sorted(summary["recognition_counts"].items())
+    )
+    raw = " ".join(
+        f"{target}={count}"
+        for target, count in sorted(summary["raw_top_above_threshold"].items())
+    )
+    suppressed = " ".join(
+        f"{reason}={count}" for reason, count in sorted(summary["suppressed"].items())
+    )
+    typer.echo(
+        f"tcn_v2_log_replay mode={summary['mode']} "
+        f"debug_all_heads={summary['debug_all_heads']} "
+        f"predictions={summary['predictions']} recognitions={summary['recognitions']}"
+    )
+    typer.echo(f"enabled_heads={','.join(summary['enabled_heads'])}")
+    typer.echo(f"recognition_counts={counts or 'none'}")
+    typer.echo(f"raw_top_above_threshold={raw or 'none'}")
+    typer.echo(f"suppressed={suppressed or 'none'}")
+    if out is not None:
+        typer.echo(f"wrote replay_summary={out}")
+
+
 
 
 def _split_tcn_feature_holdout(
@@ -1264,6 +1367,7 @@ def register_tcn_commands(gesture_app: typer.Typer) -> None:
     gesture_app.command("evaluate-tcn-v2")(gesture_evaluate_tcn_v2)
     gesture_app.command("evaluate-tcn-v2-heads")(gesture_evaluate_tcn_v2_heads)
     gesture_app.command("evaluate-tcn-v2-boundaries")(gesture_evaluate_tcn_v2_boundaries)
+    gesture_app.command("replay-tcn-v2-log")(gesture_replay_tcn_v2_log)
     gesture_app.command("diagnose-tcn-events")(gesture_diagnose_tcn_events)
     gesture_app.command("diagnose-tcn-v2-events")(gesture_diagnose_tcn_v2_events)
     gesture_app.command("holdout-tcn")(gesture_holdout_tcn)

@@ -192,6 +192,14 @@ prior and diagnostic surface. Do not enable all 13 heads globally. Use mode
 groups: point/click heads in cursor mode, zoom heads in zoom/media mode, and a
 small command-mode vocabulary only after AirDesk hard-negative testing.
 
+Implementation update: AirDesk now has a shared mode-aware filter for custom TCN
+v2 heads. `watch-tcn-v2` and `replay-tcn-v2-log` use the same vocabulary map,
+per-head/default thresholds, top-vs-runner-up margin, persistence, and cooldown.
+The first replay pass on the latest live all-IPN calibration log kept the full
+all-head evidence visible but reduced default command-mode "Recognized" callouts
+to 2 `Throw left` diagnostic events out of 328 predictions. Treat those as
+calibration evidence, not live action approval.
+
 Official IPN model check: the public IPN baselines are heavier RGB/video models
 such as ResNeXt/ResNet variants, including RGB/optical-flow/segmentation inputs.
 They are not MediaPipe-landmark TCN checkpoints and are not drop-in replacements
