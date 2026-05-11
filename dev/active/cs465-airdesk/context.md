@@ -733,8 +733,12 @@ The first deterministic control slice is now in place:
   longer triggers workspace changes.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
   and vertical zones use `top <= 0.30`, `bottom >= 0.70`. Cursor gain defaults
-  to `7.0` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
-  `airdesk control run` for live tuning.
+  to `12.0` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
+  `airdesk control run` for live tuning. The control runtime filters to one
+  active hand, and the recommended live command uses `--max-num-hands 1`.
+- Fist detection now requires a stronger fold: all four fingertips must sit at
+  least `0.09` normalized y-units below their MCP joints before `fist` can
+  trigger, so a relaxed curled hand should stay in cursor mode.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release.
 - Real pointer click/scroll injection is available through explicit

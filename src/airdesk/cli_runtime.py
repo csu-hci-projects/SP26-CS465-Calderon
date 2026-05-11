@@ -404,7 +404,7 @@ def control_run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
-    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 7.0,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 12.0,
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
@@ -437,6 +437,10 @@ def control_run(
         float,
         typer.Option(help="Palm y that counts as the down workspace zone."),
     ] = 0.70,
+    fist_fold_threshold: Annotated[
+        float,
+        typer.Option(help="Finger-tip fold distance required before a hand counts as fist."),
+    ] = 0.09,
     mirror_x: Annotated[
         bool,
         typer.Option(help="Mirror hand X movement for webcam control."),
@@ -489,6 +493,7 @@ def control_run(
             right_zone_min=right_zone_min,
             top_zone_max=top_zone_max,
             bottom_zone_min=bottom_zone_min,
+            fist_fold_threshold=fist_fold_threshold,
         ),
         event_writer=event_writer,
         config=ControlRuntimeConfig(

@@ -45,6 +45,19 @@ def test_control_pose_sideways_palm_suppresses_pinch_artifacts(
     assert "middle_pinch" in features.suppressed_poses
 
 
+def test_control_pose_requires_strong_finger_fold_for_fist(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    relaxed_curl = _relaxed_curled_hand(make_hand("open_palm"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(relaxed_curl))[0]
+
+    assert "fist" not in features.poses
+    assert features.poses == frozenset()
+
+
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
     debouncer = PoseDebouncer(PoseDebounceConfig(enter_frames=2, release_frames=2))
 
@@ -59,6 +72,14 @@ def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
     assert held[0].event_type == "held"
     assert missing == []
     assert released[0].event_type == "released"
+
+
+def test_pose_debouncer_reports_tracked_hand_ids() -> None:
+    debouncer = PoseDebouncer(PoseDebounceConfig(enter_frames=1))
+
+    debouncer.update(hand_id="hand-0", timestamp=1.0, active_poses=frozenset({"index_pinch"}))
+
+    assert debouncer.hand_ids() == {"hand-0"}
 
 
 def test_combo_buffer_matches_same_hand_and_consumes_events() -> None:
@@ -353,6 +374,35 @@ def test_control_grammar_allows_short_pinch_tap_after_tracking_dropout(
     assert click[0].request.parameters["button"] == "left"
 
 
+def test_control_grammar_releases_held_button_after_tracking_dropout(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    pinch_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+
+    grammar.update(
+        features=pinch_features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    button_down = grammar.update(
+        features=pinch_features,
+        events=[PoseEvent("hand-0", "index_pinch", "held", 1.5, duration=0.5)],
+        timestamp=1.5,
+    )
+    button_up = grammar.update(
+        features=[],
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.6, duration=0.6)],
+        timestamp=1.6,
+    )
+
+    assert button_down[0].name == "left_button_down"
+    assert button_up[0].name == "left_button_up"
+    assert button_up[0].request.parameters == {"button": "left", "action": "release"}
+
+
 def _move_hand(
     hand: NormalizedHand, *, x: float | None = None, y: float | None = None
 ) -> NormalizedHand:
@@ -385,6 +435,25 @@ def _middle_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
     landmarks = list(hand.landmarks.landmarks)
     landmarks[4] = Landmark(0.47, 0.26, 0.0)
     landmarks[12] = Landmark(0.47, 0.26, 0.0)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _relaxed_curled_hand(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    for index in (8, 12, 16, 20):
+        point = landmarks[index]
+        landmarks[index] = Landmark(point.x, 0.61, point.z, point.visibility, point.presence)
     return NormalizedHand(
         hand_id=hand.hand_id,
         landmarks=type(hand.landmarks)(

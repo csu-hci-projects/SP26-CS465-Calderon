@@ -47,6 +47,7 @@ class ControlPoseRecognizer:
     """Classify direct MediaPipe landmarks into deterministic control facts."""
 
     extended_threshold: float = 0.08
+    fist_fold_threshold: float = 0.09
     open_spread_threshold: float = 0.16
     index_pinch_threshold: float = 0.06
     middle_pinch_threshold: float = 0.065
@@ -82,7 +83,7 @@ class ControlPoseRecognizer:
         middle_pinch = self._distance(hand, THUMB_TIP, MIDDLE_TIP)
 
         raw_poses: set[str] = set()
-        if folded >= 4:
+        if self._strongly_folded_fingers(hand) >= 4:
             raw_poses.add("fist")
         if extended >= 4 and finger_spread >= self.open_spread_threshold:
             raw_poses.add("open_palm")
@@ -142,6 +143,14 @@ class ControlPoseRecognizer:
         count = 0
         for tip_index, mcp_index in zip(FINGER_TIPS, FINGER_MCPS, strict=True):
             if landmarks[tip_index].y < landmarks[mcp_index].y - self.extended_threshold:
+                count += 1
+        return count
+
+    def _strongly_folded_fingers(self, hand: NormalizedHand) -> int:
+        landmarks = hand.landmarks.landmarks
+        count = 0
+        for tip_index, mcp_index in zip(FINGER_TIPS, FINGER_MCPS, strict=True):
+            if landmarks[tip_index].y > landmarks[mcp_index].y + self.fist_fold_threshold:
                 count += 1
         return count
 

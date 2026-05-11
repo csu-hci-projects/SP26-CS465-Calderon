@@ -26,7 +26,7 @@ class ControlRuntimeConfig:
 
     execute: bool = False
     pause_on_start: bool = False
-    cursor_gain: float = 7.0
+    cursor_gain: float = 12.0
     cursor_smoothing_alpha: float = 0.25
     cursor_dead_zone_px: int = 1
     mirror_x: bool = True
@@ -64,6 +64,7 @@ class ControlRuntime:
     _last_hand_point: tuple[str, float, float] | None = None
     _pinch_scroll_anchor_y: dict[str, float] = field(default_factory=dict)
     _last_status: dict[str, object] = field(default_factory=dict)
+    _active_hand_id: str | None = None
 
     def __post_init__(self) -> None:
         self.paused = self.config.pause_on_start
@@ -98,14 +99,25 @@ class ControlRuntime:
         try:
             for frame in self.tracker.frames():
                 frames += 1
-                features = self.pose_recognizer.features_for_frame(frame)
+                features = self._active_hand_features(
+                    self.pose_recognizer.features_for_frame(frame)
+                )
                 events: list[PoseEvent] = []
+                active_hand_ids = {hand_features.hand_id for hand_features in features}
                 for hand_features in features:
                     events.extend(
                         self.debouncer.update(
                             hand_id=hand_features.hand_id,
                             timestamp=frame.timestamp,
                             active_poses=hand_features.poses,
+                        )
+                    )
+                for hand_id in sorted(self.debouncer.hand_ids() - active_hand_ids):
+                    events.extend(
+                        self.debouncer.update(
+                            hand_id=hand_id,
+                            timestamp=frame.timestamp,
+                            active_poses=frozenset(),
                         )
                     )
                 scroll_delta_by_hand = self._scroll_delta_by_hand(features)
@@ -185,6 +197,22 @@ class ControlRuntime:
     def toggle_pause(self) -> None:
         self.paused = not self.paused
         self._emit("control_paused" if self.paused else "control_resumed", {"paused": self.paused})
+
+    def _active_hand_features(
+        self, features: list[ControlPoseFeatures]
+    ) -> list[ControlPoseFeatures]:
+        """Keep the live control grammar scoped to one active hand."""
+        if not features:
+            self._active_hand_id = None
+            return []
+        active = next(
+            (feature for feature in features if feature.hand_id == self._active_hand_id),
+            None,
+        )
+        if active is None:
+            active = features[0]
+            self._active_hand_id = active.hand_id
+        return [active]
 
     def status_text(self) -> str:
         prefix = "paused | " if self.paused else ""

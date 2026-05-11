@@ -41,6 +41,10 @@ class PoseDebouncer:
     config: PoseDebounceConfig = PoseDebounceConfig()
     _states: dict[tuple[str, str], _PoseState] = field(default_factory=dict)
 
+    def hand_ids(self) -> set[str]:
+        """Return hand ids with pose state currently tracked by the debouncer."""
+        return {hand_id for hand_id, _pose in self._states}
+
     def update(
         self,
         *,

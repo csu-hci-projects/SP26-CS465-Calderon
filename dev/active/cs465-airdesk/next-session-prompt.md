@@ -135,7 +135,12 @@ Current implementation status:
   `workspace` switch. Open palm no longer triggers workspace changes during
   cursor use. Side zones default to `left <= 0.30` and `right >= 0.70`; vertical
   zones default to `top <= 0.30` and `bottom >= 0.70`; cursor gain defaults to
-  `7.0` with smoother `0.25` alpha and a `1px` dead zone.
+  `12.0` with smoother `0.25` alpha and a `1px` dead zone. The control runtime
+  filters to one active hand, and the recommended live command now uses
+  `--max-num-hands 1`.
+- Fist detection now requires a stronger fold: all four fingertips must sit at
+  least `0.09` normalized y-units below their MCP joints before `fist` can
+  trigger, so a relaxed curled hand should stay in cursor mode.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release. Holding an index
   pinch past the tap window presses and holds the left button until release;
@@ -149,7 +154,7 @@ Current implementation status:
 Recommended next implementation slice:
 
 1. Run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 7.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
    from the JSONL log and live feel.
 3. Improve live status/dashboard rendering so it clearly shows `Seeing`,
