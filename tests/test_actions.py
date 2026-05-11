@@ -208,3 +208,20 @@ def test_uinput_pointer_target_can_press_and_release_without_click_pulse() -> No
     assert release.command_preview == ["uinput.button", "left", "release"]
     assert writes_after_press >= 3
     assert len(writes) == writes_after_press + 2
+
+
+def test_uinput_pointer_target_accepts_negative_scroll_values() -> None:
+    writes: list[bytes] = []
+
+    target = UInputPointerInputTarget(
+        opener=lambda _path, _flags: 42,
+        writer=lambda _fd, data: writes.append(data) or len(data),
+        ioctl=lambda _fd, _request, _arg: 0,
+        closer=lambda _fd: None,
+    )
+
+    result = target.scroll(PointerScrollEvent(amount_y=-1))
+
+    assert result.ok is True
+    assert result.command_preview == ["uinput.scroll", "-1"]
+    assert len(writes) >= 3

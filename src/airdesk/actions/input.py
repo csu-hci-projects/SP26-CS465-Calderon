@@ -166,7 +166,7 @@ class UInputPointerInputTarget:
     def _emit(self, fd: int, event_type: int, code: int, value: int) -> None:
         seconds = int(time.time())
         micros = int((time.time() - seconds) * 1_000_000)
-        self.writer(fd, struct.pack("llHHI", seconds, micros, event_type, code, value))
+        self.writer(fd, struct.pack("llHHi", seconds, micros, event_type, code, value))
 
     def _result(self, *, ok: bool, message: str, preview: list[str]) -> ActionResult:
         return ActionResult(
