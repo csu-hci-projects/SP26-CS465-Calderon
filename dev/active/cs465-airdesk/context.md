@@ -746,6 +746,25 @@ The first deterministic control slice is now in place:
   `--pointer-execute` using `/dev/uinput`. Without that flag, pointer
   click/scroll remains dry-run even when Hyprland execution is enabled.
 
+Latest live-test stop point:
+
+- Caden is stopping this session because workspace/move-window command behavior
+  is still not reliable enough for live testing.
+- Change workspace is still not working in practice, even after switching from
+  top/bottom zones to fist vertical motion from the fist anchor.
+- Move to workspace is also not working reliably.
+- Fist recognition needs a harder evidence model. Current logic still appears
+  too dependent on one finger/too few landmarks; next session should make fist a
+  multi-finger, multi-landmark pose with explicit evidence/confidence fields.
+- Suppression/conflict handling likely needs redesign. If a frame has plausible
+  evidence for multiple command poses, the runtime should either choose the
+  safest dominant pose or mark it ambiguous and emit no command pose. Do not keep
+  letting fist/pinch/open-palm artifacts all feed command grammar.
+- Next session should inspect `data/logs/control-live-*.jsonl` before editing,
+  summarize what the runtime saw during intended fist-up/down and fist-left/right,
+  and add tests for hardened fist evidence plus ambiguous-pose suppression before
+  retesting live Hyprland actions.
+
 ### Sprint 3: Pilot-Safe Live Command Mode
 
 Build the live command loop:
