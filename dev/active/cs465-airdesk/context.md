@@ -265,9 +265,9 @@ MVP grammar candidate:
 - Index pinch tap: left click through a future input target.
 - Thumb/middle pinch tap: right click through a future input target.
 - Index pinch hold plus vertical movement: scroll through a future input target.
-- Sideways open palm held left/right: `hyprctl dispatch workspace -1` / `+1`.
-- Fist held center: arm window move and show active window title.
+- Fist held center: arm one fist command and show active window title.
 - Fist moved left/right zone: `hyprctl dispatch movetoworkspace -1` / `+1`.
+- Fist moved up/down zone: `hyprctl dispatch workspace -1` / `+1`.
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via
   `hyprctl dispatch killactive`, with visible close-armed feedback.
@@ -721,16 +721,20 @@ The first deterministic control slice is now in place:
 - Guarded Hyprland move/close actions can query the active window title so the
   status/log surface can show a target window before real testing.
 - Live Hyprland testing showed move-window was too touchy when any side-zone
-  fist could fire repeatedly. The current control grammar now requires center
-  fist to arm move-window for a short window; a side-zone fist fires once and
-  consumes the arm, while fist release or expiry returns to neutral.
-- Live testing also showed sideways-hand shapes are too unreliable for workspace
-  switching. Workspace now uses the same arming style: center open palm arms
-  workspace switching briefly, then open palm in a side zone fires once and
-  consumes the arm.
+  fist could fire repeatedly. The current control grammar now uses fist as the
+  command clutch: center fist arms one short command window, left/right fist
+  movement fires one `movetoworkspace`, and up/down fist movement fires one
+  `workspace` switch without moving a window. Firing, fist release, or expiry
+  returns to neutral.
+- Live testing also showed sideways-hand shapes and open-palm workspace arming
+  are too unreliable for workspace switching during cursor use, so open palm no
+  longer triggers workspace changes.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
-  and cursor gain defaults to `3.0`; both are exposed on `airdesk control run`
-  for live tuning.
+  and vertical zones use `top <= 0.30`, `bottom >= 0.70`. Cursor gain defaults
+  to `4.5` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
+  `airdesk control run` for live tuning.
+- Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
+  release can still click if tracking briefly drops on release.
 - Real pointer click/scroll injection is available through explicit
   `--pointer-execute` using `/dev/uinput`. Without that flag, pointer
   click/scroll remains dry-run even when Hyprland execution is enabled.

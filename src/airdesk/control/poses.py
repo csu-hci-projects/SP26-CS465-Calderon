@@ -20,6 +20,7 @@ class ControlPoseFeatures:
     palm_x: float
     palm_y: float
     palm_zone: str
+    palm_vertical_zone: str
     extended_fingers: int
     folded_fingers: int
     finger_spread: float
@@ -38,7 +39,7 @@ class ControlPoseFeatures:
             if self.suppressed_poses
             else ""
         )
-        return f"{self.hand_id}: {active} {self.palm_zone}{suppressed}"
+        return f"{self.hand_id}: {active} {self.palm_zone}/{self.palm_vertical_zone}{suppressed}"
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ class ControlPoseRecognizer:
     middle_pinch_threshold: float = 0.065
     left_zone_max: float = 0.30
     right_zone_min: float = 0.70
+    top_zone_max: float = 0.30
+    bottom_zone_min: float = 0.70
 
     def features_for_frame(self, frame: TrackingFrame) -> list[ControlPoseFeatures]:
         """Return control features for each visible hand."""
@@ -71,6 +74,7 @@ class ControlPoseRecognizer:
 
         palm_x, palm_y, _palm_z = hand.palm_center
         palm_zone = self._palm_zone(palm_x)
+        palm_vertical_zone = self._palm_vertical_zone(palm_y)
         extended = self._extended_fingers(hand)
         folded = 4 - extended
         finger_spread = self._finger_spread(hand)
@@ -98,6 +102,7 @@ class ControlPoseRecognizer:
             palm_x=palm_x,
             palm_y=palm_y,
             palm_zone=palm_zone,
+            palm_vertical_zone=palm_vertical_zone,
             extended_fingers=extended,
             folded_fingers=folded,
             finger_spread=finger_spread,
@@ -159,3 +164,10 @@ class ControlPoseRecognizer:
         if palm_x >= self.right_zone_min:
             return "right"
         return "center"
+
+    def _palm_vertical_zone(self, palm_y: float) -> str:
+        if palm_y <= self.top_zone_max:
+            return "top"
+        if palm_y >= self.bottom_zone_min:
+            return "bottom"
+        return "middle"

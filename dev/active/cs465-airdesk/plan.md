@@ -190,9 +190,9 @@ Current MVP grammar candidate:
 | Index pinch tap | Left click | Requires pointer-button injection through an input adapter. |
 | Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
 | Index pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
-| Sideways open palm held left/right | Switch workspace left/right | Dispatch `workspace -1` / `workspace +1`. |
-| Fist held in center | Arm window move | Show target window title before any move. |
+| Fist held in center | Arm one fist command | Show target window title before any move-window action. |
 | Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace -1` / `movetoworkspace +1`; cooldown to avoid repeated moves. |
+| Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace -1` / `workspace +1`; consume the arm after one switch. |
 | Open palm -> sideways open palm | Open launcher | Dispatch `global caelestia:launcher` on Caden's setup. |
 | Open palm -> fist -> open palm | Close active window | Dispatch `killactive`; show "close armed" and focused window before firing. |
 

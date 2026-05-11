@@ -404,15 +404,15 @@ def control_run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
-    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 3.0,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 4.5,
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
-    ] = 0.35,
+    ] = 0.25,
     cursor_dead_zone_px: Annotated[
         int,
         typer.Option(help="Ignore cursor movements below this pixel size."),
-    ] = 3,
+    ] = 1,
     scroll_motion_threshold: Annotated[
         float,
         typer.Option(help="Normalized vertical palm movement needed per scroll tick."),
@@ -428,6 +428,14 @@ def control_run(
     right_zone_min: Annotated[
         float,
         typer.Option(help="Palm x at or above this value counts as the right side zone."),
+    ] = 0.70,
+    top_zone_max: Annotated[
+        float,
+        typer.Option(help="Palm y at or above the camera top counts as the up workspace zone."),
+    ] = 0.30,
+    bottom_zone_min: Annotated[
+        float,
+        typer.Option(help="Palm y that counts as the down workspace zone."),
     ] = 0.70,
     mirror_x: Annotated[
         bool,
@@ -479,6 +487,8 @@ def control_run(
         pose_recognizer=ControlPoseRecognizer(
             left_zone_max=left_zone_max,
             right_zone_min=right_zone_min,
+            top_zone_max=top_zone_max,
+            bottom_zone_min=bottom_zone_min,
         ),
         event_writer=event_writer,
         config=ControlRuntimeConfig(

@@ -95,34 +95,19 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     assert click[0].request.action_type == POINTER_ACTION
     assert click[0].request.parameters["button"] == "left"
 
-    side_features = recognizer.features_for_frame(
+    side_open_features = recognizer.features_for_frame(
         make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.70))
     )
-    unarmed_workspace = grammar.update(
-        features=side_features,
+    open_palm_workspace = grammar.update(
+        features=side_open_features,
         events=[PoseEvent("hand-0", "open_palm", "held", 2.0, duration=0.4)],
         timestamp=2.0,
     )
-    center_open_features = recognizer.features_for_frame(
-        make_tracking_frame(make_hand("open_palm"))
-    )
-    grammar.update(
-        features=center_open_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 2.2, duration=0.4)],
-        timestamp=2.2,
-    )
-    workspace = grammar.update(
-        features=side_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 2.4, duration=0.6)],
-        timestamp=2.4,
-    )
 
-    assert unarmed_workspace == []
-    assert workspace[0].request.command == "workspace"
-    assert workspace[0].request.parameters["args"] == ["-1"]
+    assert open_palm_workspace == []
 
     unarmed_move = grammar.update(
-        features=side_features,
+        features=side_open_features,
         events=[PoseEvent("hand-0", "fist", "held", 2.8, duration=0.4)],
         timestamp=2.8,
     )
@@ -136,7 +121,9 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
         timestamp=3.0,
     )
     move_window = grammar.update(
-        features=side_features,
+        features=recognizer.features_for_frame(
+            make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
+        ),
         events=[PoseEvent("hand-0", "fist", "held", 3.2, duration=0.6)],
         timestamp=3.2,
     )
@@ -145,8 +132,24 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     assert move_window[0].request.command == "movetoworkspace"
     assert move_window[0].request.parameters["args"] == ["-1"]
 
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "fist", "held", 3.4, duration=0.8)],
+        timestamp=3.4,
+    )
+    workspace = grammar.update(
+        features=recognizer.features_for_frame(
+            make_tracking_frame(_move_hand(make_hand("fist"), y=0.30))
+        ),
+        events=[PoseEvent("hand-0", "fist", "held", 3.6, duration=1.0)],
+        timestamp=3.6,
+    )
+
+    assert workspace[0].request.command == "workspace"
+    assert workspace[0].request.parameters["args"] == ["-1"]
+
     close = grammar.update(
-        features=side_features,
+        features=side_open_features,
         events=[
             PoseEvent("hand-0", "open_palm", "entered", 4.0),
             PoseEvent("hand-0", "fist", "entered", 4.1),
@@ -165,7 +168,7 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
-    grammar = ControlGrammar(ControlGrammarConfig(window_move_arm_seconds=0.5))
+    grammar = ControlGrammar(ControlGrammarConfig(fist_command_arm_seconds=0.5))
     center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
     side_features = recognizer.features_for_frame(
         make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
@@ -201,40 +204,40 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
     assert cleared == []
 
 
-def test_workspace_arm_expires_and_clears_on_open_palm_release(
+def test_fist_workspace_arm_expires_and_clears_on_release(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
-    grammar = ControlGrammar(ControlGrammarConfig(workspace_arm_seconds=0.5))
-    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("open_palm")))
-    side_features = recognizer.features_for_frame(
-        make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.70))
+    grammar = ControlGrammar(ControlGrammarConfig(fist_command_arm_seconds=0.5))
+    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
+    top_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), y=0.30))
     )
 
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 1.0, duration=0.4)],
+        events=[PoseEvent("hand-0", "fist", "held", 1.0, duration=0.4)],
         timestamp=1.0,
     )
     expired = grammar.update(
-        features=side_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 1.7, duration=0.7)],
+        features=top_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.7, duration=0.7)],
         timestamp=1.7,
     )
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 2.0, duration=0.4)],
+        events=[PoseEvent("hand-0", "fist", "held", 2.0, duration=0.4)],
         timestamp=2.0,
     )
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "open_palm", "released", 2.1, duration=0.5)],
+        events=[PoseEvent("hand-0", "fist", "released", 2.1, duration=0.5)],
         timestamp=2.1,
     )
     cleared = grammar.update(
-        features=side_features,
-        events=[PoseEvent("hand-0", "open_palm", "held", 2.2, duration=0.6)],
+        features=top_features,
+        events=[PoseEvent("hand-0", "fist", "held", 2.2, duration=0.6)],
         timestamp=2.2,
     )
 
@@ -295,10 +298,38 @@ def test_control_grammar_cancels_pinch_tap_when_release_becomes_fist(
     assert click == []
 
 
-def _move_hand(hand: NormalizedHand, *, x: float) -> NormalizedHand:
+def test_control_grammar_allows_short_pinch_tap_after_tracking_dropout(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    pinch_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+
+    grammar.update(
+        features=pinch_features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    click = grammar.update(
+        features=[],
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.35, duration=0.35)],
+        timestamp=1.35,
+    )
+
+    assert click[0].name == "left_click"
+    assert click[0].request.parameters["button"] == "left"
+
+
+def _move_hand(
+    hand: NormalizedHand, *, x: float | None = None, y: float | None = None
+) -> NormalizedHand:
+    x = hand.palm_center[0] if x is None else x
+    y = hand.palm_center[1] if y is None else y
     dx = x - hand.palm_center[0]
+    dy = y - hand.palm_center[1]
     landmarks = tuple(
-        Landmark(point.x + dx, point.y, point.z, point.visibility, point.presence)
+        Landmark(point.x + dx, point.y + dy, point.z, point.visibility, point.presence)
         for point in hand.landmarks.landmarks
     )
     return NormalizedHand(
@@ -308,9 +339,10 @@ def _move_hand(hand: NormalizedHand, *, x: float) -> NormalizedHand:
             handedness=hand.landmarks.handedness,
             confidence=hand.landmarks.confidence,
         ),
-        palm_center=(x, hand.palm_center[1], hand.palm_center[2]),
+        palm_center=(x, y, hand.palm_center[2]),
         bbox=tuple(
-            value + dx if index % 2 == 0 else value for index, value in enumerate(hand.bbox)
+            value + dx if index % 2 == 0 else value + dy
+            for index, value in enumerate(hand.bbox)
         ),
         handedness=hand.handedness,
         confidence=hand.confidence,

@@ -26,9 +26,9 @@ class ControlRuntimeConfig:
 
     execute: bool = False
     pause_on_start: bool = False
-    cursor_gain: float = 3.0
-    cursor_smoothing_alpha: float = 0.35
-    cursor_dead_zone_px: int = 3
+    cursor_gain: float = 4.5
+    cursor_smoothing_alpha: float = 0.25
+    cursor_dead_zone_px: int = 1
     mirror_x: bool = True
     scroll_motion_threshold: float = 0.045
     scroll_amount_per_step: int = 1
