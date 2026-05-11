@@ -188,9 +188,11 @@ Live-preview caveat: fair held-out IPN evaluation did not imply safe AirDesk
 command use. Caden's live all-gesture test showed that open-hand presence and
 ordinary movement can trigger confident `Throw up`, `Open twice`, `Zoom out`,
 and point-like heads. The all-IPN model should now be treated as a pretraining
-prior and diagnostic surface. Do not enable all 13 heads globally. Use mode
-groups: point/click heads in cursor mode, zoom heads in zoom/media mode, and a
-small command-mode vocabulary only after AirDesk hard-negative testing.
+prior and diagnostic surface. Do not enable all 13 heads globally. Suppress IPN
+point heads from learned preview/replay because direct MediaPipe pose logic is a
+better pointing path. Use mode groups: click/double-click plus zoom heads in
+cursor diagnostics, zoom heads alone in zoom/media diagnostics, and a small
+command-mode vocabulary only after AirDesk hard-negative testing.
 
 Implementation update: AirDesk now has a shared mode-aware filter for custom TCN
 v2 heads. `watch-tcn-v2` and `replay-tcn-v2-log` use the same vocabulary map,

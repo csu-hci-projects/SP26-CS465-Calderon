@@ -552,9 +552,11 @@ preview showed high-confidence false activations from normal hand presence:
 intentional command. The next architecture step is mode-aware recognition:
 command mode, cursor mode, and zoom/media mode should each enable only their
 own heads, with per-head thresholds, top-vs-runner-up margins, persistence, and
-cooldown. Point/click heads belong in cursor mode; zoom heads belong in
-zoom/media mode; fragile heads such as `Throw up` / `Open twice` should remain
-disabled globally until hard-negative AirDesk data says otherwise.
+cooldown. IPN point heads should stay suppressed from learned preview/replay;
+use direct MediaPipe pose logic for pointing if needed. Cursor diagnostics keep
+click/double-click plus zoom heads; zoom/media diagnostics isolate zoom heads;
+fragile heads such as `Throw up` / `Open twice` should remain disabled globally
+until hard-negative AirDesk data says otherwise.
 
 ## Evaluation Metrics
 

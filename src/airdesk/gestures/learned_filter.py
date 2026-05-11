@@ -6,8 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 TCN_V2_CUSTOM_DISPLAY_NAMES: dict[str, str] = {
-    "ipn_b0a": "Point one finger",
-    "ipn_b0b": "Point two fingers",
     "ipn_g01": "Click one finger",
     "ipn_g02": "Click two fingers",
     "ipn_g03": "Throw up",
@@ -24,13 +22,12 @@ TCN_V2_CUSTOM_DISPLAY_NAMES: dict[str, str] = {
 TCN_V2_META_HEADS = frozenset(
     {"intentional_motion", "start", "end", "stroke_left", "stroke_right"}
 )
+TCN_V2_SUPPRESSED_CUSTOM_HEADS = frozenset({"ipn_b0a", "ipn_b0b"})
 TCN_V2_IPN_HEADS = tuple(TCN_V2_CUSTOM_DISPLAY_NAMES)
 TCN_V2_RECOGNITION_MODES: dict[str, frozenset[str]] = {
     "all-ipn": frozenset(TCN_V2_IPN_HEADS),
     "command": frozenset({"ipn_g05", "ipn_g06"}),
-    "cursor": frozenset(
-        {"ipn_b0a", "ipn_b0b", "ipn_g01", "ipn_g02", "ipn_g08", "ipn_g09"}
-    ),
+    "cursor": frozenset({"ipn_g01", "ipn_g02", "ipn_g08", "ipn_g09", "ipn_g10", "ipn_g11"}),
     "zoom-media": frozenset({"ipn_g10", "ipn_g11"}),
 }
 
@@ -227,6 +224,7 @@ def top_custom_evidence(
         (target, float(score))
         for target, score in evidence.items()
         if target not in TCN_V2_META_HEADS
+        and target not in TCN_V2_SUPPRESSED_CUSTOM_HEADS
         and (enabled_heads is None or target in enabled_heads)
     ]
     return sorted(scored, key=lambda item: (-item[1], item[0]))[:limit]

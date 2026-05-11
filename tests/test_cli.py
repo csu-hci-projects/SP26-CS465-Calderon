@@ -499,7 +499,7 @@ def test_live_tcn_v2_preview_status_lists_custom_heads_when_no_strokes() -> None
                     evidence={
                         "intentional_motion": 0.80,
                         "ipn_g07": 0.72,
-                        "ipn_b0a": 0.20,
+                        "ipn_b0a": 0.95,
                         "ipn_g01": 0.61,
                         "start": 0.25,
                         "end": 0.05,
@@ -510,8 +510,8 @@ def test_live_tcn_v2_preview_status_lists_custom_heads_when_no_strokes() -> None
     )
 
     assert status == (
-        "TCNv2 s=1 r=20 | hand-0:top[ipn_g07=0.72 ipn_g01=0.61 "
-        "ipn_b0a=0.20] I=0.80 S=0.25 E=0.05"
+        "TCNv2 s=1 r=20 | hand-0:top[ipn_g07=0.72 ipn_g01=0.61] "
+        "I=0.80 S=0.25 E=0.05"
     )
 
 
@@ -524,7 +524,7 @@ def test_live_tcn_v2_prediction_line_summarizes_custom_heads() -> None:
             evidence={
                 "intentional_motion": 0.80,
                 "ipn_g07": 0.72,
-                "ipn_b0a": 0.20,
+                "ipn_b0a": 0.95,
                 "ipn_g01": 0.61,
                 "start": 0.25,
                 "end": 0.05,
@@ -535,8 +535,8 @@ def test_live_tcn_v2_prediction_line_summarizes_custom_heads() -> None:
     )
 
     assert line == (
-        "t=  0.200s hand=hand-0 top=(ipn_g07=0.72 ipn_g01=0.61 "
-        "ipn_b0a=0.20) I=0.80 S=0.25 E=0.05 decoder=disabled"
+        "t=  0.200s hand=hand-0 top=(ipn_g07=0.72 ipn_g01=0.61) "
+        "I=0.80 S=0.25 E=0.05 decoder=disabled"
     )
 
 

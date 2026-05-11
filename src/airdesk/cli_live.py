@@ -9,7 +9,6 @@ from typing import Any
 from airdesk.features import FrameFeatureRow, group_feature_rows_by_stream
 from airdesk.gestures.learned_filter import (
     TCN_V2_CUSTOM_DISPLAY_NAMES,
-    TCN_V2_META_HEADS,
     LearnedRecognitionFilterConfig,
     tcn_v2_evidence_display_name,
     top_custom_evidence,
@@ -376,12 +375,7 @@ def _top_tcn_v2_evidence(
     *,
     limit: int = 4,
 ) -> list[tuple[str, float]]:
-    scored = [
-        (target, float(score))
-        for target, score in evidence.items()
-        if target not in TCN_V2_META_HEADS
-    ]
-    return sorted(scored, key=lambda item: (-item[1], item[0]))[:limit]
+    return top_custom_evidence(evidence, limit=limit)
 
 
 def _tcn_v2_evidence_display_name(target: str) -> str:

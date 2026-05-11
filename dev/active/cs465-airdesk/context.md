@@ -251,8 +251,11 @@ Current learned-recognition filter update:
 
 - `watch-tcn-v2` now has mode-aware custom-head filtering for all-IPN checkpoints.
 - Modes are diagnostic only: `command` enables the lateral throw proxy heads,
-  `cursor` enables point/click/double-click heads, `zoom-media` enables zoom
-  heads, and `all-ipn` / `--debug-all-heads` keeps the full debug view.
+  `cursor` enables click/double-click plus zoom heads, `zoom-media` isolates
+  zoom heads, and `all-ipn` / `--debug-all-heads` keeps the filtered debug view.
+- IPN point heads (`ipn_b0a` / `ipn_b0b`) are suppressed from learned-head
+  preview/replay because they are noisy and redundant with direct MediaPipe
+  finger/pose logic if pointing is needed later.
 - The plain-language "Recognized" callout now requires an enabled head,
   per-head/default threshold, top-vs-runner-up margin, short persistence, and
   per-hand cooldown. Suppressed top heads remain visible in dashboard/log

@@ -493,10 +493,12 @@ Training/evaluation results:
   lower held-out `gesture_macro_f1=0.503`, so extra width alone is not the next
   best move.
 
-The strongest heads are `intentional_motion`, `ipn_b0a`, and `ipn_b0b`; several
-named gestures are usable but uneven. `start` and `end` remain weak across all
-runs, so the next recognizer work should treat boundary evidence as a
-target-design/evaluation-tolerance problem before relying on it for event
+The strongest heads include `intentional_motion` plus the IPN point heads
+`ipn_b0a` / `ipn_b0b`, but those point heads are now suppressed from learned
+preview/replay because they are noisy and redundant with direct MediaPipe pose
+logic. Several named gestures are usable but uneven. `start` and `end` remain
+weak across all runs, so the next recognizer work should treat boundary evidence
+as a target-design/evaluation-tolerance problem before relying on it for event
 decoding.
 
 Boundary follow-up: `airdesk gesture evaluate-tcn-v2-boundaries` now evaluates
@@ -524,9 +526,10 @@ Live all-IPN preview follow-up:
   all non-`D0X` IPN gestures were named heads. The issue is AirDesk deployment
   semantics. Use mode-aware filters, per-head thresholds/margins,
   persistence/cooldown, and AirDesk hard negatives before any action binding.
-- Suggested mode grouping: point/click/double-click heads only in cursor mode;
-  zoom heads only in zoom/media mode; global command mode starts with a smaller
-  robust vocabulary after negative testing. Keep learned actions disabled.
+- Suggested mode grouping: suppress point heads from learned mode groups;
+  cursor diagnostics keep click/double-click plus zoom heads; zoom-media
+  isolates zoom heads; global command mode starts with a smaller robust
+  vocabulary after negative testing. Keep learned actions disabled.
 
 ## Notes Template
 

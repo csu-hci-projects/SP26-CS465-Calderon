@@ -74,8 +74,9 @@ Use mode groups:
 - all-IPN/debug mode: show everything, no actions.
 - command mode: only robust command gestures after AirDesk negative testing;
   keep `Throw up`, `Open twice`, and `Zoom out` disabled globally for now.
-- cursor mode: point/click/double-click heads only, because accidental pointing
-  is expected outside cursor mode.
+- cursor mode: click/double-click plus zoom heads only. IPN point heads are
+  suppressed because direct MediaPipe pose logic is cleaner if pointing is
+  needed later.
 - zoom/media mode: zoom heads only, also disabled globally by default.
 
 Next implementation target:

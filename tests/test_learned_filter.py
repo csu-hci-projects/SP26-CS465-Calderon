@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from airdesk.gestures.learned_filter import (
+    TCN_V2_RECOGNITION_MODES,
     LearnedRecognitionFilter,
     LearnedRecognitionFilterConfig,
     evaluate_tcn_v2_live_jsonl,
@@ -78,6 +79,35 @@ def test_parse_head_thresholds() -> None:
         "ipn_g05": 0.85,
         "ipn_g06": 0.9,
     }
+
+
+def test_cursor_mode_excludes_point_heads_but_keeps_clicks_and_zooms() -> None:
+    assert "ipn_b0a" not in TCN_V2_RECOGNITION_MODES["cursor"]
+    assert "ipn_b0b" not in TCN_V2_RECOGNITION_MODES["cursor"]
+    assert {"ipn_g01", "ipn_g02", "ipn_g10", "ipn_g11"}.issubset(
+        TCN_V2_RECOGNITION_MODES["cursor"]
+    )
+
+
+def test_point_heads_are_suppressed_from_custom_top_evidence() -> None:
+    filter_ = LearnedRecognitionFilter(
+        LearnedRecognitionFilterConfig(
+            mode="cursor",
+            score_threshold=0.5,
+            margin=0.1,
+            persistence_frames=1,
+        )
+    )
+
+    frame = filter_.update(
+        hand_id="hand-0",
+        evidence={"ipn_b0a": 0.99, "ipn_g10": 0.72, "ipn_g01": 0.40},
+        timestamp=1.0,
+    )
+
+    assert frame.top == ("ipn_g10", 0.72)
+    assert frame.recognition is not None
+    assert frame.recognition.target == "ipn_g10"
 
 
 def test_tcn_v2_live_jsonl_replay_scores_filtered_recognitions(tmp_path: Path) -> None:

@@ -8,9 +8,11 @@ margin/persistence checks, and targeted AirDesk hard negatives.
 
 Current context-reset task: implement a mode-aware learned-recognition filter
 around TCN v2 preview/evaluation while keeping actions disabled. Do not treat all
-13 IPN heads as globally available commands. Point/click heads belong in cursor
-mode; zoom heads belong in zoom/media mode; global command mode should start
-with a smaller robust vocabulary after false-positive review.
+13 IPN heads as globally available commands. IPN point heads are suppressed from
+learned preview/replay because direct MediaPipe pose logic is cleaner for
+pointing. Cursor mode keeps click/double-click plus zoom heads; zoom-media
+isolates zoom heads; global command mode should start with a smaller robust
+vocabulary after false-positive review.
 
 Immediate next-session checklist:
 
