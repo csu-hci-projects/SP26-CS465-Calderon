@@ -463,7 +463,7 @@ head instead of treating those gestures as background:
 - held-out test manifest:
   `data/public/ipn/airdesk-test-ipn-all/tcn-v2-ipn-all-test-manifest.json`.
 
-Use the reviewed script only after Caden explicitly confirms the launch:
+The original reviewed launch command was:
 
 ```bash
 LOG_PATH=data/logs/tcn-v2-ipn-all-80ep-h64-l4-overnight.log \
@@ -477,6 +477,24 @@ final-frame head metrics to
 Use `airdesk gesture evaluate-tcn-v2-heads` for all-IPN model quality; the
 older `evaluate-tcn-v2` command is still the AirDesk left/right event-decoder
 view and is not a meaningful all-IPN score.
+
+Training/evaluation results:
+
+- `tcn-v2-ipn-all-80ep-h64-l4.pt` used the original 0.8s manifest and scored
+  held-out `gesture_macro_f1=0.505`, `gesture_micro_f1=0.695`;
+- `tcn-v2-ipn-all-w16-80ep-h64-l4.pt` used a 1.6s manifest with the same
+  architecture and is the current best all-IPN checkpoint:
+  `gesture_macro_f1=0.521`, `gesture_micro_f1=0.742`, gesture-positive top-1
+  final-frame accuracy `0.757`, and top-3 `0.934`;
+- `tcn-v2-ipn-all-w16-80ep-h96-l4.pt` fit train/validation harder but scored
+  lower held-out `gesture_macro_f1=0.503`, so extra width alone is not the next
+  best move.
+
+The strongest heads are `intentional_motion`, `ipn_b0a`, and `ipn_b0b`; several
+named gestures are usable but uneven. `start` and `end` remain weak across all
+runs, so the next recognizer work should treat boundary evidence as a
+target-design/evaluation-tolerance problem before relying on it for event
+decoding.
 
 ## Notes Template
 

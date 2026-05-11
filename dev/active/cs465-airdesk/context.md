@@ -583,13 +583,23 @@ existing tracked IPN recordings without rerunning MediaPipe:
 `data/public/ipn/airdesk-train-ipn-all/tcn-v2-ipn-all-train-manifest.json`
 has 148 sources, 3,117 labeled gesture events, and 99,510 windows; the held-out
 test manifest has 52 sources, 1,101 labeled events, and 35,706 windows. This is
-the right overnight training target. A pre-launch review on this checkout
+the first all-IPN training target. A pre-launch review on this checkout
 confirmed the generated labels match the official non-`D0X` annotation events,
 `D0X` remains background, the manifests use `stream-invariant-v2`, and CUDA sees
-the NVIDIA T550. The reviewed launch script is
-`scripts/train-ipn-all-tcn-v2.sh`; it trains the all-IPN model and then runs
-`evaluate-tcn-v2-heads` on the held-out test manifest. Do not launch it until
-Caden explicitly confirms.
+the NVIDIA T550.
+
+All-IPN training results: the original 0.8s-window `h64/l4` run finished in
+about 12 minutes and wrote
+`data/models/gestures/tcn-v2-ipn-all-80ep-h64-l4.pt`, with held-out
+`gesture_macro_f1=0.505` and `gesture_micro_f1=0.695`. A controlled 1.6s-window
+rerun using the same architecture improved held-out ranking and is the current
+best checkpoint: `data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt` with
+`gesture_macro_f1=0.521`, `gesture_micro_f1=0.742`, top-1 gesture-positive
+final-frame accuracy `0.757`, and top-3 `0.934`. A wider `h96` 1.6s run fit the
+random validation split better but fell back to `gesture_macro_f1=0.503` on the
+official held-out split, so simply widening the TCN is not the next best lever.
+`start` / `end` stayed weak across all runs, which points to boundary target
+design/tolerance rather than CUDA, caching, or basic architecture failure.
 
 ## Current Roadmap
 

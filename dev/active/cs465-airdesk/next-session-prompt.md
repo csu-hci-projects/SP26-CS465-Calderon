@@ -224,7 +224,17 @@ and keep `D0X` as background; manifests use `stream-invariant-v2` and only
 `data/public/ipn/...` artifacts. The correct held-out quality metric for the
 all-IPN checkpoint is `airdesk gesture evaluate-tcn-v2-heads`, not the older
 AirDesk left/right `evaluate-tcn-v2` event decoder. The reviewed launch script
-is `scripts/train-ipn-all-tcn-v2.sh`, but no all-IPN model has been trained yet.
+is `scripts/train-ipn-all-tcn-v2.sh`.
+
+All-IPN training update: the 0.8s-window `h64/l4` run finished cleanly and
+scored held-out `gesture_macro_f1=0.505`, `gesture_micro_f1=0.695`. A controlled
+1.6s-window rerun with the same architecture is the current best checkpoint:
+`data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt`, with
+`gesture_macro_f1=0.521`, `gesture_micro_f1=0.742`, gesture-positive top-1
+final-frame accuracy `0.757`, and top-3 `0.934`. A wider 1.6s `h96` run scored
+lower held-out `gesture_macro_f1=0.503`, so do not assume more width is the next
+fix. `start` / `end` stayed weak across runs and should be treated as a boundary
+target/evaluation problem before event-decoder use.
 
 Next-session assignment:
 
@@ -252,14 +262,11 @@ Architectural stance:
 
 1. Check `git status`, reread the active docs, and verify the latest tests if
    the checkout has changed.
-2. Do not start training unless Caden explicitly confirms. If confirmed, launch
-   the reviewed overnight script with durable logging:
-   `LOG_PATH=data/logs/tcn-v2-ipn-all-80ep-h64-l4-overnight.log nohup bash scripts/train-ipn-all-tcn-v2.sh >/dev/null 2>&1 &`.
-3. After training completes, review
-   `data/evaluations/ipn-all/tcn-v2-ipn-all-80ep-h64-l4-final-frame-heads.json`
-   for per-head precision/recall/F1, macro/micro scores, and gesture-head
-   confusions.
-4. Then decide which IPN heads are useful as AirDesk priors and compare
+2. Use the 1.6s `h64/l4` all-IPN checkpoint as the current public-data prior
+   candidate unless a new controlled run beats it on the official held-out split.
+3. Review the weak `start` / `end` heads with boundary tolerance or wider target
+   labels before treating all-IPN evidence as an event decoder.
+4. Decide which IPN heads are useful as AirDesk priors and compare
    AirDesk-only vs IPN-only vs IPN-pretrain/AirDesk-fine-tune or hybrid training
    on the AirDesk source-held-out V2 recordings.
 5. Keep the old atomic `G05` / `G06` checkpoint interpretation narrow: it was

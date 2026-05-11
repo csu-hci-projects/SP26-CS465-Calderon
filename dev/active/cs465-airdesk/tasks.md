@@ -160,7 +160,8 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Add custom v2 evidence heads and generate IPN-all manifests so all 13 non-background IPN gestures are trained as named heads instead of background
 - [x] Add an all-IPN final-frame evidence-head evaluator so held-out IPN quality is measured per head instead of through the old AirDesk swipe decoder
 - [x] Add a reviewed overnight all-IPN TCN v2 launch script with durable ignored logging, CUDA preflight, and held-out head-metric evaluation
-- [ ] Train and evaluate an IPN-only all-gesture TCN v2 model before deciding which IPN gestures map cleanly into AirDesk commands
+- [x] Train and evaluate IPN-only all-gesture TCN v2 models; current best is the 1.6s-window `h64/l4` checkpoint with held-out `gesture_macro_f1=0.521` and `gesture_micro_f1=0.742`
+- [ ] Redesign or tolerance-score sparse `start` / `end` boundary evidence before relying on all-IPN checkpoints for event decoding
 - [ ] Compare AirDesk-only, public-pretrained/fine-tuned, and hybrid training on AirDesk source-held-out recordings
 - [ ] Add a command-grammar layer for combos over atomic emitted events instead of training every combo as its own TCN class
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay and source holdout still fire on normal desk motion
