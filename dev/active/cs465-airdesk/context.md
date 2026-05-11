@@ -715,6 +715,9 @@ The first deterministic control slice is now in place:
 - Pinch behavior is now split so quick index/middle pinch releases become
   left/right clicks, while index-pinch hold plus vertical palm motion emits
   dry-run scroll ticks and suppresses the tap.
+- Control pose facts are prioritized to reduce overlap from noisy sideways/fist
+  tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
+  artifacts, and clean pinch suppresses plain open-palm.
 - Guarded Hyprland move/close actions can query the active window title so the
   status/log surface can show a target window before real testing.
 - Real pointer click/scroll injection is still intentionally not enabled. The

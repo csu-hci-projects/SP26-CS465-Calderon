@@ -123,6 +123,7 @@ class ControlGrammar:
                 if event.pose == "index_pinch":
                     intents.extend(
                         self._click_intent_if_tap(
+                            current_features=hand_features,
                             hand_id=event.hand_id,
                             pose="index_pinch",
                             button="left",
@@ -134,6 +135,7 @@ class ControlGrammar:
                 elif event.pose == "middle_pinch":
                     intents.extend(
                         self._click_intent_if_tap(
+                            current_features=hand_features,
                             hand_id=event.hand_id,
                             pose="middle_pinch",
                             button="right",
@@ -215,6 +217,7 @@ class ControlGrammar:
     def _click_intent_if_tap(
         self,
         *,
+        current_features: ControlPoseFeatures,
         hand_id: str,
         pose: str,
         button: str,
@@ -225,6 +228,8 @@ class ControlGrammar:
         pending_key = (hand_id, pose)
         pending = self._pending_taps.pop(pending_key, False)
         if not pending or duration > self.config.tap_max_seconds:
+            return []
+        if not self._is_clean_pinch_release(current_features):
             return []
         return self._intent_if_ready(
             key=f"{hand_id}:{button}_click",
@@ -242,6 +247,11 @@ class ControlGrammar:
                 reason=reason,
             ),
         )
+
+    @staticmethod
+    def _is_clean_pinch_release(features: ControlPoseFeatures) -> bool:
+        blocked = {"fist", "sideways_open_palm_left", "sideways_open_palm_right"}
+        return features.poses.isdisjoint(blocked)
 
     def _intent_if_ready(
         self,

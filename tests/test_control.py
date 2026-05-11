@@ -9,7 +9,7 @@ from airdesk.control.poses import ControlPoseRecognizer
 from airdesk.state.types import Landmark, NormalizedHand, TrackingFrame
 
 
-def test_control_pose_features_classify_open_fist_zones_and_pinches(
+def test_control_pose_features_prioritize_conflicting_landmark_facts(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
@@ -27,7 +27,22 @@ def test_control_pose_features_classify_open_fist_zones_and_pinches(
     assert "sideways_open_palm_left" in open_features.poses
     assert open_features.palm_zone == "left"
     assert "fist" in fist_features.poses
+    assert "index_pinch" not in fist_features.poses
     assert "middle_pinch" in middle_features.poses
+    assert "open_palm" not in middle_features.poses
+
+
+def test_control_pose_sideways_palm_suppresses_pinch_artifacts(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    noisy_sideways = _middle_pinch_hand(_move_hand(make_hand("open_palm"), x=0.30))
+
+    features = recognizer.features_for_frame(make_tracking_frame(noisy_sideways))[0]
+
+    assert features.poses == frozenset({"open_palm", "sideways_open_palm_left"})
+    assert "middle_pinch" in features.suppressed_poses
 
 
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
@@ -134,6 +149,29 @@ def test_control_grammar_scrolls_on_index_pinch_hold_and_suppresses_tap(
 
     assert scroll[0].name == "scroll"
     assert scroll[0].request.parameters["amount_y"] == -1
+    assert click == []
+
+
+def test_control_grammar_cancels_pinch_tap_when_release_becomes_fist(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    pinch_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+    fist_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
+
+    grammar.update(
+        features=pinch_features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    click = grammar.update(
+        features=fist_features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.1, duration=0.1)],
+        timestamp=1.1,
+    )
+
     assert click == []
 
 

@@ -123,6 +123,9 @@ Current implementation status:
   pinch-tap left click, middle-pinch-tap right click, index-pinch-hold vertical
   scroll, sideways-palm workspace switching, fist side-zone move-window,
   launcher combo, and deliberate close-window combo.
+- Control pose facts are prioritized to reduce accidental overlap: fist
+  suppresses pinch artifacts, sideways-open-palm suppresses pinch artifacts, and
+  clean pinch suppresses plain open-palm.
 - Guarded move/close actions can query the active window title for target-window
   feedback.
 - Pointer button/scroll real execution is still not enabled. The dry-run input

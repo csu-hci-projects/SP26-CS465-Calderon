@@ -168,6 +168,11 @@ separation, active-window title lookup for guarded move/close status, and JSONL
 control logs. Pointer button/scroll real execution is still dry-run only until a
 real input injection adapter is installed and tested.
 
+Control poses are intentionally prioritized rather than treated as independent
+booleans. Fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
+artifacts, and clean pinch suppresses plain open-palm so noisy landmark geometry
+does not trigger overlapping commands from one hand shape.
+
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture chart-record` is the structured "Guitar Hero for swipes" collection path. It takes compact charts such as `RR | rest | RL | rest | RRR`, shows an on-screen colored chart HUD with a default 3-second lead-in, a smooth progress bar for the current cue, and fixed upcoming cards for get-ready/stroke/reset/rest prompts, records the replayable landmark stream, and writes coarse chart-derived stroke/recovery/event labels by default. Combo blocks such as `RRR` are shown as one active prompt so the swipes can happen at a natural pace inside that block. Chart recording now defaults to two tracked hands and should remain the recommended combo path; treat the generated labels as prompt-timing labels that may still need manual refinement before final training.
 `airdesk gesture build-tcn-dataset` builds a dependency-free JSON manifest of sliding windows over exported CSV features. The first target is intentionally narrow: `background`, `swipe_left`, and `swipe_right`. The manifest stores feature-file paths, row ranges, target labels, and frame-count summaries; it does not train a model and does not add PyTorch to the base runtime. Feature export includes causal trailing-window motion summaries for swipe analysis, including signed palm displacement, displacement normalized by hand scale, peak horizontal velocity, and direction consistency.

@@ -26,14 +26,19 @@ class ControlPoseFeatures:
     index_pinch_distance: float
     middle_pinch_distance: float
     poses: frozenset[str]
+    suppressed_poses: frozenset[str] = frozenset()
     hand_confidence: float | None = None
     handedness: str | None = None
 
     def sees(self) -> str:
         """Return a compact user-facing summary of the current pose facts."""
-        if not self.poses:
-            return f"{self.hand_id}: relaxed {self.palm_zone}"
-        return f"{self.hand_id}: {','.join(sorted(self.poses))} {self.palm_zone}"
+        active = "relaxed" if not self.poses else ",".join(sorted(self.poses))
+        suppressed = (
+            f" suppressed={','.join(sorted(self.suppressed_poses))}"
+            if self.suppressed_poses
+            else ""
+        )
+        return f"{self.hand_id}: {active} {self.palm_zone}{suppressed}"
 
 
 @dataclass(frozen=True)
@@ -72,17 +77,20 @@ class ControlPoseRecognizer:
         index_pinch = self._distance(hand, THUMB_TIP, INDEX_TIP)
         middle_pinch = self._distance(hand, THUMB_TIP, MIDDLE_TIP)
 
-        poses: set[str] = set()
-        if extended >= 4 and finger_spread >= self.open_spread_threshold:
-            poses.add("open_palm")
-            if palm_zone in {"left", "right"}:
-                poses.add(f"sideways_open_palm_{palm_zone}")
+        raw_poses: set[str] = set()
         if folded >= 4:
-            poses.add("fist")
+            raw_poses.add("fist")
+        if extended >= 4 and finger_spread >= self.open_spread_threshold:
+            raw_poses.add("open_palm")
+            if palm_zone in {"left", "right"}:
+                raw_poses.add(f"sideways_open_palm_{palm_zone}")
         if index_pinch <= self.index_pinch_threshold:
-            poses.add("index_pinch")
+            raw_poses.add("index_pinch")
         if middle_pinch <= self.middle_pinch_threshold:
-            poses.add("middle_pinch")
+            raw_poses.add("middle_pinch")
+
+        poses = self._resolve_control_poses(raw_poses)
+        suppressed_poses = raw_poses - poses
 
         return ControlPoseFeatures(
             hand_id=hand.hand_id,
@@ -96,9 +104,33 @@ class ControlPoseRecognizer:
             index_pinch_distance=index_pinch,
             middle_pinch_distance=middle_pinch,
             poses=frozenset(poses),
+            suppressed_poses=frozenset(suppressed_poses),
             hand_confidence=hand.confidence,
             handedness=hand.handedness,
         )
+
+    @staticmethod
+    def _resolve_control_poses(raw_poses: set[str]) -> set[str]:
+        """Apply control-lane priority so noisy landmark facts do not all fire."""
+        if "fist" in raw_poses:
+            return {"fist"}
+
+        side_poses = {"sideways_open_palm_left", "sideways_open_palm_right"}
+        sideways_poses = {
+            pose for pose in raw_poses if pose in side_poses
+        }
+        if sideways_poses:
+            return {"open_palm", *sideways_poses}
+
+        pinch_poses = {
+            pose for pose in raw_poses if pose in {"index_pinch", "middle_pinch"}
+        }
+        if pinch_poses:
+            return pinch_poses
+
+        if "open_palm" in raw_poses:
+            return {"open_palm"}
+        return set()
 
     def _extended_fingers(self, hand: NormalizedHand) -> int:
         landmarks = hand.landmarks.landmarks
