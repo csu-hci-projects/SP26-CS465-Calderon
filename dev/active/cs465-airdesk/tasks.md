@@ -22,6 +22,9 @@ Immediate next-session checklist:
       `public-dataset-survey.md`, `tracking-samples.md`, and this file.
 - [ ] Review existing `StaticHandPoseRecognizer`, `PinchCursorController`,
       Hyprland actions, cursor actions, runtime preview hooks, and tests.
+- [ ] Add the new live-control path side-by-side, preferably under
+      `src/airdesk/control/` and `airdesk control run`; do not overload the old
+      learned/dynamic `gestures` stack.
 - [ ] Add primitive logic features for stable open palm, fist, sideways open
       palm, index pinch, middle pinch, palm zone, and simple vertical motion.
 - [ ] Add a stable-pose debouncer that emits enter/held/release events rather
@@ -40,6 +43,11 @@ Immediate next-session checklist:
 - [ ] Add focused tests for primitive pose classification, debouncing, combo
       expiry/matching, grammar conflicts, cooldown, dry-run action routing, and
       guarded Hyprland command allowlisting.
+- [ ] Keep old `airdesk gesture ...`, `airdesk run`, and `airdesk cursor run`
+      behavior stable; mark legacy/diagnostic in docs only after the new control
+      command works.
+- [ ] Do not let the new control runtime import `gestures.dtw`, `gestures.motion`,
+      `gestures.learned_filter`, or TCN modules.
 - [x] Add a mode/profile vocabulary map for learned/custom TCN v2 heads.
 - [x] Let live preview show only enabled heads for the selected diagnostic mode,
       while retaining an all-head debug view.
@@ -82,6 +90,12 @@ As of the planning pass, `hyprctl` is installed, `/dev/uinput` is writable by
 `caden`, no external pointer helper (`ydotool`, `dotool`, `wtype`) is installed,
 and the Python `evdev` package is not installed. Prefer an isolated input action
 target behind tests rather than assuming an unavailable binary.
+
+Separation note: `src/airdesk/gestures/` is now mostly a future/replay/model
+lane. The logic-control MVP should get its own small package and tests instead
+of growing `gestures/primitives.py` into a second runtime. If a shared pose layer
+is useful, extract it deliberately as `src/airdesk/poses/` or
+`src/airdesk/control/poses.py` while keeping old imports compatible.
 
 ## Phase 0: Project Setup
 

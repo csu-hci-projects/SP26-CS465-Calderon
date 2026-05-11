@@ -104,7 +104,9 @@ airdesk/
   capture/          webcam, video file, recorded stream, Kinect stream
   tracking/         MediaPipe, OpenVINO, Kinect/depth, mock/replay, future Ultraleap
   state/            normalized hand/body state, calibration, smoothing
-  gestures/         rule recognizers, templates, classifiers, temporal recognizers
+  poses/            direct landmark pose features shared by control and diagnostics
+  control/          deterministic live-control grammar, debouncing, combos
+  gestures/         legacy/dynamic/learned recognizers, templates, classifiers
   modes/            command, cursor, media, window manager, presentation, keyboard
   profiles/         bindings, thresholds, safety rules, profile selection
   actions/          Hyprland, media, input, shell, dry-run
@@ -126,14 +128,65 @@ Sprint 0 implementation status:
 
 Near-term logic-control additions should preserve these boundaries:
 
-- `gestures` should own primitive landmark facts such as pinch distance, stable
-  open palm, fist, sideways open palm, finger count, and palm zone.
-- `modes` should own stateful behavior such as combo buffers, hold windows,
-  action grammar, cooldown, and whether an event is currently armed.
+- `poses` should own primitive landmark facts such as pinch distance, stable
+  open palm, fist, sideways open palm, finger count, and palm zone. If adding a
+  new top-level package feels too large for the first patch, add the code under
+  `control/poses.py` and leave a future extraction note.
+- `control` should own deterministic live behavior: pose debouncing, hold
+  windows, combo buffers, action grammar, cooldown, and whether an event is
+  currently armed.
+- `gestures` should be treated as the learned/dynamic diagnostic lane:
+  `dtw.py`, `motion.py`, `learned_filter.py`, `decoder.py`, and TCN-facing
+  helpers should not become dependencies of the new live-control MVP.
 - `actions` should own the OS adapters: Hyprland dispatch, cursor movement, and
   future `uinput` pointer-button/scroll injection.
 - `overlay` / live preview should explain what is being seen, what combo is
   pending, which window is targeted, and what was executed or suppressed.
+
+## Pivot Cleanup and Separation
+
+The pivot should be implemented as a side-by-side architecture, not by deleting
+or half-rewriting the existing gesture stack under time pressure.
+
+Keep:
+
+- `airdesk gesture ...` commands for replay/evaluation/model diagnostics.
+- `airdesk run` as the older profile/command-mode runtime until the new control
+  runtime proves itself.
+- `airdesk cursor run` as the old pinch-held cursor experiment, but document it
+  as legacy once the new control runtime owns pointer behavior.
+- Existing recordings, labels, features, IPN imports, and TCN checkpoints as
+  evidence and future work.
+
+Add:
+
+- `src/airdesk/control/` for the deterministic control runtime:
+  `poses.py` or `features.py`, `debounce.py`, `combos.py`, `grammar.py`,
+  `runtime.py`, and possibly `status.py`.
+- `airdesk control run` as the new class-demo surface, dry-run by default. This
+  keeps the new loop easy to test without disturbing older `airdesk run` and
+  `airdesk cursor run` behavior.
+- Focused tests such as `tests/test_control_poses.py`,
+  `tests/test_control_debounce.py`, `tests/test_control_combos.py`,
+  `tests/test_control_grammar.py`, and `tests/test_input_actions.py`.
+
+Do not do in the first implementation slice:
+
+- Do not move large learned/DTW/TCN files just to make the tree look cleaner.
+- Do not rename public commands before the demo.
+- Do not route learned recognizer outputs into the control grammar.
+- Do not let `control` import from `gestures.dtw`, `gestures.motion`,
+  `gestures.learned_filter`, or TCN modules.
+
+Allowed compatibility cleanup:
+
+- It is fine to leave `StaticHandPoseRecognizer` in `gestures.primitives` for
+  old tests while extracting shared landmark math into `poses` or
+  `control/poses`.
+- It is fine for old modules to import the new shared pose helpers later, but
+  keep that as a small compatibility step after the live-control MVP is green.
+- It is fine to add deprecation/legacy notes to docs and help text, but avoid
+  breaking CLI behavior during the class crunch.
 
 Potential top-level project layout:
 
@@ -294,7 +347,7 @@ Important boundaries:
 - command queue and mode/profile policy own ordering, chaining, and safety;
 - live desktop actions remain opt-in and guarded outside recognition.
 
-Potential package cleanup:
+Future learned-recognition package cleanup:
 
 ```text
 airdesk/features/
@@ -309,7 +362,10 @@ airdesk/recognition/
   tcn_v2.py
 ```
 
-This package shape is provisional. The next session should review the current code before moving files. The first implementation slice should be a deterministic motion-event baseline, not TCN v2.
+This package shape is provisional and belongs to the future model lane. It is
+not the next class-demo cleanup. The next implementation should add the
+side-by-side deterministic `control` lane first, then revisit learned
+recognition package moves only if they remove real maintenance friction.
 
 May 2026 plan review update: keep this package shape as the likely future
 direction, but do not start with a broad migration. Current code already has

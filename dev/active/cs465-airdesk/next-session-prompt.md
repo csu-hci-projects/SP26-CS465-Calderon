@@ -37,6 +37,14 @@ logic-control lane: a small "mid-air mouse plus window manager" grammar that
 recreates core keyboard/mouse/window affordances with observable pose facts,
 stable timing, visible feedback, and dry-run-first safety.
 
+Separation/cleanup decision:
+
+Build this as a side-by-side live-control path, not as more code inside the old
+learned/dynamic gesture stack. Prefer a new `src/airdesk/control/` package and
+an `airdesk control run` command. Keep `airdesk gesture ...`, old `airdesk run`,
+and old `airdesk cursor run` stable as diagnostic/legacy surfaces until the new
+control runtime is proven.
+
 Why the pivot happened:
 
 - Best all-IPN checkpoint:
@@ -111,7 +119,11 @@ Recommended first implementation slice:
    - `src/airdesk/actions/cursor.py`
    - `src/airdesk/cli_runtime.py`
    - existing cursor/action/runtime tests.
-2. Add primitive logic features for:
+2. Add the new live-control package/CLI boundary:
+   - `src/airdesk/control/`
+   - `airdesk control run`
+   - dry-run by default.
+3. Add primitive logic features for:
    - stable open palm
    - stable fist
    - sideways open palm
@@ -119,16 +131,23 @@ Recommended first implementation slice:
    - middle pinch
    - palm zone
    - pinch vertical motion for scroll.
-3. Add the stable-event debouncer and combo buffer.
-4. Implement the grammar in dry-run first.
-5. Expand guarded action adapters only as needed.
-6. Add dashboard/status and JSONL logging for pose/combo/action state.
-7. Add focused tests for primitives, debouncing, combo matching/expiry,
+4. Add the stable-event debouncer and combo buffer.
+5. Implement the grammar in dry-run first.
+6. Expand guarded action adapters only as needed.
+7. Add dashboard/status and JSONL logging for pose/combo/action state.
+8. Add focused tests for primitives, debouncing, combo matching/expiry,
    grammar conflicts, cooldown, dry-run routing, and guarded Hyprland allowlist.
 
 Safety stance:
 
 - Learned/DTW/motion gestures stay out of live Hyprland actions.
+- The new control runtime should not import `gestures.dtw`, `gestures.motion`,
+  `gestures.learned_filter`, TCN modules, or IPN helpers.
+- Leave old recognizer files parked for future work; do not delete or move large
+  files before the logic-control MVP works.
+- If shared landmark math is useful, extract it deliberately into
+  `src/airdesk/poses/` or `src/airdesk/control/poses.py` and keep old imports
+  compatible.
 - `killactive` is high risk: require the close combo and visible close-armed
   feedback with the active window title.
 - Pointer click/scroll injection must be isolated behind an input action target

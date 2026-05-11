@@ -28,6 +28,12 @@ window manager" grammar: open/relaxed hand cursor control, pinch click/scroll,
 sideways palm workspace switching, fist-based window move, launcher combo, and a
 deliberate open-palm/fist/open-palm close-window combo.
 
+Architecture note for the pivot: build the new live-control path beside the
+older gesture/model stack, preferably as `src/airdesk/control/` plus
+`airdesk control run`. Keep `airdesk gesture ...`, old `airdesk run`, and old
+`airdesk cursor run` stable as diagnostic/legacy surfaces until the new control
+runtime is proven.
+
 ## Development
 
 AirDesk currently uses Python, `uv`, `ruff`, and `pytest`.

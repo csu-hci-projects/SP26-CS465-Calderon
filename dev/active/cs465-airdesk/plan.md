@@ -159,6 +159,12 @@ MediaPipe landmarks
   -> overlay and JSONL action logs
 ```
 
+The implementation should also cleanly separate this new lane from the old
+gesture-recognition system. Treat `gestures/`, TCN, DTW, and IPN as a future
+diagnostic/model lane. Build the class-demo control path beside it, preferably
+under a new `control/` package and an `airdesk control run` CLI command, so the
+demo runtime is not forced through old swipe/model abstractions.
+
 The combo buffer should record stable events, not every frame. Example event
 stream:
 
@@ -192,6 +198,11 @@ Current MVP grammar candidate:
 
 The goal is not a large vocabulary. The goal is a small "mid-air mouse plus
 window manager" grammar that strings together without accidental overlap.
+
+Cleanup rule: do not delete or rewrite the old recognizer stack during the first
+logic-control implementation. Park it as preview/replay/evaluation future work,
+avoid importing it from the new control runtime, and only extract shared
+landmark pose math when it directly reduces duplication.
 
 ## Interaction Modes
 

@@ -244,6 +244,11 @@ Current next step:
 - Do not wire learned all-IPN heads to live Hyprland actions for the class demo.
 - Build a "mid-air mouse plus window manager" grammar from direct MediaPipe
   landmark facts.
+- Keep this as a separate live-control lane, not as another feature stuffed into
+  the old learned/dynamic `gestures` stack.
+- Prefer a new `src/airdesk/control/` package and `airdesk control run` command.
+  Keep `airdesk gesture ...`, old `airdesk run`, and old `airdesk cursor run`
+  stable as diagnostic/legacy surfaces until the new control runtime is proven.
 - Emit stable pose events only after debouncing/hold confirmation; do not treat
   every frame as a command event.
 - Keep the last about four stable pose events per hand in a two-second combo
@@ -266,6 +271,17 @@ MVP grammar candidate:
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via
   `hyprctl dispatch killactive`, with visible close-armed feedback.
+
+Cleanup/separation rule for the next implementation:
+
+- The new control runtime must not import `gestures.dtw`, `gestures.motion`,
+  `gestures.learned_filter`, TCN modules, or IPN helpers.
+- Shared landmark math may be extracted into `src/airdesk/poses/` or kept first
+  in `src/airdesk/control/poses.py`.
+- Leave `StaticHandPoseRecognizer` compatible for older tests and runtime paths;
+  do not do a broad module move before the MVP works.
+- Treat large gesture/model files as parked future work, not dead code to delete
+  during the crunch.
 
 Current learned-recognition filter update:
 
