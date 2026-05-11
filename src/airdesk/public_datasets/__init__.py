@@ -2,6 +2,8 @@
 
 from airdesk.public_datasets.ipn import (
     IPN_AIRDESK_ATOMIC_MAP,
+    IPN_EVIDENCE_HEADS,
+    IPN_EVIDENCE_TARGETS,
     IpnConversionResult,
     IpnSegment,
     class_file_for_ipn_annotations,
@@ -15,6 +17,8 @@ from airdesk.public_datasets.ipn import (
 
 __all__ = [
     "IPN_AIRDESK_ATOMIC_MAP",
+    "IPN_EVIDENCE_HEADS",
+    "IPN_EVIDENCE_TARGETS",
     "IpnConversionResult",
     "IpnSegment",
     "class_file_for_ipn_annotations",

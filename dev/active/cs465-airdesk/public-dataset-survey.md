@@ -134,3 +134,29 @@ is either better public-data target design, for example an explicit
 `intentional_non_left_right_motion` / richer atomic heads, or IPN pretraining
 followed by AirDesk fine-tuning and evaluation on AirDesk source-held-out V2
 recordings.
+
+## All-IPN Gesture Pivot
+
+Caden correctly flagged that the first two-head IPN proxy model should not be
+judged as broadly bad from false activations on other IPN gestures. Those
+"false" activations were partly caused by the target design: the model was asked
+to learn only `G05` / `G06`, while the other 11 non-background IPN gesture
+classes were treated as background.
+
+The next public-data target is therefore an IPN-only all-gesture evidence model.
+AirDesk now supports custom v2 evidence heads, and IPN can generate an
+`ipn-all` label mode with:
+
+- `intentional_motion`;
+- one head for every non-`D0X` IPN class:
+  `ipn_b0a`, `ipn_b0b`, `ipn_g01` ... `ipn_g11`;
+- `start` and `end` boundary heads.
+
+Ignored all-IPN manifests have been generated from the existing tracked IPN
+recordings without rerunning MediaPipe:
+
+- train: `data/public/ipn/airdesk-train-ipn-all/tcn-v2-ipn-all-train-manifest.json`
+  with 148 sources, 3,117 labeled IPN gesture events, and 99,510 windows;
+- held-out test:
+  `data/public/ipn/airdesk-test-ipn-all/tcn-v2-ipn-all-test-manifest.json`
+  with 52 sources, 1,101 labeled IPN gesture events, and 35,706 windows.

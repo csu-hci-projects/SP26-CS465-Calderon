@@ -69,6 +69,10 @@ def public_data_ipn_convert(
         int | None,
         typer.Option(help="Debug limit on frames per video."),
     ] = None,
+    label_mode: Annotated[
+        str,
+        typer.Option(help="IPN labeling mode: airdesk-atomic or ipn-all."),
+    ] = "airdesk-atomic",
 ) -> None:
     """Convert IPN Hand videos into AirDesk replay/features/labels artifacts."""
     try:
@@ -85,6 +89,7 @@ def public_data_ipn_convert(
             delegate=hand_delegate,
             manifest_out=manifest_out,
             frame_limit=frame_limit,
+            label_mode=label_mode,
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         typer.echo(str(exc), err=True)

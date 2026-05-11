@@ -157,7 +157,8 @@ Current context-reset task: continue the staff-level review/refactor pass before
 - [x] Prototype an IPN Hand importer that runs videos through MediaPipe and exports AirDesk `FrameFeatureRow` CSVs with `stream-invariant-v2` features
 - [x] Download IPN Hand official annotations/video archives into ignored `data/public/ipn/`, extract 200 videos, and smoke the official annotation converter path
 - [x] Train an IPN-only TCN v2 atomic gesture model on IPN `G05` / `G06` throw-left/right proxy labels and evaluate held-out IPN replay before hybridizing datasets
-- [ ] Redesign the public-data target/decoder strategy before treating IPN as more than left/right lateral-motion pretraining signal
+- [x] Add custom v2 evidence heads and generate IPN-all manifests so all 13 non-background IPN gestures are trained as named heads instead of background
+- [ ] Train and evaluate an IPN-only all-gesture TCN v2 model before deciding which IPN gestures map cleanly into AirDesk commands
 - [ ] Compare AirDesk-only, public-pretrained/fine-tuned, and hybrid training on AirDesk source-held-out recordings
 - [ ] Add a command-grammar layer for combos over atomic emitted events instead of training every combo as its own TCN class
 - [ ] Tighten TCN v2 negative-motion intent rejection after schema-2 isolated replay and source holdout still fire on normal desk motion

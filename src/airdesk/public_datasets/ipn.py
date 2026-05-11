@@ -48,6 +48,18 @@ IPN_AIRDESK_ATOMIC_MAP = {
     "G05": ("swipe_left", "stroke_left"),
     "G06": ("swipe_right", "stroke_right"),
 }
+IPN_EVIDENCE_HEADS = {
+    label: f"ipn_{label.lower()}"
+    for label in IPN_CLASS_NAMES
+    if label != "D0X"
+}
+IPN_EVIDENCE_TARGETS = (
+    "intentional_motion",
+    *tuple(IPN_EVIDENCE_HEADS.values()),
+    "start",
+    "end",
+)
+IPN_LABEL_MODES = ("airdesk-atomic", "ipn-all")
 
 _IPN_SPLIT_FILES = {
     "train": ("trainlistall.txt", "Annot_TrainList.txt"),
@@ -249,8 +261,12 @@ def convert_ipn_videos(
     delegate: str = "cpu",
     manifest_out: Path | None = None,
     frame_limit: int | None = None,
+    label_mode: str = "airdesk-atomic",
 ) -> IpnConversionResult:
     """Convert selected IPN videos into AirDesk recordings, labels, and features."""
+    if label_mode not in IPN_LABEL_MODES:
+        options = ", ".join(IPN_LABEL_MODES)
+        raise ValueError(f"unsupported IPN label_mode={label_mode!r}; use one of: {options}")
     class_index = load_ipn_class_index(class_file_for_ipn_annotations(annotations_dir))
     split_path = split_file_for_ipn_annotations(annotations_dir, split)
     segments = load_ipn_split_segments(split_path, class_index=class_index, subset=split)
@@ -294,6 +310,7 @@ def convert_ipn_videos(
             segments=video_segments,
             fps=fps,
             observed_frame_count=frame_count,
+            label_mode=label_mode,
         )
         validation = validate_label_file(label_file)
         if not validation.ok:
@@ -306,7 +323,9 @@ def convert_ipn_videos(
         label_paths.append(label_path)
         feature_paths.append(feature_path)
         converted_segments += len(video_segments)
-        mapped_segments += sum(1 for segment in video_segments if segment.maps_to_airdesk)
+        mapped_segments += sum(
+            1 for segment in video_segments if _segment_maps_for_label_mode(segment, label_mode)
+        )
 
     if manifest_out is not None:
         manifest = build_tcn_dataset_manifest(
@@ -315,6 +334,9 @@ def convert_ipn_videos(
             feature_preset="stream-invariant-v2",
             target_mode="v2-evidence",
             target_assignment="label",
+            evidence_targets=(
+                IPN_EVIDENCE_TARGETS if label_mode == "ipn-all" else None
+            ),
         )
         save_tcn_dataset_manifest(manifest, manifest_out)
 
@@ -422,21 +444,31 @@ def _ipn_label_file_for_recording(
     segments: list[IpnSegment],
     fps: float,
     observed_frame_count: int,
+    label_mode: str = "airdesk-atomic",
 ) -> GestureLabelFile:
+    if label_mode not in IPN_LABEL_MODES:
+        options = ", ".join(IPN_LABEL_MODES)
+        raise ValueError(f"unsupported IPN label_mode={label_mode!r}; use one of: {options}")
     label_file = init_label_file(
         recording_path,
         participant_id="ipn-public",
         notes=(
-            "Generated from IPN Hand annotations. Only AirDesk atomic left/right "
-            "swipe mappings are positive labels; other IPN gestures remain background "
-            "for the first v2-evidence training pass."
+            "Generated from IPN Hand annotations. "
+            + (
+                "All non-D0X IPN gesture classes are positive evidence labels."
+                if label_mode == "ipn-all"
+                else (
+                    "Only AirDesk atomic left/right throw-proxy mappings are positive "
+                    "labels; other IPN gestures remain background for this pass."
+                )
+            )
         ),
     )
     event_labels: list[GestureEventLabel] = []
     phase_labels: list[GesturePhaseLabel] = list(label_file.phase_labels)
     max_frame = max(1, observed_frame_count)
     for segment in segments:
-        mapped = IPN_AIRDESK_ATOMIC_MAP.get(segment.label)
+        mapped = _segment_label_mapping(segment, label_mode)
         if mapped is None:
             continue
         gesture, phase = mapped
@@ -454,20 +486,21 @@ def _ipn_label_file_for_recording(
                 commit_time=end_time,
                 notes=(
                     f"IPN {segment.label} {IPN_CLASS_NAMES.get(segment.label, '')}; "
-                    "mapped to AirDesk atomic swipe evidence."
+                    f"mapped to {gesture} evidence."
                 ),
             )
         )
-        phase_labels.append(
-            GesturePhaseLabel(
-                label_id=f"phase-{len(phase_labels) + 1:03d}",
-                phase=phase,
-                start_time=start_time,
-                end_time=end_time,
-                gesture=gesture,
-                notes=f"IPN {segment.label} mapped to {phase}.",
+        if phase is not None:
+            phase_labels.append(
+                GesturePhaseLabel(
+                    label_id=f"phase-{len(phase_labels) + 1:03d}",
+                    phase=phase,
+                    start_time=start_time,
+                    end_time=end_time,
+                    gesture=gesture,
+                    notes=f"IPN {segment.label} mapped to {phase}.",
+                )
             )
-        )
     return GestureLabelFile(
         schema_version=label_file.schema_version,
         created_at=label_file.created_at,
@@ -475,6 +508,20 @@ def _ipn_label_file_for_recording(
         event_labels=tuple(event_labels),
         phase_labels=tuple(phase_labels),
     )
+
+
+def _segment_maps_for_label_mode(segment: IpnSegment, label_mode: str) -> bool:
+    return _segment_label_mapping(segment, label_mode) is not None
+
+
+def _segment_label_mapping(
+    segment: IpnSegment,
+    label_mode: str,
+) -> tuple[str, str | None] | None:
+    if label_mode == "ipn-all":
+        gesture = IPN_EVIDENCE_HEADS.get(segment.label)
+        return (gesture, None) if gesture is not None else None
+    return IPN_AIRDESK_ATOMIC_MAP.get(segment.label)
 
 
 def write_ipn_mapping_csv(path: Path) -> None:

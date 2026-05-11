@@ -13,6 +13,7 @@ TCN_V2_EVIDENCE_TARGETS = (
     "end",
 )
 TCN_V2_WINDOW_TARGETS = ("background",) + TCN_V2_EVIDENCE_TARGETS
+TCN_V2_CONTROL_TARGETS = {"intentional_motion", "start", "end"}
 
 
 def tcn_v2_frame_evidence_targets(
@@ -22,6 +23,7 @@ def tcn_v2_frame_evidence_targets(
     target_assignment: str,
     motion_gate_min_dx_per_hand_scale: float,
     motion_gate_min_direction_consistency: float,
+    evidence_targets: tuple[str, ...] = TCN_V2_EVIDENCE_TARGETS,
 ) -> list[dict[str, float]]:
     """Return decoder-facing evidence targets aligned to feature rows."""
     evidence = [
@@ -31,6 +33,7 @@ def tcn_v2_frame_evidence_targets(
             target_assignment=target_assignment,
             motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
             motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+            evidence_targets=evidence_targets,
         )
         for row in rows
     ]
@@ -68,45 +71,53 @@ def tcn_v2_evidence_for_row(
     target_assignment: str,
     motion_gate_min_dx_per_hand_scale: float,
     motion_gate_min_direction_consistency: float,
+    evidence_targets: tuple[str, ...] = TCN_V2_EVIDENCE_TARGETS,
 ) -> dict[str, float]:
     """Return multi-label TCN v2 evidence for one feature row."""
+    frame_evidence = _empty_tcn_v2_evidence(evidence_targets)
     if not is_tracked_feature_row(row):
-        return _empty_tcn_v2_evidence()
+        return frame_evidence
     phase = (
         row.phase
         if row.phase and row.phase != "background"
         else _phase_at(labels, row.timestamp)
     )
     event = row.event or _event_at(labels, row.timestamp)
-    stroke_left = phase == "stroke_left" or event == "swipe_left"
-    stroke_right = phase == "stroke_right" or event == "swipe_right"
+    active_targets = {
+        target
+        for target in evidence_targets
+        if target not in TCN_V2_CONTROL_TARGETS and _target_matches_label(target, phase, event)
+    }
     if target_assignment == "motion-gated":
-        if stroke_left and not row_motion_matches_tcn_target(
-            row,
-            "stroke_left",
-            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
-            min_direction_consistency=motion_gate_min_direction_consistency,
-        ):
-            stroke_left = False
-        if stroke_right and not row_motion_matches_tcn_target(
-            row,
-            "stroke_right",
-            min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
-            min_direction_consistency=motion_gate_min_direction_consistency,
-        ):
-            stroke_right = False
+        active_targets = {
+            target
+            for target in active_targets
+            if row_motion_matches_tcn_target(
+                row,
+                target,
+                min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
+                min_direction_consistency=motion_gate_min_direction_consistency,
+            )
+        }
     intentional_motion = bool(
-        stroke_left
-        or stroke_right
+        active_targets
         or phase in {"recovery", "reset", "release", "cooldown"}
     )
-    return {
-        "intentional_motion": 1.0 if intentional_motion else 0.0,
-        "stroke_left": 1.0 if stroke_left else 0.0,
-        "stroke_right": 1.0 if stroke_right else 0.0,
-        "start": 0.0,
-        "end": 0.0,
-    }
+    for target in active_targets:
+        frame_evidence[target] = 1.0
+    if "intentional_motion" in frame_evidence:
+        frame_evidence["intentional_motion"] = 1.0 if intentional_motion else 0.0
+    return frame_evidence
+
+
+def _target_matches_label(target: str, phase: str, event: str) -> bool:
+    if target in (phase, event):
+        return True
+    if target == "stroke_left":
+        return phase == "stroke_left" or event == "swipe_left"
+    if target == "stroke_right":
+        return phase == "stroke_right" or event == "swipe_right"
+    return False
 
 
 def row_motion_matches_tcn_target(
@@ -131,7 +142,10 @@ def row_motion_matches_tcn_target(
 
 def tcn_v2_window_target_from_evidence(evidence: dict[str, float]) -> str:
     """Return the collapsed display/window target for one frame's v2 evidence."""
-    for target in ("stroke_left", "stroke_right", "start", "end", "intentional_motion"):
+    for target, value in evidence.items():
+        if target not in TCN_V2_CONTROL_TARGETS and value > 0:
+            return target
+    for target in ("start", "end", "intentional_motion"):
         if evidence.get(target, 0.0) > 0:
             return target
     return "background"
@@ -150,14 +164,8 @@ def tcn_v2_evidence_counts(
     return counts
 
 
-def _empty_tcn_v2_evidence() -> dict[str, float]:
-    return {
-        "intentional_motion": 0.0,
-        "stroke_left": 0.0,
-        "stroke_right": 0.0,
-        "start": 0.0,
-        "end": 0.0,
-    }
+def _empty_tcn_v2_evidence(evidence_targets: tuple[str, ...]) -> dict[str, float]:
+    return {target: 0.0 for target in evidence_targets}
 
 
 def _event_at(labels: GestureLabelFile | None, timestamp: float) -> str:

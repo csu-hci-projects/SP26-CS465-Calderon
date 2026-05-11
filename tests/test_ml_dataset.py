@@ -797,6 +797,75 @@ def test_tcn_v2_frame_evidence_keeps_boundaries_on_tracked_intentional_rows() ->
     assert evidence[3]["end"] == 1.0
 
 
+def test_tcn_v2_manifest_accepts_custom_evidence_heads(tmp_path: Path) -> None:
+    features = tmp_path / "ipn.csv"
+    labels_dir = tmp_path / "labels"
+    _write_features(
+        features,
+        [
+            _row(timestamp=1.0, frame_index=0, event=""),
+            _row(timestamp=1.1, frame_index=1, event="ipn_g01"),
+            _row(timestamp=1.2, frame_index=2, event="ipn_g01"),
+            _row(timestamp=1.3, frame_index=3, event=""),
+        ],
+    )
+    save_label_file(
+        GestureLabelFile(
+            schema_version=1,
+            created_at=1.0,
+            session=SessionMetadata(
+                recording_path="recording.jsonl",
+                start_timestamp=1.0,
+                end_timestamp=1.3,
+            ),
+            event_labels=(
+                GestureEventLabel(
+                    label_id="event-001",
+                    label_type="gesture",
+                    gesture="ipn_g01",
+                    start_time=1.1,
+                    end_time=1.2,
+                ),
+            ),
+            phase_labels=(),
+        ),
+        labels_dir / "ipn.labels.json",
+    )
+
+    manifest = build_tcn_dataset_manifest(
+        [features],
+        labels_dir=labels_dir,
+        window_seconds=0.2,
+        stride_seconds=0.2,
+        min_rows=2,
+        min_gesture_fraction=0.25,
+        target_mode="v2-evidence",
+        feature_preset="stream-invariant",
+        evidence_targets=("intentional_motion", "ipn_g01", "ipn_g02", "start", "end"),
+    )
+
+    assert manifest.evidence_targets == (
+        "intentional_motion",
+        "ipn_g01",
+        "ipn_g02",
+        "start",
+        "end",
+    )
+    assert manifest.targets == ("background",) + manifest.evidence_targets
+    assert manifest.sources[0].evidence_frame_counts == {
+        "intentional_motion": 2,
+        "ipn_g01": 2,
+        "ipn_g02": 0,
+        "start": 1,
+        "end": 1,
+    }
+    assert manifest.windows[0].target == "ipn_g01"
+    assert feature_window_frame_targets(
+        manifest.windows[0],
+        evidence_targets=manifest.evidence_targets,
+    )[1] == [1.0, 1.0, 0.0, 1.0, 0.0]
+
+
 def test_build_tcn_manifest_v2_motion_gates_resting_hand_evidence(tmp_path: Path) -> None:
     features = tmp_path / "two-hand.csv"
     _write_features(

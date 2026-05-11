@@ -90,6 +90,7 @@ def test_public_data_ipn_convert_help_exposes_import_options() -> None:
     assert "--videos-dir" in result.stdout
     assert "--manifest-out" in result.stdout
     assert "--hand-delegate" in result.stdout
+    assert "--label-mode" in result.stdout
 
 
 def test_tune_help_exposes_threshold_options() -> None:

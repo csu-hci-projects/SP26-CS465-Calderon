@@ -340,13 +340,22 @@ def build_tcn_dataset_manifest(
     feature_preset: str = "legacy",
     target_mode: str = "event",
     target_assignment: str = "label",
+    evidence_targets: tuple[str, ...] | None = None,
     motion_gate_min_dx_per_hand_scale: float = DEFAULT_MOTION_GATE_MIN_DX_PER_HAND_SCALE,
     motion_gate_min_direction_consistency: float = DEFAULT_MOTION_GATE_MIN_DIRECTION_CONSISTENCY,
 ) -> TcnDatasetManifest:
     """Build deterministic sliding-window metadata over exported feature CSVs."""
     resolved_feature_columns = feature_columns or feature_columns_for_preset(feature_preset)
-    resolved_targets = targets_for_mode(target_mode) if targets == TCN_TARGETS else targets
-    evidence_targets = TCN_V2_EVIDENCE_TARGETS if target_mode == "v2-evidence" else ()
+    resolved_evidence_targets = (
+        evidence_targets or TCN_V2_EVIDENCE_TARGETS if target_mode == "v2-evidence" else ()
+    )
+    resolved_targets = (
+        ("background",) + resolved_evidence_targets
+        if target_mode == "v2-evidence" and targets == TCN_TARGETS
+        else targets_for_mode(target_mode)
+        if targets == TCN_TARGETS
+        else targets
+    )
     _validate_manifest_config(
         window_seconds=window_seconds,
         stride_seconds=stride_seconds,
@@ -371,6 +380,7 @@ def build_tcn_dataset_manifest(
                 target_assignment=target_assignment,
                 motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
                 motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
+                evidence_targets=resolved_evidence_targets,
             )
             if target_mode == "v2-evidence"
             else None
@@ -403,7 +413,7 @@ def build_tcn_dataset_manifest(
                 duration_seconds=_duration(rows),
                 target_frame_counts=_target_counts(target_by_row, resolved_targets),
                 evidence_frame_counts=(
-                    tcn_v2_evidence_counts(evidence_by_row, evidence_targets)
+                    tcn_v2_evidence_counts(evidence_by_row, resolved_evidence_targets)
                     if evidence_by_row is not None
                     else {}
                 ),
@@ -441,7 +451,7 @@ def build_tcn_dataset_manifest(
         target_assignment=target_assignment,
         motion_gate_min_dx_per_hand_scale=motion_gate_min_dx_per_hand_scale,
         motion_gate_min_direction_consistency=motion_gate_min_direction_consistency,
-        evidence_targets=evidence_targets,
+        evidence_targets=resolved_evidence_targets,
     )
 
 

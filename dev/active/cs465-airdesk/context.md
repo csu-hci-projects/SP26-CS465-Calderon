@@ -568,6 +568,17 @@ activations; `88/104` at stricter `0.80/0.45/0.80` thresholds with `247` false
 activations; and `52/104` at `0.90/0.50/0.90` with `49` false activations.
 Interpretation: useful pretraining signal, not a deployable AirDesk swipe model.
 
+All-IPN correction: Caden correctly pointed out that the two-head IPN proxy
+model should not be blamed for every false activation when 11 real IPN gestures
+were being treated as background. The next public-data model should train all
+non-`D0X` IPN gestures as named evidence heads. AirDesk now supports custom v2
+evidence targets, and ignored all-IPN manifests have been generated from the
+existing tracked IPN recordings without rerunning MediaPipe:
+`data/public/ipn/airdesk-train-ipn-all/tcn-v2-ipn-all-train-manifest.json`
+has 148 sources, 3,117 labeled gesture events, and 99,510 windows; the held-out
+test manifest has 52 sources, 1,101 labeled events, and 35,706 windows. This is
+the right overnight training target.
+
 ## Current Roadmap
 
 ### Sprint 3: Pilot-Safe Live Command Mode
