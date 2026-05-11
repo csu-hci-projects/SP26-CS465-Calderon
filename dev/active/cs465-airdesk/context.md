@@ -720,6 +720,13 @@ The first deterministic control slice is now in place:
   artifacts, and clean pinch suppresses plain open-palm.
 - Guarded Hyprland move/close actions can query the active window title so the
   status/log surface can show a target window before real testing.
+- Live Hyprland testing showed move-window was too touchy when any side-zone
+  fist could fire repeatedly. The current control grammar now requires center
+  fist to arm move-window for a short window; a side-zone fist fires once and
+  consumes the arm, while fist release or expiry returns to neutral.
+- The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
+  and cursor gain defaults to `1.8`; both are exposed on `airdesk control run`
+  for live tuning.
 - Real pointer click/scroll injection is still intentionally not enabled. The
   dry-run input target is in place so a future `uinput`/`evdev` adapter can be
   added behind focused tests.

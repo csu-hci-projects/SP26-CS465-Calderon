@@ -49,8 +49,8 @@ class ControlPoseRecognizer:
     open_spread_threshold: float = 0.16
     index_pinch_threshold: float = 0.06
     middle_pinch_threshold: float = 0.065
-    left_zone_max: float = 0.40
-    right_zone_min: float = 0.60
+    left_zone_max: float = 0.30
+    right_zone_min: float = 0.70
 
     def features_for_frame(self, frame: TrackingFrame) -> list[ControlPoseFeatures]:
         """Return control features for each visible hand."""

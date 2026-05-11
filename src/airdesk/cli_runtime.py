@@ -19,6 +19,7 @@ from airdesk.actions.hyprland import (
 from airdesk.actions.input import DryRunPointerInputTarget
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_tracking import _make_tracker
+from airdesk.control.poses import ControlPoseRecognizer
 from airdesk.control.runtime import ControlRuntime, ControlRuntimeConfig, format_control_summary
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.profiles.loader import load_profile
@@ -399,7 +400,7 @@ def control_run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
-    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 1.0,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 1.8,
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
@@ -416,6 +417,14 @@ def control_run(
         int,
         typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
     ] = 1,
+    left_zone_max: Annotated[
+        float,
+        typer.Option(help="Palm x at or below this value counts as the left side zone."),
+    ] = 0.30,
+    right_zone_min: Annotated[
+        float,
+        typer.Option(help="Palm x at or above this value counts as the right side zone."),
+    ] = 0.70,
     mirror_x: Annotated[
         bool,
         typer.Option(help="Mirror hand X movement for webcam control."),
@@ -463,6 +472,10 @@ def control_run(
         cursor_target=cursor_target,
         hyprland_target=hyprland_target,
         pointer_target=DryRunPointerInputTarget(),
+        pose_recognizer=ControlPoseRecognizer(
+            left_zone_max=left_zone_max,
+            right_zone_min=right_zone_min,
+        ),
         event_writer=event_writer,
         config=ControlRuntimeConfig(
             execute=execute,

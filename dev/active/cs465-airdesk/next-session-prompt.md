@@ -128,6 +128,9 @@ Current implementation status:
   clean pinch suppresses plain open-palm.
 - Guarded move/close actions can query the active window title for target-window
   feedback.
+- Move-window now requires a center-fist arm before side-zone fist movement can
+  fire; the arm expires quickly and is cleared by fist release. Side zones
+  default to `left <= 0.30` and `right >= 0.70`; cursor gain defaults to `1.8`.
 - Pointer button/scroll real execution is still not enabled. The dry-run input
   adapter is present for tests and future `uinput`/`evdev` work.
 - Focused tests cover primitive control poses, debouncing, combo
@@ -137,7 +140,7 @@ Current implementation status:
 Recommended next implementation slice:
 
 1. Run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 1.8 --left-zone-max 0.30 --right-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
    from the JSONL log and live feel.
 3. Improve live status/dashboard rendering so it clearly shows `Seeing`,

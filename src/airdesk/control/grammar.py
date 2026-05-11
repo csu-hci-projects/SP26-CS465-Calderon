@@ -33,6 +33,7 @@ class ControlGrammarConfig:
     close_cooldown_seconds: float = 2.0
     tap_max_seconds: float = 0.30
     scroll_cooldown_seconds: float = 0.12
+    window_move_arm_seconds: float = 1.75
 
 
 @dataclass
@@ -43,6 +44,7 @@ class ControlGrammar:
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
+    _window_move_armed_until: dict[str, float] = field(default_factory=dict)
 
     def update(
         self,
@@ -55,6 +57,7 @@ class ControlGrammar:
         intents: list[ControlIntent] = []
         feature_by_hand = {item.hand_id: item for item in features}
         scroll_delta_by_hand = scroll_delta_by_hand or {}
+        self._expire_window_move_arms(timestamp)
 
         for event in events:
             self.combo_buffer.add(event)
@@ -105,8 +108,17 @@ class ControlGrammar:
                             reason="sideways open palm hold",
                         )
                     )
-                elif event.pose == "fist" and hand_features.palm_zone in {"left", "right"}:
+                elif event.pose == "fist" and hand_features.palm_zone == "center":
+                    self._window_move_armed_until[event.hand_id] = (
+                        timestamp + self.config.window_move_arm_seconds
+                    )
+                elif (
+                    event.pose == "fist"
+                    and hand_features.palm_zone in {"left", "right"}
+                    and self._window_move_is_armed(event.hand_id, timestamp)
+                ):
                     direction = "+1" if hand_features.palm_zone == "left" else "-1"
+                    self._window_move_armed_until.pop(event.hand_id, None)
                     intents.extend(
                         self._hyprland_intent_if_ready(
                             key=f"{event.hand_id}:move_window:{direction}",
@@ -120,6 +132,8 @@ class ControlGrammar:
                     )
 
             if event.event_type == "released":
+                if event.pose == "fist":
+                    self._window_move_armed_until.pop(event.hand_id, None)
                 if event.pose == "index_pinch":
                     intents.extend(
                         self._click_intent_if_tap(
@@ -182,6 +196,16 @@ class ControlGrammar:
                 )
 
         return intents
+
+    def armed_summary(self, *, now: float) -> str:
+        """Return a compact runtime summary of currently armed control states."""
+        self._expire_window_move_arms(now)
+        if not self._window_move_armed_until:
+            return "none"
+        return ", ".join(
+            f"{hand_id}:window_move {expires_at - now:.1f}s"
+            for hand_id, expires_at in sorted(self._window_move_armed_until.items())
+        )
 
     def _hyprland_intent_if_ready(
         self,
@@ -266,3 +290,13 @@ class ControlGrammar:
             return []
         self._last_fired[key] = timestamp
         return [intent]
+
+    def _window_move_is_armed(self, hand_id: str, timestamp: float) -> bool:
+        return self._window_move_armed_until.get(hand_id, 0.0) >= timestamp
+
+    def _expire_window_move_arms(self, timestamp: float) -> None:
+        self._window_move_armed_until = {
+            hand_id: expires_at
+            for hand_id, expires_at in self._window_move_armed_until.items()
+            if expires_at >= timestamp
+        }

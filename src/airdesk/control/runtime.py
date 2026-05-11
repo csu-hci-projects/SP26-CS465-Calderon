@@ -26,7 +26,7 @@ class ControlRuntimeConfig:
 
     execute: bool = False
     pause_on_start: bool = False
-    cursor_gain: float = 1.0
+    cursor_gain: float = 1.8
     cursor_smoothing_alpha: float = 0.35
     cursor_dead_zone_px: int = 3
     mirror_x: bool = True
@@ -185,9 +185,10 @@ class ControlRuntime:
 
     def status_text(self) -> str:
         prefix = "paused | " if self.paused else ""
-        combo = self.grammar.combo_buffer.summary(now=utc_timestamp())
+        now = utc_timestamp()
+        combo = self.grammar.combo_buffer.summary(now=now)
         seeing = self._last_status.get("seeing", "none")
-        armed = self._last_status.get("armed", "none")
+        armed = self.grammar.armed_summary(now=now)
         executed = self._last_status.get("executed", "none")
         suppressed = self._last_status.get("suppressed", "none")
         target_window = self._last_status.get("target_window", "active")
@@ -311,6 +312,7 @@ class ControlRuntime:
                 "seeing": "; ".join(seeing) if seeing else "none",
                 "suppressed": suppressed,
                 "target_window": "active",
+                "armed": self.grammar.armed_summary(now=timestamp),
             }
         )
         if self.event_writer is None:
