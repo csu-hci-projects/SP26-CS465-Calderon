@@ -217,6 +217,7 @@ def test_control_run_help_exposes_control_controls() -> None:
 
     assert result.exit_code == 0
     assert "--execute" in result.stdout
+    assert "--pointer-execute" in result.stdout
     assert "--cursor-gain" in result.stdout
     assert "--scroll-motion-threshold" in result.stdout
     assert "--left-zone-max" in result.stdout

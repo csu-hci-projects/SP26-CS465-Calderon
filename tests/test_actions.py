@@ -10,7 +10,17 @@ from airdesk.actions.hyprland import (
     GuardedHyprlandActionTarget,
     HyprlandActionTarget,
 )
-from airdesk.actions.input import DryRunPointerInputTarget, PointerButtonEvent, PointerScrollEvent
+from airdesk.actions.input import (
+    BTN_LEFT,
+    UI_DEV_CREATE,
+    UI_SET_EVBIT,
+    UI_SET_KEYBIT,
+    UI_SET_RELBIT,
+    DryRunPointerInputTarget,
+    PointerButtonEvent,
+    PointerScrollEvent,
+    UInputPointerInputTarget,
+)
 from airdesk.state.types import ActionRequest
 
 
@@ -152,3 +162,27 @@ def test_dry_run_pointer_input_records_buttons_and_scrolls() -> None:
     assert scroll.command_preview == ["pointer.scroll", "-1"]
     assert target.buttons == [PointerButtonEvent(button="left")]
     assert target.scrolls == [PointerScrollEvent(amount_y=-1)]
+
+
+def test_uinput_pointer_target_creates_device_and_emits_click() -> None:
+    writes: list[bytes] = []
+    ioctls: list[tuple[int, int]] = []
+    closed: list[int] = []
+
+    target = UInputPointerInputTarget(
+        opener=lambda _path, _flags: 42,
+        writer=lambda _fd, data: writes.append(data) or len(data),
+        ioctl=lambda _fd, request, arg: ioctls.append((request, arg)) or 0,
+        closer=lambda fd: closed.append(fd),
+    )
+
+    result = target.button(PointerButtonEvent(button="left"))
+    target.close()
+
+    assert result.ok is True
+    assert (UI_SET_EVBIT, 1) in ioctls
+    assert (UI_SET_KEYBIT, BTN_LEFT) in ioctls
+    assert (UI_SET_RELBIT, 8) in ioctls
+    assert (UI_DEV_CREATE, 0) in ioctls
+    assert len(writes) >= 5
+    assert closed == [42]

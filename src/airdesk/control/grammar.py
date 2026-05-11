@@ -33,6 +33,7 @@ class ControlGrammarConfig:
     close_cooldown_seconds: float = 2.0
     tap_max_seconds: float = 0.30
     scroll_cooldown_seconds: float = 0.12
+    workspace_arm_seconds: float = 1.50
     window_move_arm_seconds: float = 1.75
 
 
@@ -44,6 +45,7 @@ class ControlGrammar:
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
+    _workspace_armed_until: dict[str, float] = field(default_factory=dict)
     _window_move_armed_until: dict[str, float] = field(default_factory=dict)
 
     def update(
@@ -57,6 +59,7 @@ class ControlGrammar:
         intents: list[ControlIntent] = []
         feature_by_hand = {item.hand_id: item for item in features}
         scroll_delta_by_hand = scroll_delta_by_hand or {}
+        self._expire_workspace_arms(timestamp)
         self._expire_window_move_arms(timestamp)
 
         for event in events:
@@ -95,8 +98,17 @@ class ControlGrammar:
                                 ),
                             )
                         )
-                if event.pose in {"sideways_open_palm_left", "sideways_open_palm_right"}:
-                    direction = "+1" if event.pose.endswith("left") else "-1"
+                if event.pose == "open_palm" and hand_features.palm_zone == "center":
+                    self._workspace_armed_until[event.hand_id] = (
+                        timestamp + self.config.workspace_arm_seconds
+                    )
+                elif (
+                    event.pose == "open_palm"
+                    and hand_features.palm_zone in {"left", "right"}
+                    and self._workspace_is_armed(event.hand_id, timestamp)
+                ):
+                    direction = "+1" if hand_features.palm_zone == "left" else "-1"
+                    self._workspace_armed_until.pop(event.hand_id, None)
                     intents.extend(
                         self._hyprland_intent_if_ready(
                             key=f"{event.hand_id}:workspace:{direction}",
@@ -105,7 +117,7 @@ class ControlGrammar:
                             command="workspace",
                             args=[direction],
                             hand_id=event.hand_id,
-                            reason="sideways open palm hold",
+                            reason="open palm side zone after center arm",
                         )
                     )
                 elif event.pose == "fist" and hand_features.palm_zone == "center":
@@ -132,6 +144,8 @@ class ControlGrammar:
                     )
 
             if event.event_type == "released":
+                if event.pose == "open_palm":
+                    self._workspace_armed_until.pop(event.hand_id, None)
                 if event.pose == "fist":
                     self._window_move_armed_until.pop(event.hand_id, None)
                 if event.pose == "index_pinch":
@@ -200,12 +214,19 @@ class ControlGrammar:
     def armed_summary(self, *, now: float) -> str:
         """Return a compact runtime summary of currently armed control states."""
         self._expire_window_move_arms(now)
-        if not self._window_move_armed_until:
-            return "none"
-        return ", ".join(
+        self._expire_workspace_arms(now)
+        armed: list[str] = []
+        armed.extend(
+            f"{hand_id}:workspace {expires_at - now:.1f}s"
+            for hand_id, expires_at in sorted(self._workspace_armed_until.items())
+        )
+        armed.extend(
             f"{hand_id}:window_move {expires_at - now:.1f}s"
             for hand_id, expires_at in sorted(self._window_move_armed_until.items())
         )
+        if not armed:
+            return "none"
+        return ", ".join(armed)
 
     def _hyprland_intent_if_ready(
         self,
@@ -293,6 +314,16 @@ class ControlGrammar:
 
     def _window_move_is_armed(self, hand_id: str, timestamp: float) -> bool:
         return self._window_move_armed_until.get(hand_id, 0.0) >= timestamp
+
+    def _workspace_is_armed(self, hand_id: str, timestamp: float) -> bool:
+        return self._workspace_armed_until.get(hand_id, 0.0) >= timestamp
+
+    def _expire_workspace_arms(self, timestamp: float) -> None:
+        self._workspace_armed_until = {
+            hand_id: expires_at
+            for hand_id, expires_at in self._workspace_armed_until.items()
+            if expires_at >= timestamp
+        }
 
     def _expire_window_move_arms(self, timestamp: float) -> None:
         self._window_move_armed_until = {

@@ -724,12 +724,16 @@ The first deterministic control slice is now in place:
   fist could fire repeatedly. The current control grammar now requires center
   fist to arm move-window for a short window; a side-zone fist fires once and
   consumes the arm, while fist release or expiry returns to neutral.
+- Live testing also showed sideways-hand shapes are too unreliable for workspace
+  switching. Workspace now uses the same arming style: center open palm arms
+  workspace switching briefly, then open palm in a side zone fires once and
+  consumes the arm.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
-  and cursor gain defaults to `1.8`; both are exposed on `airdesk control run`
+  and cursor gain defaults to `3.0`; both are exposed on `airdesk control run`
   for live tuning.
-- Real pointer click/scroll injection is still intentionally not enabled. The
-  dry-run input target is in place so a future `uinput`/`evdev` adapter can be
-  added behind focused tests.
+- Real pointer click/scroll injection is available through explicit
+  `--pointer-execute` using `/dev/uinput`. Without that flag, pointer
+  click/scroll remains dry-run even when Hyprland execution is enabled.
 
 ### Sprint 3: Pilot-Safe Live Command Mode
 

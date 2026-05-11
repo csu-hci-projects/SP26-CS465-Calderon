@@ -98,12 +98,26 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
     side_features = recognizer.features_for_frame(
         make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.70))
     )
-    workspace = grammar.update(
+    unarmed_workspace = grammar.update(
         features=side_features,
-        events=[PoseEvent("hand-0", "sideways_open_palm_right", "held", 2.0, duration=0.4)],
+        events=[PoseEvent("hand-0", "open_palm", "held", 2.0, duration=0.4)],
         timestamp=2.0,
     )
+    center_open_features = recognizer.features_for_frame(
+        make_tracking_frame(make_hand("open_palm"))
+    )
+    grammar.update(
+        features=center_open_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 2.2, duration=0.4)],
+        timestamp=2.2,
+    )
+    workspace = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 2.4, duration=0.6)],
+        timestamp=2.4,
+    )
 
+    assert unarmed_workspace == []
     assert workspace[0].request.command == "workspace"
     assert workspace[0].request.parameters["args"] == ["-1"]
 
@@ -180,6 +194,47 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
     cleared = grammar.update(
         features=side_features,
         events=[PoseEvent("hand-0", "fist", "held", 2.2, duration=0.6)],
+        timestamp=2.2,
+    )
+
+    assert expired == []
+    assert cleared == []
+
+
+def test_workspace_arm_expires_and_clears_on_open_palm_release(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(ControlGrammarConfig(workspace_arm_seconds=0.5))
+    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("open_palm")))
+    side_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.70))
+    )
+
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 1.0, duration=0.4)],
+        timestamp=1.0,
+    )
+    expired = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 1.7, duration=0.7)],
+        timestamp=1.7,
+    )
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 2.0, duration=0.4)],
+        timestamp=2.0,
+    )
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "open_palm", "released", 2.1, duration=0.5)],
+        timestamp=2.1,
+    )
+    cleared = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "open_palm", "held", 2.2, duration=0.6)],
         timestamp=2.2,
     )
 

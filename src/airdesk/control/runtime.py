@@ -26,7 +26,7 @@ class ControlRuntimeConfig:
 
     execute: bool = False
     pause_on_start: bool = False
-    cursor_gain: float = 1.8
+    cursor_gain: float = 3.0
     cursor_smoothing_alpha: float = 0.35
     cursor_dead_zone_px: int = 3
     mirror_x: bool = True
@@ -160,6 +160,9 @@ class ControlRuntime:
                     )
         finally:
             self.tracker.stop()
+            close_pointer = getattr(self.pointer_target, "close", None)
+            if close_pointer is not None:
+                close_pointer()
             self._emit(
                 "control_session_finish",
                 {

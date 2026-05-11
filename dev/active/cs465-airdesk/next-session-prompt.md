@@ -119,10 +119,10 @@ Current implementation status:
 - `airdesk control run` exists and defaults to dry-run. It logs what the system
   is seeing, stable pose events, combo state, cursor moves, requested actions,
   and action results.
-- The current dry-run grammar covers open-hand relative cursor movement, index
+- The current grammar covers open-hand relative cursor movement, index
   pinch-tap left click, middle-pinch-tap right click, index-pinch-hold vertical
-  scroll, sideways-palm workspace switching, fist side-zone move-window,
-  launcher combo, and deliberate close-window combo.
+  scroll, center-open-palm armed workspace switching, center-fist armed
+  move-window, launcher combo, and deliberate close-window combo.
 - Control pose facts are prioritized to reduce accidental overlap: fist
   suppresses pinch artifacts, sideways-open-palm suppresses pinch artifacts, and
   clean pinch suppresses plain open-palm.
@@ -130,9 +130,11 @@ Current implementation status:
   feedback.
 - Move-window now requires a center-fist arm before side-zone fist movement can
   fire; the arm expires quickly and is cleared by fist release. Side zones
-  default to `left <= 0.30` and `right >= 0.70`; cursor gain defaults to `1.8`.
-- Pointer button/scroll real execution is still not enabled. The dry-run input
-  adapter is present for tests and future `uinput`/`evdev` work.
+  default to `left <= 0.30` and `right >= 0.70`; cursor gain defaults to `3.0`.
+- Workspace switching now requires a center-open-palm arm before open-palm side
+  movement can fire; this replaced the unreliable sideways-palm recognizer.
+- Pointer button/scroll real execution is available with explicit
+  `--pointer-execute` through `/dev/uinput`.
 - Focused tests cover primitive control poses, debouncing, combo
   matching/consumption, grammar routing/cooldown, dry-run pointer routing,
   guarded Hyprland command allowlisting, and `airdesk control run`.
@@ -140,7 +142,7 @@ Current implementation status:
 Recommended next implementation slice:
 
 1. Run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 1.8 --left-zone-max 0.30 --right-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 3.0 --left-zone-max 0.30 --right-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
    from the JSONL log and live feel.
 3. Improve live status/dashboard rendering so it clearly shows `Seeing`,

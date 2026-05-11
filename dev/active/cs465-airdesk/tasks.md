@@ -33,7 +33,7 @@ Immediate next-session checklist:
       matching, event consumption, and cooldown.
 - [x] Implement MVP grammar in dry-run first:
       open/relaxed cursor move; index pinch left click; middle pinch right click;
-      pinch-hold vertical scroll; sideways palm workspace left/right; fist
+      pinch-hold vertical scroll; open-palm armed workspace left/right; fist
       move-window left/right; open palm -> sideways palm launcher; open palm ->
       fist -> open palm close-window combo.
 - [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
@@ -65,7 +65,7 @@ Immediate next-session checklist:
 First logic-control slice note: `airdesk control run` exists and is dry-run by
 default. The current grammar covers open-hand relative cursor movement, index
 pinch left click, middle pinch right click, index-pinch-hold vertical scroll,
-sideways-palm workspace switching, fist side-zone move-window, launcher combo,
+open-palm armed workspace switching, center-fist armed move-window, launcher combo,
 and deliberate close-window combo. The remaining MVP polish is richer live
 overlay/preview rendering beyond the current status line and JSONL fields for
 `Armed`, `Target window`, `Executed`, and `Suppressed`.

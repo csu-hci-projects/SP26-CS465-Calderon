@@ -25,7 +25,7 @@ Current 2026-05-11 product pivot: learned/DTW/motion gestures remain
 preview/replay/evaluation tools only. The next class-demo implementation should
 use deterministic MediaPipe landmark logic for a small "mid-air mouse plus
 window manager" grammar: open/relaxed hand cursor control, pinch click/scroll,
-sideways palm workspace switching, fist-based window move, launcher combo, and a
+open-palm armed workspace switching, fist-based window move, launcher combo, and a
 deliberate open-palm/fist/open-palm close-window combo.
 
 Architecture note for the pivot: build the new live-control path beside the
@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 1.8 --left-zone-max 0.30 --right-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --cursor-gain 3.0 --left-zone-max 0.30 --right-zone-min 0.70 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -156,7 +156,7 @@ Cursor control is also dry-run by default. Real cursor movement is opt-in and us
 uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --execute --events-out data/logs/cursor-execute.jsonl
 ```
 
-In the current shipped cursor command, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. The next logic-control pass should revise this so open/relaxed hand movement controls the pointer while pinch becomes click/scroll/drag. Mouse click/drag injection is not enabled yet. The current machine has `/dev/uinput` access for `caden`, but no external helper such as `ydotool`, `dotool`, or `wtype` is installed.
+In the current shipped cursor command, pinch-hold activates relative cursor movement, releasing the pinch exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. The newer `airdesk control run` path uses open/relaxed hand movement for the pointer while pinch becomes click/scroll. The current machine has `/dev/uinput` access for `caden`, but no external helper such as `ydotool`, `dotool`, or `wtype` is installed.
 
 The new deterministic control lane starts at `airdesk control run`. It is
 side-by-side with the older `airdesk run`, `airdesk cursor run`, and
@@ -165,8 +165,9 @@ adds primitive control pose facts, stable pose events, a short per-hand combo
 buffer, dry-run pointer button/scroll routing, guarded Hyprland command mapping,
 open-hand relative cursor movement, pinch-tap click vs pinch-hold scroll
 separation, active-window title lookup for guarded move/close status, and JSONL
-control logs. Pointer button/scroll real execution is still dry-run only until a
-real input injection adapter is installed and tested.
+control logs. Real pointer button/scroll execution is available through an
+explicit `--pointer-execute` flag using `/dev/uinput`; without that flag,
+pointer button/scroll events remain dry-run even when `--execute` is enabled.
 
 Control poses are intentionally prioritized rather than treated as independent
 booleans. Fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
@@ -177,6 +178,10 @@ Window movement is also explicitly armed: a center fist arms move-window briefly
 then a side-zone fist can fire one move and consumes the arm. Releasing fist or
 waiting out the short arming window returns to neutral so stale move-window state
 does not trigger after hand reset.
+
+Workspace switching no longer depends on a sideways-open-palm shape. A center
+open palm arms workspace switching briefly, then an open palm in a side zone
+fires one workspace action and consumes the arm.
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture chart-record` is the structured "Guitar Hero for swipes" collection path. It takes compact charts such as `RR | rest | RL | rest | RRR`, shows an on-screen colored chart HUD with a default 3-second lead-in, a smooth progress bar for the current cue, and fixed upcoming cards for get-ready/stroke/reset/rest prompts, records the replayable landmark stream, and writes coarse chart-derived stroke/recovery/event labels by default. Combo blocks such as `RRR` are shown as one active prompt so the swipes can happen at a natural pace inside that block. Chart recording now defaults to two tracked hands and should remain the recommended combo path; treat the generated labels as prompt-timing labels that may still need manual refinement before final training.

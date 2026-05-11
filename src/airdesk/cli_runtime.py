@@ -16,7 +16,7 @@ from airdesk.actions.hyprland import (
     SAFE_HYPRLAND_DISPATCHERS,
     GuardedHyprlandActionTarget,
 )
-from airdesk.actions.input import DryRunPointerInputTarget
+from airdesk.actions.input import DryRunPointerInputTarget, UInputPointerInputTarget
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_tracking import _make_tracker
 from airdesk.control.poses import ControlPoseRecognizer
@@ -368,6 +368,10 @@ def control_run(
         bool,
         typer.Option(help="Opt in to guarded real Hyprland cursor/window actions."),
     ] = False,
+    pointer_execute: Annotated[
+        bool,
+        typer.Option(help="Opt in to real pointer button/scroll injection through /dev/uinput."),
+    ] = False,
     monitor: Annotated[
         str | None,
         typer.Option(help="Hyprland monitor name to constrain cursor movement."),
@@ -400,7 +404,7 @@ def control_run(
         bool,
         typer.Option(help="Download the MediaPipe model to --model-path if missing."),
     ] = True,
-    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 1.8,
+    cursor_gain: Annotated[float, typer.Option(help="Open-hand cursor movement gain.")] = 3.0,
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
@@ -443,8 +447,7 @@ def control_run(
     """Run deterministic landmark-logic control.
 
     Dry-run is default. `--execute` enables guarded Hyprland cursor/window
-    dispatches, while pointer buttons/scroll remain dry-run until a real input
-    injection target is installed and tested.
+    dispatches, while pointer buttons/scroll require `--pointer-execute`.
     """
     source = str(recording) if recording is not None else device
     tracker = _make_tracker(
@@ -466,12 +469,13 @@ def control_run(
         if execute
         else DryRunActionTarget()
     )
+    pointer_target = UInputPointerInputTarget() if pointer_execute else DryRunPointerInputTarget()
     event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
     runtime = ControlRuntime(
         tracker=tracker,
         cursor_target=cursor_target,
         hyprland_target=hyprland_target,
-        pointer_target=DryRunPointerInputTarget(),
+        pointer_target=pointer_target,
         pose_recognizer=ControlPoseRecognizer(
             left_zone_max=left_zone_max,
             right_zone_min=right_zone_min,
