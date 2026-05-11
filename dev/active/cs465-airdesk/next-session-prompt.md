@@ -96,7 +96,7 @@ MVP grammar:
 | Thumb/middle pinch hold + vertical movement | Scroll |
 | Fist held center | Arm one fist command and show target window |
 | Fist moved left/right zone | Move active/window-under-cursor to workspace left/right |
-| Fist moved up/down zone | Switch workspace up/down without moving a window |
+| Fist moved up/down from fist start | Switch workspace up/down without moving a window |
 | Open palm -> sideways open palm | Open launcher |
 | Open palm -> fist -> open palm | Close active window |
 
@@ -131,10 +131,11 @@ Current implementation status:
 - Guarded move/close actions can query the active window title for target-window
   feedback.
 - Fist is now the command clutch: center-fist arms briefly, left/right fist
-  movement fires one `movetoworkspace`, and up/down fist movement fires one
-  `workspace` switch. Open palm no longer triggers workspace changes during
-  cursor use. Side zones default to `left <= 0.30` and `right >= 0.70`; vertical
-  zones default to `top <= 0.30` and `bottom >= 0.70`; cursor gain defaults to
+  movement fires one `movetoworkspace`, and up/down fist motion from the fist
+  start point fires one `workspace` switch. Workspace switching no longer
+  requires the hand to enter a top/bottom zone. Open palm no longer triggers
+  workspace changes during cursor use. Side zones default to `left <= 0.30` and
+  `right >= 0.70`; workspace motion defaults to `0.10`; cursor gain defaults to
   `12.0` with smoother `0.25` alpha and a `1px` dead zone. The control runtime
   filters to one active hand, and the recommended live command now uses
   `--max-num-hands 1`.
@@ -154,7 +155,7 @@ Current implementation status:
 Recommended next implementation slice:
 
 1. Run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 2. Tune pose thresholds, scroll threshold, cursor gain, smoothing, and cooldowns
    from the JSONL log and live feel.
 3. Improve live status/dashboard rendering so it clearly shows `Seeing`,

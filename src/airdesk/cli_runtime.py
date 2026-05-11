@@ -19,6 +19,7 @@ from airdesk.actions.hyprland import (
 from airdesk.actions.input import DryRunPointerInputTarget, UInputPointerInputTarget
 from airdesk.capture.opencv import CameraSettings
 from airdesk.cli_tracking import _make_tracker
+from airdesk.control.grammar import ControlGrammar, ControlGrammarConfig
 from airdesk.control.poses import ControlPoseRecognizer
 from airdesk.control.runtime import ControlRuntime, ControlRuntimeConfig, format_control_summary
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
@@ -421,6 +422,10 @@ def control_run(
         int,
         typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
     ] = 1,
+    workspace_motion_threshold: Annotated[
+        float,
+        typer.Option(help="Normalized fist up/down movement needed to switch workspace."),
+    ] = 0.10,
     left_zone_max: Annotated[
         float,
         typer.Option(help="Palm x at or below this value counts as the left side zone."),
@@ -494,6 +499,9 @@ def control_run(
             top_zone_max=top_zone_max,
             bottom_zone_min=bottom_zone_min,
             fist_fold_threshold=fist_fold_threshold,
+        ),
+        grammar=ControlGrammar(
+            ControlGrammarConfig(workspace_motion_threshold=workspace_motion_threshold)
         ),
         event_writer=event_writer,
         config=ControlRuntimeConfig(

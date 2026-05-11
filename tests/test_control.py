@@ -155,12 +155,12 @@ def test_control_grammar_routes_clicks_workspace_and_close_combo(
 
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "fist", "held", 3.4, duration=0.8)],
+        events=[PoseEvent("hand-0", "fist", "entered", 3.4)],
         timestamp=3.4,
     )
     workspace = grammar.update(
         features=recognizer.features_for_frame(
-            make_tracking_frame(_move_hand(make_hand("fist"), y=0.30))
+            make_tracking_frame(_move_hand(make_hand("fist"), y=0.44))
         ),
         events=[PoseEvent("hand-0", "fist", "held", 3.6, duration=1.0)],
         timestamp=3.6,
@@ -225,12 +225,17 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
     assert cleared == []
 
 
-def test_fist_workspace_arm_expires_and_clears_on_release(
+def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
-    grammar = ControlGrammar(ControlGrammarConfig(fist_command_arm_seconds=0.5))
+    grammar = ControlGrammar(
+        ControlGrammarConfig(
+            command_cooldown_seconds=0.0,
+            fist_command_arm_seconds=0.5,
+        )
+    )
     center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
     top_features = recognizer.features_for_frame(
         make_tracking_frame(_move_hand(make_hand("fist"), y=0.30))
@@ -238,32 +243,33 @@ def test_fist_workspace_arm_expires_and_clears_on_release(
 
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "fist", "held", 1.0, duration=0.4)],
+        events=[PoseEvent("hand-0", "fist", "entered", 1.0)],
         timestamp=1.0,
     )
-    expired = grammar.update(
+    workspace = grammar.update(
         features=top_features,
-        events=[PoseEvent("hand-0", "fist", "held", 1.7, duration=0.7)],
-        timestamp=1.7,
+        events=[PoseEvent("hand-0", "fist", "held", 1.2, duration=0.2)],
+        timestamp=1.2,
     )
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "fist", "held", 2.0, duration=0.4)],
+        events=[PoseEvent("hand-0", "fist", "released", 1.3, duration=0.3)],
+        timestamp=1.3,
+    )
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "fist", "entered", 2.0)],
         timestamp=2.0,
     )
-    grammar.update(
-        features=center_features,
-        events=[PoseEvent("hand-0", "fist", "released", 2.1, duration=0.5)],
-        timestamp=2.1,
-    )
-    cleared = grammar.update(
+    reanchored = grammar.update(
         features=top_features,
         events=[PoseEvent("hand-0", "fist", "held", 2.2, duration=0.6)],
         timestamp=2.2,
     )
 
-    assert expired == []
-    assert cleared == []
+    assert workspace[0].request.command == "workspace"
+    assert workspace[0].request.parameters["args"] == ["-1"]
+    assert reanchored[0].request.command == "workspace"
 
 
 def test_control_grammar_holds_left_button_on_index_pinch_hold(

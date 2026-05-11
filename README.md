@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -183,10 +183,10 @@ hands can keep driving the cursor.
 
 Fist is the explicit command clutch. A centered fist arms a short command
 window; moving that fist left/right sends the active/window-under-cursor to the
-neighbor workspace, while moving it up/down switches workspaces without carrying
-a window. Releasing fist, firing one action, or waiting out the short arming
-window returns to neutral so stale command state does not trigger after hand
-reset.
+neighbor workspace, while moving it up/down by the
+`--workspace-motion-threshold` switches workspaces without carrying a window.
+Releasing fist, firing one action, or waiting out the short arming window
+returns to neutral so stale command state does not trigger after hand reset.
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture chart-record` is the structured "Guitar Hero for swipes" collection path. It takes compact charts such as `RR | rest | RL | rest | RRR`, shows an on-screen colored chart HUD with a default 3-second lead-in, a smooth progress bar for the current cue, and fixed upcoming cards for get-ready/stroke/reset/rest prompts, records the replayable landmark stream, and writes coarse chart-derived stroke/recovery/event labels by default. Combo blocks such as `RRR` are shown as one active prompt so the swipes can happen at a natural pace inside that block. Chart recording now defaults to two tracked hands and should remain the recommended combo path; treat the generated labels as prompt-timing labels that may still need manual refinement before final training.

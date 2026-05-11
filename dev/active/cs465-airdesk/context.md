@@ -268,7 +268,7 @@ MVP grammar candidate:
 - Thumb/middle pinch hold plus vertical movement: scroll through a future input target.
 - Fist held center: arm one fist command and show active window title.
 - Fist moved left/right zone: `hyprctl dispatch movetoworkspace -1` / `+1`.
-- Fist moved up/down zone: `hyprctl dispatch workspace -1` / `+1`.
+- Fist moved up/down from fist start: `hyprctl dispatch workspace -1` / `+1`.
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via
   `hyprctl dispatch killactive`, with visible close-armed feedback.
@@ -732,10 +732,11 @@ The first deterministic control slice is now in place:
   are too unreliable for workspace switching during cursor use, so open palm no
   longer triggers workspace changes.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
-  and vertical zones use `top <= 0.30`, `bottom >= 0.70`. Cursor gain defaults
-  to `12.0` with smoother `0.25` alpha and a `1px` dead zone; all are exposed on
-  `airdesk control run` for live tuning. The control runtime filters to one
-  active hand, and the recommended live command uses `--max-num-hands 1`.
+  and workspace switching uses fist up/down motion from the fist start point
+  instead of top/bottom zones. Cursor gain defaults to `12.0` with smoother
+  `0.25` alpha and a `1px` dead zone; all are exposed on `airdesk control run`
+  for live tuning. The control runtime filters to one active hand, and the
+  recommended live command uses `--max-num-hands 1`.
 - Fist detection now requires a stronger fold: all four fingertips must sit at
   least `0.09` normalized y-units below their MCP joints before `fist` can
   trigger, so a relaxed curled hand should stay in cursor mode.

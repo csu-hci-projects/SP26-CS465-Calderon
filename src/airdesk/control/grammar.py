@@ -34,6 +34,7 @@ class ControlGrammarConfig:
     tap_max_seconds: float = 0.45
     scroll_cooldown_seconds: float = 0.12
     fist_command_arm_seconds: float = 1.75
+    workspace_motion_threshold: float = 0.10
 
 
 @dataclass
@@ -46,6 +47,7 @@ class ControlGrammar:
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
     _held_buttons: dict[tuple[str, str], str] = field(default_factory=dict)
     _window_move_armed_until: dict[str, float] = field(default_factory=dict)
+    _fist_anchor_y: dict[str, float] = field(default_factory=dict)
 
     def update(
         self,
@@ -70,6 +72,8 @@ class ControlGrammar:
                     self._pending_taps[(event.hand_id, "index_pinch")] = True
                 elif event.pose == "middle_pinch":
                     self._pending_taps[(event.hand_id, "middle_pinch")] = True
+                elif event.pose == "fist" and hand_features is not None:
+                    self._fist_anchor_y[event.hand_id] = hand_features.palm_y
 
             if hand_features is None:
                 if event.event_type == "released":
@@ -122,9 +126,16 @@ class ControlGrammar:
                     and hand_features.palm_zone == "center"
                     and hand_features.palm_vertical_zone == "middle"
                 ):
-                    self._window_move_armed_until[event.hand_id] = (
-                        timestamp + self.config.fist_command_arm_seconds
+                    self._fist_anchor_y.setdefault(event.hand_id, hand_features.palm_y)
+                    workspace_motion = self._workspace_motion_intent_if_ready(
+                        hand_features=hand_features,
+                        timestamp=timestamp,
                     )
+                    intents.extend(workspace_motion)
+                    if not workspace_motion:
+                        self._window_move_armed_until[event.hand_id] = (
+                            timestamp + self.config.fist_command_arm_seconds
+                        )
                 elif (
                     event.pose == "fist"
                     and hand_features.palm_zone in {"left", "right"}
@@ -143,29 +154,18 @@ class ControlGrammar:
                             reason="fist held in side zone",
                         )
                     )
-                elif (
-                    event.pose == "fist"
-                    and hand_features.palm_zone == "center"
-                    and hand_features.palm_vertical_zone in {"top", "bottom"}
-                    and self._window_move_is_armed(event.hand_id, timestamp)
-                ):
-                    direction = "-1" if hand_features.palm_vertical_zone == "top" else "+1"
-                    self._window_move_armed_until.pop(event.hand_id, None)
+                elif event.pose == "fist":
                     intents.extend(
-                        self._hyprland_intent_if_ready(
-                            key=f"{event.hand_id}:workspace:{direction}",
+                        self._workspace_motion_intent_if_ready(
+                            hand_features=hand_features,
                             timestamp=timestamp,
-                            name=f"workspace_{direction}",
-                            command="workspace",
-                            args=[direction],
-                            hand_id=event.hand_id,
-                            reason="fist held in vertical zone",
                         )
                     )
 
             if event.event_type == "released":
                 if event.pose == "fist":
                     self._window_move_armed_until.pop(event.hand_id, None)
+                    self._fist_anchor_y.pop(event.hand_id, None)
                 if event.pose == "index_pinch":
                     if self._button_is_held(event.hand_id, "index_pinch"):
                         intents.extend(
@@ -372,6 +372,26 @@ class ControlGrammar:
 
     def _button_is_held(self, hand_id: str, pose: str) -> bool:
         return (hand_id, pose) in self._held_buttons
+
+    def _workspace_motion_intent_if_ready(
+        self, *, hand_features: ControlPoseFeatures, timestamp: float
+    ) -> list[ControlIntent]:
+        anchor_y = self._fist_anchor_y.setdefault(hand_features.hand_id, hand_features.palm_y)
+        dy = hand_features.palm_y - anchor_y
+        if abs(dy) < self.config.workspace_motion_threshold:
+            return []
+        direction = "-1" if dy < 0 else "+1"
+        self._window_move_armed_until.pop(hand_features.hand_id, None)
+        self._fist_anchor_y.pop(hand_features.hand_id, None)
+        return self._hyprland_intent_if_ready(
+            key=f"{hand_features.hand_id}:workspace:{direction}",
+            timestamp=timestamp,
+            name=f"workspace_{direction}",
+            command="workspace",
+            args=[direction],
+            hand_id=hand_features.hand_id,
+            reason="fist vertical motion",
+        )
 
     def _click_intent_if_tap(
         self,
