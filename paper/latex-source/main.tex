@@ -63,7 +63,7 @@ Keyboard and mouse input are still excellent for most desktop work. They are pre
 
 AirDesk explores whether webcam-based mid-air hand gestures can help in these situations. The goal is not to replace keyboard and mouse input during normal desktop work. Instead, AirDesk focuses on a secondary control loop where availability matters more than maximum speed: moving between workspaces, moving a pointer, clicking, scrolling, selecting, copying, pasting, and controlling small profile-specific actions. A useful AirDesk command does not need to beat a keyboard shortcut when someone is already sitting at the keyboard. It needs to be available when touching the keyboard or mouse is inconvenient.
 
-This paper presents AirDesk as a system paper with pilot evidence. The prototype is a Python-based webcam-to-desktop pipeline for Hyprland Linux. It includes camera capture, MediaPipe hand tracking, normalized hand-state events, deterministic control policy, practice/logging mode, guarded desktop actions, pointer event injection, replayable logs, labeling tools, feature export, and offline recognizer evaluation. The evaluation is intentionally formative: I tested the system with one roommate participant to identify which parts of the interaction are promising and which parts are not yet reliable enough for live desktop control.
+This paper presents AirDesk as a system paper with pilot evidence. The prototype is a Python-based webcam-to-desktop pipeline for Hyprland Linux. It includes camera capture, MediaPipe hand tracking, normalized hand-state events, deterministic control policy, practice/logging mode, guarded desktop actions, pointer event injection, replayable logs, labeling tools, feature export, and offline recognizer evaluation. The evaluation is intentionally formative: I tested the system with one informal participant to identify which parts of the interaction are promising and which parts are not yet reliable enough for live desktop control.
 
 This paper makes three contributions. First, it describes an interaction design for mid-air desktop control based on a small vocabulary, explicit intent, and visible recovery behavior. Second, it documents a prototype pipeline that records, replays, labels, and evaluates hand-tracking sessions without repeatedly re-performing gestures. Third, it reports pilot evidence showing when a practical mid-air mouse and window-manager workflow is useful, especially when ordinary input has a cleanup or access cost.
 
@@ -114,7 +114,7 @@ These goals lead to the following research questions for the formative pilot:
 \begin{enumerate}
   \item Can a small deterministic hand-control vocabulary support a realistic desktop workflow with acceptable false activation, latency, and perceived control?
   \item Which parts of the workflow are promising for mid-air input, and which remain slower or more awkward than keyboard and mouse?
-  \item How does gesture control compare with keyboard/mouse input when ordinary input is immediately available versus when it is temporarily costly to use?
+  \item How does gesture control compare with keyboard and mouse input when ordinary input is immediately available versus when it is temporarily costly to use?
 \end{enumerate}
 
 \section{System Overview}
@@ -243,7 +243,7 @@ This vocabulary emphasizes a small desktop workflow rather than a large symbolic
 
 Fist is used differently. It acts as a clutch for workspace and window movement because it is visually distinct from an open hand and feels closer to grabbing or carrying. That makes it a better fit for commands that change the desktop state. Closing a window is even riskier, so AirDesk maps it to an intentionally deliberate open-palm, fist, open-palm combo rather than to a single pose. These choices reflect the interaction goal: common actions should be quick, but destructive or disorienting actions should require clearer intent.
 
-The system is also multimodal in a practical desktop sense. It does not ask gestures to do every job. It combines camera-based hand input, pointer emulation, Hyprland window-manager commands, visible runtime feedback, practice logs, and ordinary keyboard/mouse fallback. This makes gestures one layer in a broader interaction loop rather than a replacement for all other input.
+The system is also multimodal in a practical desktop sense. It does not ask gestures to do every job. It combines camera-based hand input, pointer emulation, Hyprland window-manager commands, visible runtime feedback, practice logs, and ordinary keyboard and mouse fallback. This makes gestures one layer in a broader interaction loop rather than a replacement for all other input.
 
 \subsection{Feedback and Recovery}
 
@@ -261,7 +261,7 @@ The default testing posture is practice-first. This lets the prototype show what
 
 AirDesk records normalized tracking frames and runtime events as JSONL. Replay support allows recognizer changes to be evaluated without repeatedly performing gestures. The labeling workflow creates per-recording JSON label files with event and phase labels, then exports deterministic landmark-derived feature CSVs for evaluation and future model training.
 
-This replay workflow makes the system easier to evaluate honestly. A recognizer can be changed, tuned, or replaced, then tested against the same recorded sessions. The final submission package will include the LaTeX source, literature PDFs, README links, and enough project documentation to locate the code, recordings, labels, features, and evaluation summaries used in the report.
+This replay workflow makes the system easier to evaluate honestly. A recognizer can be changed, tuned, or replaced, then tested against the same recorded sessions. For a prototype gesture system, that matters because a short live demo can look successful even when the same recognizer fails on repeated commands, background motion, or slightly different hand positions.
 
 \subsection{Recognizer Evolution}
 
@@ -283,7 +283,7 @@ This pivot also made the interaction more legible. A user does not need to learn
 
 \subsection{Participants}
 
-The pilot included me and one non-developer roommate participant. This is a small formative pilot, not a generalizable user study. The participant count reflects the course timeline and solo-project constraints. The roommate participant is treated as an informal pilot participant rather than as a project author.
+The pilot included the author and one non-developer informal participant. This is a small formative pilot, not a generalizable user study. The participant count reflects the course timeline and solo-project constraints. The second participant is treated as an informal pilot participant rather than as a project author.
 
 \subsection{Apparatus}
 
@@ -291,26 +291,46 @@ The pilot ran on my Linux laptop using the built-in laptop webcam and the AirDes
 
 \subsection{Conditions and Tasks}
 
-The pilot compared the same task under two contexts. The first context was normal desktop use, where keyboard and mouse could be used immediately. The second context simulated dirty-hand interaction. Participants covered their hands with a messy mixture of olive oil, flour, and honey. In the keyboard/mouse condition, participants first washed their hands, then used the keyboard and mouse. In the AirDesk condition, participants skipped washing and completed the task using hand gestures.
+The pilot compared the same task under two contexts. The first context was normal desktop use, where keyboard and mouse could be used immediately. The second context simulated dirty-hand interaction. Participants covered their hands with a messy mixture of olive oil, flour, and honey. In the keyboard and mouse condition, participants first washed their hands, then used the keyboard and mouse. In the AirDesk condition, participants skipped washing and completed the task using hand gestures.
 
 The input conditions were:
 
 \begin{itemize}
-  \item keyboard/mouse baseline at the desk;
+  \item keyboard and mouse baseline at the desk;
   \item AirDesk hand-only control using the deterministic control runtime.
 \end{itemize}
 
-The task was designed to expose most of the current gesture vocabulary in one realistic workflow. The participant started on workspace 1. A Google Docs tab was open on workspace 8. The goal was to navigate to that workspace, click the correct document, scroll to page 4, select a keyword/code string, highlight or copy it, return to workspace 4, click into a second Google Docs tab, paste the code into a ``paste here'' location, and stop the run. This task requires workspace navigation, cursor movement, clicking, scrolling, text selection, right click or copy behavior, returning across workspaces, and paste placement.
+The task was designed to expose most of the current gesture vocabulary in one realistic workflow. The participant started on workspace 1. A Google Docs tab was open on workspace 8. The goal was to navigate to that workspace, click the correct document, scroll to page 4, select a keyword/code string, highlight or copy it, return to workspace 4, click into a second Google Docs tab, paste the code into a ``paste here'' location, and stop the run. This task requires workspace navigation, cursor movement, clicking, scrolling, text selection, right click or copy behavior, returning across workspaces, and paste placement. Figure~\ref{fig:pilot-workflow} summarizes the flow used for every timed run.
+
+\begin{figure}[h]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    pilotstep/.style={draw, rounded corners, align=center, minimum width=2.8cm, minimum height=0.95cm, font=\scriptsize},
+    arrow/.style={-{Latex[length=2mm]}, thick}
+  ]
+    \node[pilotstep] (s1) at (0,0) {\textbf{1}\\Start on\\workspace 1};
+    \node[pilotstep] (s2) at (3.65,0) {\textbf{2}\\Open doc on\\workspace 8};
+    \node[pilotstep] (s3) at (7.3,0) {\textbf{3}\\Scroll to\\page 4};
+    \node[pilotstep] (s4) at (10.95,0) {\textbf{4}\\Copy code,\\return, paste};
+
+    \draw[arrow] (s1) -- (s2);
+    \draw[arrow] (s2) -- (s3);
+    \draw[arrow] (s3) -- (s4);
+  \end{tikzpicture}}
+  \caption{Pilot task workflow. The same sequence was used in the normal desktop and dirty-hands conditions so that the comparison focused on input context rather than task differences.}
+  \label{fig:pilot-workflow}
+\end{figure}
 
 The workflow was chosen because it is closer to an interruption task than to a gesture checklist. The participant has to move between contexts, recover a small piece of information, manipulate a document, and return to another workspace. That pattern matches the project motivation: a user may not want to perform a long desktop session with gestures, but may need to quickly retrieve, scroll, copy, paste, or control something when normal input is temporarily costly.
 
 \subsection{Procedure}
 
-The roommate participant first explored the gestures and workflow for about 5--10 minutes until the controls felt understandable. In the normal desktop comparison, I first demonstrated the workflow, then both participants completed two keyboard/mouse runs followed by two AirDesk hand-control runs. The dirty-hands comparison repeated the same workflow with two keyboard/mouse runs and two AirDesk hand-control runs per participant. Participants were told that the system was a prototype and could be stopped at any time. The session would stop if false activations repeatedly occurred during normal motion, if the participant reported fatigue or discomfort, or if live execution controlled the wrong target more than once.
+The second participant first explored the gestures and workflow for about 5--10 minutes until the controls felt understandable. In the normal desktop comparison, I first demonstrated the workflow, then both participants completed two keyboard and mouse runs followed by two AirDesk hand-control runs. The dirty-hands comparison repeated the same workflow with two keyboard and mouse runs and two AirDesk hand-control runs per participant. Participants were told that the system was a prototype and could be stopped at any time. The session would stop if false activations repeatedly occurred during normal motion, if the participant reported fatigue or discomfort, or if live execution controlled the wrong target more than once.
 
 \subsection{Measures}
 
-Objective measures include task success, completion time, false activations, missed intended gestures, repeated fires, fallback keyboard or mouse use, and tracking loss. Subjective measures include perceived control, fatigue or discomfort, frustration, perceived usefulness, preference versus keyboard/mouse baseline, and short interview notes.
+Objective measures include task success, completion time, false activations, missed intended gestures, repeated fires, fallback keyboard or mouse use, and tracking loss. Subjective measures include perceived control, fatigue or discomfort, frustration, perceived usefulness, preference versus keyboard and mouse baseline, and short interview notes.
 
 \section{Pilot Results and Findings}
 
@@ -318,7 +338,7 @@ The results focus on the working interaction technique: deterministic landmark c
 
 \subsection{Two-Person Pilot}
 
-In the normal two-person pilot workflow, keyboard and mouse were faster. Across both participants, the keyboard/mouse condition averaged 22.0 seconds, while the hand-control condition averaged 41.5 seconds. This result was expected. AirDesk is not designed to beat a mouse and keyboard when the user is already seated at the desk with both devices available. The more important result is that the hand-control condition completed the same multi-step workflow using only mid-air gestures.
+In the normal two-person pilot workflow, keyboard and mouse were faster. Across both participants, the keyboard and mouse condition averaged 22.0 seconds, while the hand-control condition averaged 41.5 seconds. This result was expected. AirDesk is not designed to beat a mouse and keyboard when the user is already seated at the desk with both devices available. The more important result is that the hand-control condition completed the same multi-step workflow using only mid-air gestures.
 
 \begin{table}[h]
   \caption{Normal desktop pilot comparison for the Google Docs workspace task. Keyboard and mouse were available immediately.}
@@ -329,7 +349,7 @@ In the normal two-person pilot workflow, keyboard and mouse were faster. Across 
     Participant & Keyboard/mouse runs & AirDesk runs & Mean difference \\
     \hline
     Author & 22s, 20s & 41s, 39s & AirDesk 19.0s slower \\
-    Roommate & 24s, 22s & 44s, 42s & AirDesk 20.0s slower \\
+    Participant B & 24s, 22s & 44s, 42s & AirDesk 20.0s slower \\
     Overall & 22.0s mean & 41.5s mean & AirDesk 19.5s slower \\
     \hline
   \end{tabular}
@@ -339,7 +359,7 @@ The pilot also clarified where AirDesk is most useful. For normal desktop use, m
 
 \subsection{Dirty-Hands Condition}
 
-The dirty-hands condition better matched AirDesk's motivating use case. Participants began with messy hands using olive oil, flour, and honey. For keyboard/mouse runs, they had to wash their hands before using the devices. For AirDesk runs, they could keep their hands dirty and complete the task with gestures. This made the comparison less about whether mid-air input can beat a mouse in ideal conditions and more about whether it can avoid the transition cost of cleaning up before touching the computer.
+The dirty-hands condition better matched AirDesk's motivating use case. Participants began with messy hands using olive oil, flour, and honey. For keyboard and mouse runs, they had to wash their hands before using the devices. For AirDesk runs, they could keep their hands dirty and complete the task with gestures. This made the comparison less about whether mid-air input can beat a mouse in ideal conditions and more about whether it can avoid the transition cost of cleaning up before touching the computer.
 
 \begin{table}[h]
   \caption{Dirty-hands pilot results. Keyboard/mouse time includes washing hands before using the devices. AirDesk time skips washing and uses hand control.}
@@ -350,13 +370,13 @@ The dirty-hands condition better matched AirDesk's motivating use case. Particip
     Participant & Keyboard/mouse runs & AirDesk runs & Mean difference \\
     \hline
     Author & 46s, 43s & 38s, 40s & AirDesk 5.5s faster \\
-    Roommate & 44s, 42s & 40s, 42s & AirDesk 2.0s faster \\
+    Participant B & 44s, 42s & 40s, 42s & AirDesk 2.0s faster \\
     Overall & 43.8s mean & 40.0s mean & AirDesk 3.8s faster \\
     \hline
   \end{tabular}
 \end{table}
 
-The margin changed substantially between contexts. In normal use, hand control was about twice as slow as keyboard and mouse. With dirty hands, the keyboard/mouse condition added cleanup time, and the difference nearly disappeared. AirDesk was slightly faster overall because it let participants act immediately instead of washing, returning to the computer, completing the task, and then getting their hands dirty again. This supports the central project claim: mid-air gestures are not generally better than keyboard and mouse, but they can be useful when ordinary input has a real access cost.
+The margin changed substantially between contexts. In normal use, hand control was about twice as slow as keyboard and mouse. With dirty hands, the keyboard and mouse condition added cleanup time, and the difference nearly disappeared. AirDesk was slightly faster overall because it let participants act immediately instead of washing, returning to the computer, completing the task, and then getting their hands dirty again. This supports the central project claim: mid-air gestures are not generally better than keyboard and mouse, but they can be useful when ordinary input has a real access cost.
 
 The practical comparison is therefore not just ``gesture versus mouse.'' It is ``gesture now'' versus ``stop the surrounding task, clean up, interact with the computer, and resume.'' AirDesk becomes more compelling when that transition cost is part of the real workflow.
 
@@ -364,13 +384,13 @@ The practical comparison is therefore not just ``gesture versus mouse.'' It is `
 
 Both participants completed the workflow in both contexts, but the interaction did not feel equally strong across all gestures. Cursor movement and pinch-to-click felt the most natural. They are direct, visible, and similar to ordinary pointing behavior: move the hand to move the cursor, pinch to commit. Dragging and text selection were usable but required patience because the prototype still depends on stable tracking and clean pinch timing.
 
-Scrolling was the hardest part of the workflow. The middle-pinch scroll gesture worked, but it was less familiar than clicking and more sensitive to vertical hand motion. Participants sometimes had to adjust their hand position to get the scroll direction and amount they wanted. Pinch-to-click also occasionally missed on the first attempt, requiring a second pinch. These misses did not stop the task, but they explain part of the time difference between AirDesk and keyboard/mouse in the normal condition.
+Scrolling was the hardest part of the workflow. The middle-pinch scroll gesture worked, but it was less familiar than clicking and more sensitive to vertical hand motion. Participants sometimes had to adjust their hand position to get the scroll direction and amount they wanted. Pinch-to-click also occasionally missed on the first attempt, requiring a second pinch. These misses did not stop the task, but they explain part of the time difference between AirDesk and keyboard and mouse in the normal condition.
 
 The pilot also reinforced how much webcam-based landmark control depends on setup. Good lighting and a front-facing hand improved tracking. Darker lighting, angled hands, or a hand too far from the camera made the landmarks less stable. When the hand was far away, the landmarks compressed together in the image, which made distance thresholds such as pinch more fragile. These observations shaped the limitations and future-work sections: AirDesk can work as a prototype under favorable conditions, but robust everyday use would need better calibration, depth information, or a recognizer that adapts to distance and camera angle.
 
 \subsection{Research Question Summary}
 
-The pilot gives formative answers to the research questions. For RQ1, the small deterministic vocabulary was sufficient to complete a realistic desktop workflow, but only under favorable lighting and with practice. For RQ2, cursor movement, clicking, workspace navigation, and the dirty-hands use case were the most promising; scrolling, selection, and occasional missed pinches remained slower or more awkward. For RQ3, keyboard/mouse was clearly faster when ordinary input was immediately available, but the comparison changed when ordinary input required cleanup first. In that situationally impaired context, AirDesk became competitive and slightly faster on average.
+The pilot gives formative answers to the research questions. For RQ1, the small deterministic vocabulary was sufficient to complete a realistic desktop workflow, but only under favorable lighting and with practice. For RQ2, cursor movement, clicking, workspace navigation, and the dirty-hands use case were the most promising; scrolling, selection, and occasional missed pinches remained slower or more awkward. For RQ3, keyboard and mouse input was clearly faster when ordinary input was immediately available, but the comparison changed when ordinary input required cleanup first. In that situationally impaired context, AirDesk became competitive and slightly faster on average.
 
 \section{Discussion}
 

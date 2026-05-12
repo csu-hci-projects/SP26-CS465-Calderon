@@ -1,7 +1,6 @@
 # AirDesk Pilot Summary
 
-This file summarizes the final small pilot used in the CS465 paper. The more
-complete paper-facing evidence log is [paper/findings/evidence-log.md](../paper/findings/evidence-log.md).
+This file summarizes the small pilot used in the CS465 paper.
 
 ## Purpose
 
@@ -14,8 +13,8 @@ input is temporarily inconvenient or costly.
 
 ## Participants
 
-- Author/developer.
-- One roommate participant.
+- Author.
+- One informal participant.
 
 ## Apparatus
 
@@ -46,31 +45,31 @@ previous context.
 
 Normal condition:
 
-- Keyboard/mouse available immediately.
+- Keyboard and mouse available immediately.
 - AirDesk hand control using the deterministic control runtime.
 
 Dirty-hands condition:
 
 - Participants started with hands covered in olive oil, flour, and honey.
-- Keyboard/mouse runs required washing hands first.
+- Keyboard and mouse runs required washing hands first.
 - AirDesk runs skipped washing and used gestures directly.
 
 ## Results
 
 Normal condition:
 
-| Participant | Keyboard/mouse runs | AirDesk runs | Mean difference |
+| Participant | Keyboard and mouse runs | AirDesk runs | Mean difference |
 | --- | --- | --- | --- |
 | Author | 22s, 20s | 41s, 39s | AirDesk 19.0s slower |
-| Roommate | 24s, 22s | 44s, 42s | AirDesk 20.0s slower |
+| Participant B | 24s, 22s | 44s, 42s | AirDesk 20.0s slower |
 | Overall | 22.0s mean | 41.5s mean | AirDesk 19.5s slower |
 
 Dirty-hands condition:
 
-| Participant | Keyboard/mouse runs | AirDesk runs | Mean difference |
+| Participant | Keyboard and mouse runs | AirDesk runs | Mean difference |
 | --- | --- | --- | --- |
 | Author | 46s, 43s | 38s, 40s | AirDesk 5.5s faster |
-| Roommate | 44s, 42s | 40s, 42s | AirDesk 2.0s faster |
+| Participant B | 44s, 42s | 40s, 42s | AirDesk 2.0s faster |
 | Overall | 43.8s mean | 40.0s mean | AirDesk 3.8s faster |
 
 ## Qualitative Notes
@@ -84,7 +83,7 @@ Dirty-hands condition:
 
 ## Interpretation
 
-Keyboard/mouse was clearly faster in normal desktop conditions. In the
+Keyboard and mouse input was clearly faster in normal desktop conditions. In the
 dirty-hands condition, AirDesk became competitive and slightly faster because it
 avoided the cleanup interruption. This supports the paper's main framing:
 mid-air gestures are useful as an optional input layer when ordinary input has a

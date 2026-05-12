@@ -132,20 +132,20 @@ uv run airdesk control run \
 
 ## Pilot Summary
 
-The pilot used a Google Docs workspace task that required workspace navigation, cursor movement, clicking, scrolling, text selection/copying, and pasting. Two people participated: the author and one roommate participant.
+The pilot used a Google Docs workspace task that required workspace navigation, cursor movement, clicking, scrolling, text selection/copying, and pasting. Two people participated: the author and one informal participant.
 
 Normal desktop condition:
 
-- Keyboard/mouse mean: 22.0 seconds.
+- Keyboard and mouse mean: 22.0 seconds.
 - AirDesk hand-control mean: 41.5 seconds.
-- Result: keyboard/mouse was clearly faster under ideal desk conditions.
+- Result: keyboard and mouse input was clearly faster under ideal desk conditions.
 
 Dirty-hands condition:
 
 - Participants started with hands covered in olive oil, flour, and honey.
-- Keyboard/mouse runs required washing hands first.
+- Keyboard and mouse runs required washing hands first.
 - AirDesk runs skipped washing and used gestures directly.
-- Keyboard/mouse mean: 43.8 seconds.
+- Keyboard and mouse mean: 43.8 seconds.
 - AirDesk hand-control mean: 40.0 seconds.
 - Result: AirDesk became competitive and slightly faster because it avoided the cleanup interruption.
 
