@@ -72,6 +72,9 @@ Immediate next-session checklist:
       and expose both pinch thresholds on `airdesk control run`.
 - [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
       and pointer button/scroll injection. Execution must stay guarded.
+- [x] Route guarded real control cursor movement through `/dev/uinput` when
+      `--execute --pointer-execute` is enabled, so clients receive normal
+      pointer-motion events and clickable hover states can update.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
       `Target window`, `Executed`, and `Suppressed`.
 - [x] Route `airdesk control run --show` preview labels through the control pose
@@ -137,7 +140,9 @@ needed OS commands directly:
 - `hyprctl dispatch workspace r-1` / `r+1` by default in AirDesk control
 - `hyprctl dispatch movetoworkspace r-1` / `r+1` by default in AirDesk control
 - `hyprctl dispatch killactive`
-- `hyprctl dispatch movecursor <x> <y>`
+- `hyprctl dispatch movecursor <x> <y>` as the fallback cursor movement path
+- `/dev/uinput` relative pointer movement for `airdesk control run --execute
+  --pointer-execute`, preferred when real UI hover feedback matters
 
 As of the planning pass, `hyprctl` is installed, `/dev/uinput` is writable by
 `caden`, no external pointer helper (`ydotool`, `dotool`, `wtype`) is installed,
@@ -403,11 +408,13 @@ is useful, extract it deliberately as `src/airdesk/poses/` or
 - [x] Add visible cursor-mode indicator
 - [x] Investigate safe real-cursor control on Wayland/Hyprland
 - [x] Add guarded real cursor movement through Hyprland `movecursor`
+- [x] Add guarded real control cursor movement through `/dev/uinput` relative
+      pointer events so hover feedback behaves like a hardware mouse
 - [x] Add dry-run cursor movement and JSONL cursor session logging
 - [ ] Add controlled test surface for click/drag before global cursor control
 - [x] Evaluate Hyprland cursor dispatchers
 - [ ] Add pointer-button injection for click and drag
-- [ ] Evaluate Wayland virtual pointer or `uinput`/`ydotool` path
+- [x] Evaluate and implement the minimal `uinput` path for the control runtime
 
 ## Phase 3.6: Text Mode / Virtual Keyboard
 

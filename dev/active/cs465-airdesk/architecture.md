@@ -139,7 +139,7 @@ Near-term logic-control additions should preserve these boundaries:
   `dtw.py`, `motion.py`, `learned_filter.py`, `decoder.py`, and TCN-facing
   helpers should not become dependencies of the new live-control MVP.
 - `actions` should own the OS adapters: Hyprland dispatch, cursor movement, and
-  future `uinput` pointer-button/scroll injection.
+  `uinput` pointer movement/button/scroll injection.
 - `overlay` / live preview should explain what is being seen, what combo is
   pending, which window is targeted, and what was executed or suppressed.
 
@@ -485,7 +485,9 @@ Caden's current Hyprland setup supports the core class-demo actions directly:
 - switch workspace: `hyprctl dispatch workspace -1` / `+1`
 - move focused/window-under-cursor to workspace: `hyprctl dispatch movetoworkspace -1` / `+1`
 - close active window: `hyprctl dispatch killactive`
-- move cursor: `hyprctl dispatch movecursor <x> <y>`
+- move cursor fallback: `hyprctl dispatch movecursor <x> <y>`
+- move cursor preferred live-control path:
+  `/dev/uinput` relative pointer events via `--execute --pointer-execute`
 
 Close-window and move-window commands should remain guarded. The grammar should
 show the focused/target window title from `hyprctl activewindow -j` before a
@@ -502,11 +504,11 @@ Cursor control should be isolated behind an input driver because Wayland input i
 
 As of the 2026-05-11 planning pass, `hyprctl` is installed, Caden has write
 access to `/dev/uinput`, and no external pointer helper such as `ydotool`,
-`dotool`, or `wtype` is installed. The next implementation should therefore add
-an internal input target behind tests rather than depending on an unavailable
-binary. The Python `evdev` package was not installed during planning; either
-add it deliberately or implement the minimal `uinput` path with clear setup
-docs.
+`dotool`, or `wtype` is installed. AirDesk now implements the minimal internal
+`uinput` path behind tests for control-lane pointer movement, buttons, and
+scroll. The Python `evdev` package was not installed during planning, so keep
+this path dependency-free unless a later review deliberately adds a maintained
+input library.
 
 ## Logging and Study Instrumentation
 

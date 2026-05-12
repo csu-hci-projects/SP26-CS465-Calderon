@@ -150,7 +150,8 @@ uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height
 
 Dry-run remains the default. Use `--pause-on-start` or press `p` in the live preview to suppress actions while tracking continues.
 
-Cursor control is also dry-run by default. Real cursor movement is opt-in and uses Hyprland's `movecursor` dispatcher:
+The older cursor-control command is also dry-run by default. Its real cursor
+movement is opt-in and still uses Hyprland's `movecursor` dispatcher:
 
 ```bash
 uv run airdesk cursor run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --execute --events-out data/logs/cursor-execute.jsonl
@@ -166,9 +167,12 @@ buffer, dry-run pointer button/scroll routing, guarded Hyprland command mapping,
 open-hand relative cursor movement, index-pinch tap/hold for left click and
 select/drag, middle-pinch tap/hold for right click and scroll, active-window
 title lookup for guarded move/close status, and JSONL control logs. Real pointer
-button/scroll execution is available through an explicit `--pointer-execute`
-flag using `/dev/uinput`; without that flag, pointer button/scroll events remain
-dry-run even when `--execute` is enabled.
+movement/button/scroll execution is available through explicit
+`--execute --pointer-execute` using `/dev/uinput`; without `--pointer-execute`,
+cursor movement falls back to Hyprland `movecursor` and pointer button/scroll
+events remain dry-run. Prefer the uinput cursor path for live UI use because it
+delivers relative pointer motion to clients, which allows normal hover feedback
+on clickable controls.
 
 Control poses are intentionally resolved rather than treated as independent
 booleans. Fist now uses multi-finger, multi-landmark closed-hand evidence:

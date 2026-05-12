@@ -8,7 +8,12 @@ from uuid import uuid4
 
 import typer
 
-from airdesk.actions.cursor import CursorTarget, DryRunCursorTarget, HyprlandCursorTarget
+from airdesk.actions.cursor import (
+    CursorTarget,
+    DryRunCursorTarget,
+    HyprlandCursorTarget,
+    UInputRelativeCursorTarget,
+)
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import (
     CONTROL_HYPRLAND_DISPATCHERS,
@@ -372,7 +377,7 @@ def control_run(
     ] = False,
     pointer_execute: Annotated[
         bool,
-        typer.Option(help="Opt in to real pointer button/scroll injection through /dev/uinput."),
+        typer.Option(help="Opt in to real pointer movement/button/scroll through /dev/uinput."),
     ] = False,
     monitor: Annotated[
         str | None,
@@ -506,7 +511,6 @@ def control_run(
         min_presence_confidence=min_presence_confidence,
         min_tracking_confidence=min_tracking_confidence,
     )
-    cursor_target: CursorTarget = HyprlandCursorTarget() if execute else DryRunCursorTarget()
     hyprland_target = (
         GuardedHyprlandActionTarget(
             inner=HyprlandActionTarget(verify_after_dispatch=True),
@@ -516,6 +520,11 @@ def control_run(
         else DryRunActionTarget()
     )
     pointer_target = UInputPointerInputTarget() if pointer_execute else DryRunPointerInputTarget()
+    cursor_target: CursorTarget = _make_control_cursor_target(
+        execute=execute,
+        pointer_execute=pointer_execute,
+        pointer_target=pointer_target,
+    )
     event_writer = JsonlRecordingWriter(events_out) if events_out is not None else None
     runtime = ControlRuntime(
         tracker=tracker,
@@ -558,6 +567,22 @@ def control_run(
     finally:
         if event_writer is not None:
             event_writer.close()
+
+
+def _make_control_cursor_target(
+    *,
+    execute: bool,
+    pointer_execute: bool,
+    pointer_target: DryRunPointerInputTarget | UInputPointerInputTarget,
+) -> CursorTarget:
+    if not execute:
+        return DryRunCursorTarget()
+    if pointer_execute:
+        return UInputRelativeCursorTarget(
+            pointer_target=pointer_target,
+            reference=HyprlandCursorTarget(),
+        )
+    return HyprlandCursorTarget()
 
 
 def _attach_runtime_preview_controls(

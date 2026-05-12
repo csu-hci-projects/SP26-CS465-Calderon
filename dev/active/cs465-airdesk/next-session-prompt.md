@@ -110,7 +110,11 @@ Caden's Hyprland setup:
   `hyprctl dispatch movetoworkspace r-1` / `r+1`; raw `-1` / `+1` is still
   available with `--workspace-selector-prefix ""`.
 - Close active window: `hyprctl dispatch killactive`
-- Move cursor: `hyprctl dispatch movecursor <x> <y>`
+- Move cursor: dry-run by default; guarded real control should use
+  `--execute --pointer-execute` so cursor movement goes through `/dev/uinput`
+  relative pointer events. Hyprland `movecursor` remains the fallback when
+  `--execute` is enabled without `--pointer-execute`, but it can visually warp
+  the pointer without giving apps normal hover feedback.
 - `hyprctl` is installed.
 - `/dev/uinput` is writable by `caden`.
 - No external pointer helper (`ydotool`, `dotool`, `wtype`) is installed.
@@ -166,8 +170,10 @@ Current implementation status:
 - The `airdesk control run --show` preview now uses the control pose resolver
   rather than the old static Sprint 0 preview recognizer, so visual labels
   should match command-safe poses and ambiguity suppression.
-- Pointer button/scroll real execution is available with explicit
-  `--pointer-execute` through `/dev/uinput`.
+- Pointer movement/button/scroll real execution is available with explicit
+  `--execute --pointer-execute` through `/dev/uinput`. This is the preferred
+  live cursor path because it sends normal relative pointer motion, so clickable
+  UI hover states should update like they do with a hardware mouse.
 - Focused tests cover primitive control poses, debouncing, combo
   matching/consumption, grammar routing/cooldown, dry-run pointer routing,
   guarded Hyprland command allowlisting, and `airdesk control run`.
@@ -215,8 +221,10 @@ Recommended next implementation slice:
    `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 5. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
-6. Only after dry-run feels stable, consider guarded real Hyprland movement
-   with pointer button/scroll still dry-run.
+6. Only after dry-run feels stable, consider guarded real Hyprland/window
+   movement. For cursor hover fidelity, test real cursor movement with
+   `--execute --pointer-execute` so the cursor uses uinput relative motion
+   instead of Hyprland `movecursor`.
 7. Keep running `uv run ruff check .` and `uv run pytest` after changes.
 
 Safety stance:

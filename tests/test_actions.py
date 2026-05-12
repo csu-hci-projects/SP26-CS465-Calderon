@@ -12,12 +12,15 @@ from airdesk.actions.hyprland import (
 )
 from airdesk.actions.input import (
     BTN_LEFT,
+    REL_X,
+    REL_Y,
     UI_DEV_CREATE,
     UI_SET_EVBIT,
     UI_SET_KEYBIT,
     UI_SET_RELBIT,
     DryRunPointerInputTarget,
     PointerButtonEvent,
+    PointerMoveEvent,
     PointerScrollEvent,
     UInputPointerInputTarget,
 )
@@ -213,6 +216,26 @@ def test_dry_run_pointer_input_records_buttons_and_scrolls() -> None:
     assert scroll.command_preview == ["pointer.scroll", "-1"]
     assert target.buttons == [PointerButtonEvent(button="left")]
     assert target.scrolls == [PointerScrollEvent(amount_y=-1)]
+
+
+def test_uinput_pointer_target_emits_relative_motion() -> None:
+    writes: list[bytes] = []
+    ioctls: list[tuple[int, int]] = []
+
+    target = UInputPointerInputTarget(
+        opener=lambda _path, _flags: 42,
+        writer=lambda _fd, data: writes.append(data) or len(data),
+        ioctl=lambda _fd, request, arg: ioctls.append((request, arg)) or 0,
+        closer=lambda _fd: None,
+    )
+
+    result = target.move(PointerMoveEvent(dx=12, dy=-7))
+
+    assert result.ok is True
+    assert result.command_preview == ["uinput.move", "12", "-7"]
+    assert (UI_SET_RELBIT, REL_X) in ioctls
+    assert (UI_SET_RELBIT, REL_Y) in ioctls
+    assert len(writes) >= 4
 
 
 def test_uinput_pointer_target_creates_device_and_emits_click() -> None:

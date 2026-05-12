@@ -273,12 +273,16 @@ Important design constraints:
 - support a dead zone to avoid jitter
 - route real clicks/scroll through an isolated input adapter, with dry-run and
   visible event logs before global execution
+- route real control cursor movement through a real pointer-motion source when
+  hover feedback matters; compositor cursor warps are not enough for every app
 
 Possible implementation path:
 
-1. Reuse the current Hyprland `movecursor` path for real pointer movement.
+1. Keep Hyprland `movecursor` as the fallback real pointer movement path.
 2. Add a dry-run input target for click/scroll/drag events and tests.
-3. Add a Linux `uinput` target if dependency and permission checks pass.
+3. Use the Linux `uinput` target for `airdesk control run --execute
+   --pointer-execute` cursor movement and pointer clicks/scroll, so apps receive
+   normal relative pointer motion and hover states update.
 4. Add index-pinch click, middle-pinch right click, and pinch-drag scroll.
 5. Keep a fake/diagnostic overlay view for tuning thresholds safely.
 

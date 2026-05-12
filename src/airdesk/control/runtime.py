@@ -91,7 +91,7 @@ class ControlRuntime:
                     "name": bounds.name,
                 },
                 "paused_at_start": self.paused,
-                "pointer_execute_available": False,
+                "pointer_execute_available": self.pointer_target.name != "pointer-dry-run",
             },
         )
 

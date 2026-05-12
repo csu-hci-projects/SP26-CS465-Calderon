@@ -191,7 +191,7 @@ Sprint 2 established a working live and replay foundation:
 - MediaPipe model path, hand count, and confidence thresholds are CLI-tunable.
 - JSONL recording/replay and replay analysis are available.
 - Command-mode policy, profile binding resolution, and dry-run runtime routing are implemented.
-- Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. This older cursor model uses pinch as the cursor-move clutch; the crunch-time logic-control pivot should revise that so open/relaxed hand movement controls the pointer and pinch becomes click/scroll/drag. Real pointer button/scroll injection is still pending. The 2026-05-11 planning check found `hyprctl` installed, `/dev/uinput` writable by `caden`, no `ydotool`/`dotool`/`wtype`, and no Python `evdev` package installed.
+- Cursor mode now has an explicit `airdesk cursor run` command. Dry-run is default; `--execute` uses Hyprland `movecursor` for real cursor movement while pinch is held. Release exits cursor movement, `p` pauses/resumes, and `q`/`esc` exits. This older cursor model uses pinch as the cursor-move clutch. The newer `airdesk control run` path uses open/relaxed hand movement for the pointer and pinch for click/scroll/drag. When `airdesk control run` is launched with both `--execute` and `--pointer-execute`, cursor movement now goes through `/dev/uinput` relative mouse events rather than Hyprland `movecursor`, which should restore normal app hover feedback. The 2026-05-11 planning check found `hyprctl` installed, `/dev/uinput` writable by `caden`, no `ydotool`/`dotool`/`wtype`, and no Python `evdev` package installed.
 - `airdesk label suggest` can bootstrap swipe labels by finding the strongest palm-motion window and applying phase/event labels for review. This is a labeling accelerator, not a final recognizer.
 - `airdesk gesture calibrate --kind dtw` and `airdesk gesture evaluate --recognizer dtw --model ...` now provide a dependency-free personalized DTW/template baseline for replay evaluation.
 - Sprint 4 batch `data/recordings/sprint4-swipes-001` has 24 local takes: 8 left swipes, 8 right swipes, and 8 normal desk-motion negatives. Generated labels/features/evaluations live under ignored `data/labels`, `data/features`, and `data/evaluations`.
@@ -303,7 +303,10 @@ Current next step:
 
 MVP grammar candidate:
 
-- Open/relaxed hand in cursor mode: move cursor through Hyprland `movecursor`.
+- Open/relaxed hand in cursor mode: move cursor through the cursor target. In
+  guarded live control, prefer `--execute --pointer-execute` so cursor movement
+  uses `/dev/uinput` relative pointer events and apps receive normal hover
+  motion; Hyprland `movecursor` remains the fallback without pointer execution.
 - Index pinch tap: left click through a future input target.
 - Index pinch hold: hold left button for select/drag through a future input target.
 - Thumb/middle pinch tap: right click through a future input target.
@@ -758,6 +761,10 @@ The first deterministic control slice is now in place:
 - The first action boundary includes dry-run pointer button/scroll requests,
   guarded Hyprland dispatches for the demo grammar, and open-hand relative
   cursor movement through the existing cursor target abstraction.
+- Cursor hover fix: `airdesk control run --execute --pointer-execute` now uses a
+  uinput relative cursor target for cursor movement, not Hyprland `movecursor`.
+  Hyprland cursor warps can visibly move the pointer without producing the
+  ordinary client pointer-motion stream that clickable hover states expect.
 - Pinch behavior is now split so quick index/middle pinch releases become
   left/right clicks, index-pinch hold presses and holds left button for
   select/drag, and middle-pinch hold plus vertical palm motion emits scroll
@@ -792,9 +799,10 @@ The first deterministic control slice is now in place:
   curled hands out of the command pose while accepting a sideways closed fist.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release.
-- Real pointer click/scroll injection is available through explicit
-  `--pointer-execute` using `/dev/uinput`. Without that flag, pointer
-  click/scroll remains dry-run even when Hyprland execution is enabled.
+- Real pointer movement/click/scroll injection is available through explicit
+  `--execute --pointer-execute` using `/dev/uinput`. Without `--pointer-execute`,
+  cursor movement falls back to Hyprland `movecursor`, and pointer click/scroll
+  remains dry-run even when Hyprland execution is enabled.
 
 Latest live-test stop point:
 

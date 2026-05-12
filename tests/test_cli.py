@@ -8,8 +8,14 @@ import pytest
 from typer.testing import CliRunner
 
 import airdesk.cli_tcn as cli_tcn
+from airdesk.actions.cursor import (
+    DryRunCursorTarget,
+    HyprlandCursorTarget,
+    UInputRelativeCursorTarget,
+)
 from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.actions.hyprland import GuardedHyprlandActionTarget
+from airdesk.actions.input import DryRunPointerInputTarget, UInputPointerInputTarget
 from airdesk.analysis import GestureEvaluation
 from airdesk.cli import app
 from airdesk.cli_live import (
@@ -29,7 +35,7 @@ from airdesk.cli_recording import (
     _parse_record_prompt_segments,
     _record_preview_status,
 )
-from airdesk.cli_runtime import _make_runtime_action_target
+from airdesk.cli_runtime import _make_control_cursor_target, _make_runtime_action_target
 from airdesk.features import FrameFeatureRow
 from airdesk.labels import (
     GestureEventLabel,
@@ -232,6 +238,36 @@ def test_control_run_help_exposes_control_controls() -> None:
     assert "--fist-repeat-cooldown-seconds" in result.stdout
     assert "--events-out" in result.stdout
     assert "--pause-on-start" in result.stdout
+
+
+def test_control_cursor_target_uses_uinput_when_pointer_execution_is_enabled() -> None:
+    dry_pointer = DryRunPointerInputTarget()
+    real_pointer = UInputPointerInputTarget(
+        opener=lambda _path, _flags: 42,
+        writer=lambda _fd, data: len(data),
+        ioctl=lambda _fd, _request, _arg: 0,
+        closer=lambda _fd: None,
+    )
+
+    dry_cursor = _make_control_cursor_target(
+        execute=False,
+        pointer_execute=True,
+        pointer_target=real_pointer,
+    )
+    hyprland_cursor = _make_control_cursor_target(
+        execute=True,
+        pointer_execute=False,
+        pointer_target=dry_pointer,
+    )
+    uinput_cursor = _make_control_cursor_target(
+        execute=True,
+        pointer_execute=True,
+        pointer_target=real_pointer,
+    )
+
+    assert isinstance(dry_cursor, DryRunCursorTarget)
+    assert isinstance(hyprland_cursor, HyprlandCursorTarget)
+    assert isinstance(uinput_cursor, UInputRelativeCursorTarget)
 
 
 def test_train_tcn_help_exposes_optional_training_controls() -> None:

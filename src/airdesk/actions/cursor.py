@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from airdesk.actions.input import PointerInputTarget, PointerMoveEvent
 from airdesk.state.types import ActionResult, utc_timestamp
 
 
@@ -148,6 +149,51 @@ class HyprlandCursorTarget:
             executed_at=utc_timestamp(),
             message=output or ("ok" if ok else f"hyprctl exited {completed.returncode}"),
             command_preview=command,
+        )
+
+
+@dataclass
+class UInputRelativeCursorTarget:
+    """Cursor movement through a virtual relative mouse."""
+
+    pointer_target: PointerInputTarget
+    reference: CursorTarget = field(default_factory=HyprlandCursorTarget)
+    name: str = "uinput-cursor"
+    _last_position: CursorPosition | None = None
+
+    def current_position(self) -> CursorPosition:
+        if self._last_position is None:
+            self._last_position = self.reference.current_position()
+        return self._last_position
+
+    def bounds(self, monitor: str | None = None) -> CursorBounds:
+        return self.reference.bounds(monitor=monitor)
+
+    def move_to(self, position: CursorPosition) -> ActionResult:
+        current = self.current_position()
+        dx = position.x - current.x
+        dy = position.y - current.y
+        result = self.pointer_target.move(PointerMoveEvent(dx=dx, dy=dy))
+        if result.ok:
+            self._last_position = position
+        return ActionResult(
+            request_id="cursor-uinput",
+            ok=result.ok,
+            target=self.name,
+            executed_at=result.executed_at,
+            message=(
+                f"uinput cursor relative move {dx},{dy} to {position.x},{position.y}"
+                if result.ok
+                else result.message
+            ),
+            command_preview=[
+                "uinput.cursor",
+                str(dx),
+                str(dy),
+                "target",
+                str(position.x),
+                str(position.y),
+            ],
         )
 
 

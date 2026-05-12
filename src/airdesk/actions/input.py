@@ -16,6 +16,8 @@ EV_SYN = 0x00
 EV_KEY = 0x01
 EV_REL = 0x02
 SYN_REPORT = 0x00
+REL_X = 0x00
+REL_Y = 0x01
 REL_WHEEL = 0x08
 BTN_LEFT = 0x110
 BTN_RIGHT = 0x111
@@ -42,10 +44,21 @@ class PointerScrollEvent:
     amount_y: int
 
 
+@dataclass(frozen=True)
+class PointerMoveEvent:
+    """Relative pointer movement request."""
+
+    dx: int
+    dy: int
+
+
 class PointerInputTarget(Protocol):
-    """Pointer button/scroll target boundary."""
+    """Pointer movement/button/scroll target boundary."""
 
     name: str
+
+    def move(self, event: PointerMoveEvent) -> ActionResult:
+        """Send a relative pointer movement request."""
 
     def button(self, event: PointerButtonEvent) -> ActionResult:
         """Send a pointer button request."""
@@ -59,8 +72,20 @@ class DryRunPointerInputTarget:
     """Pointer target for tests and dry-run control sessions."""
 
     name: str = "pointer-dry-run"
+    moves: list[PointerMoveEvent] = field(default_factory=list)
     buttons: list[PointerButtonEvent] = field(default_factory=list)
     scrolls: list[PointerScrollEvent] = field(default_factory=list)
+
+    def move(self, event: PointerMoveEvent) -> ActionResult:
+        self.moves.append(event)
+        return ActionResult(
+            request_id="pointer-move-dry-run",
+            ok=True,
+            target=self.name,
+            executed_at=utc_timestamp(),
+            message=f"dry-run pointer move {event.dx},{event.dy}",
+            command_preview=["pointer.move", str(event.dx), str(event.dy)],
+        )
 
     def button(self, event: PointerButtonEvent) -> ActionResult:
         self.buttons.append(event)
@@ -96,6 +121,32 @@ class UInputPointerInputTarget:
     ioctl: Callable[[int, int, int], int] = fcntl.ioctl
     closer: Callable[[int], None] = os.close
     _fd: int | None = None
+
+    def move(self, event: PointerMoveEvent) -> ActionResult:
+        if event.dx == 0 and event.dy == 0:
+            return self._result(
+                ok=True,
+                message="uinput pointer move 0,0",
+                preview=["uinput.move", "0", "0"],
+            )
+        try:
+            fd = self._ensure_device()
+            if event.dx != 0:
+                self._emit(fd, EV_REL, REL_X, event.dx)
+            if event.dy != 0:
+                self._emit(fd, EV_REL, REL_Y, event.dy)
+            self._emit(fd, EV_SYN, SYN_REPORT, 0)
+        except OSError as exc:
+            return self._result(
+                ok=False,
+                message=f"uinput move failed: {exc}",
+                preview=["uinput.move", str(event.dx), str(event.dy)],
+            )
+        return self._result(
+            ok=True,
+            message=f"uinput pointer move {event.dx},{event.dy}",
+            preview=["uinput.move", str(event.dx), str(event.dy)],
+        )
 
     def button(self, event: PointerButtonEvent) -> ActionResult:
         code = _button_code(event.button)
@@ -156,7 +207,8 @@ class UInputPointerInputTarget:
             self.ioctl(fd, UI_SET_EVBIT, event_type)
         for code in (BTN_LEFT, BTN_RIGHT):
             self.ioctl(fd, UI_SET_KEYBIT, code)
-        self.ioctl(fd, UI_SET_RELBIT, REL_WHEEL)
+        for code in (REL_X, REL_Y, REL_WHEEL):
+            self.ioctl(fd, UI_SET_RELBIT, code)
         self.writer(fd, _uinput_user_dev())
         self.ioctl(fd, UI_DEV_CREATE, 0)
         time.sleep(0.05)

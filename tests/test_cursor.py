@@ -6,10 +6,13 @@ from collections.abc import Sequence
 from airdesk.actions.cursor import (
     CursorBounds,
     CursorPosition,
+    DryRunCursorTarget,
     HyprlandCursorTarget,
+    UInputRelativeCursorTarget,
     monitor_bounds_from_json,
     parse_cursor_position,
 )
+from airdesk.actions.input import DryRunPointerInputTarget, PointerMoveEvent
 from airdesk.modes.cursor import CursorControlConfig, PinchCursorController
 from airdesk.state.types import (
     FrameMetadata,
@@ -57,6 +60,25 @@ def test_hyprland_cursor_target_moves_with_injected_runner() -> None:
     assert result.ok is True
     assert calls == [["hyprctl", "dispatch", "movecursor", "100", "200"]]
     assert result.command_preview == calls[0]
+
+
+def test_uinput_relative_cursor_target_moves_by_delta_from_last_position() -> None:
+    pointer = DryRunPointerInputTarget()
+    reference = DryRunCursorTarget(
+        initial_position=CursorPosition(100, 200),
+        movement_bounds=CursorBounds(x=0, y=0, width=1000, height=800),
+    )
+    target = UInputRelativeCursorTarget(pointer_target=pointer, reference=reference)
+
+    start = target.current_position()
+    first = target.move_to(CursorPosition(115, 190))
+    second = target.move_to(CursorPosition(120, 210))
+
+    assert start == CursorPosition(100, 200)
+    assert first.ok is True
+    assert second.ok is True
+    assert pointer.moves == [PointerMoveEvent(dx=15, dy=-10), PointerMoveEvent(dx=5, dy=20)]
+    assert first.command_preview == ["uinput.cursor", "15", "-10", "target", "115", "190"]
 
 
 def test_pinch_cursor_controller_moves_relative_to_activation_anchor() -> None:
