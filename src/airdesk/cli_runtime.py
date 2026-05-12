@@ -428,6 +428,22 @@ def control_run(
         int,
         typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
     ] = 1,
+    click_cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds between repeated pinch tap clicks."),
+    ] = 0.16,
+    tap_max_seconds: Annotated[
+        float,
+        typer.Option(help="Maximum pinch duration that still counts as a tap click."),
+    ] = 0.55,
+    index_drag_hold_seconds: Annotated[
+        float,
+        typer.Option(help="Stationary index-pinch duration before select/drag begins."),
+    ] = 0.35,
+    index_drag_motion_threshold: Annotated[
+        float,
+        typer.Option(help="Normalized index-pinch movement before select/drag begins."),
+    ] = 0.025,
     workspace_motion_threshold: Annotated[
         float,
         typer.Option(help="Normalized fist up/down movement needed to switch workspace."),
@@ -542,6 +558,10 @@ def control_run(
         ),
         grammar=ControlGrammar(
             ControlGrammarConfig(
+                click_cooldown_seconds=click_cooldown_seconds,
+                tap_max_seconds=tap_max_seconds,
+                index_drag_hold_seconds=index_drag_hold_seconds,
+                index_drag_motion_threshold=index_drag_motion_threshold,
                 workspace_motion_threshold=workspace_motion_threshold,
                 move_window_motion_threshold=move_window_motion_threshold,
                 workspace_selector_prefix=workspace_selector_prefix,

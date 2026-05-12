@@ -159,14 +159,16 @@ Current implementation status:
 - Fist detection tests cover relaxed curl, partial curl, real fist, sideways
   closed fist, pinch-like fist artifacts, forming-fist pinch artifacts, and noisy
   sideways hands.
-- Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
-  release can still click if tracking briefly drops on a clean release. Pending
-  pinch taps are canceled by forming-fist/ambiguous-pinch frames, and releases
-  onto the other pinch pose are rejected. Holding an index pinch past the tap
-  window presses and holds the left button until release; middle-pinch hold is
-  reserved for scrolling. Middle-pinch detection now defaults to the same
-  stricter distance as index pinch (`0.06`) and both thresholds are exposed on
-  `airdesk control run`.
+- Pinch taps are more forgiving: index/middle pinch poses enter after one
+  stable frame, tap max is now `0.55s`, click cooldown is `0.16s`, and a clean
+  index tap can still click if release passes through a non-closed
+  index/middle pinch ambiguity. Pending taps are still canceled by
+  forming-fist/closed-hand ambiguity, and releases onto the other clean pinch
+  pose are rejected. Index pinch keeps cursor movement live and starts a held
+  left button on drag motion or a `0.35s` hold for select/highlight;
+  middle-pinch drag scrolls continuously instead of waiting for a long held
+  event. Middle-pinch detection defaults to the same stricter distance as index
+  pinch (`0.06`) and both thresholds are exposed on `airdesk control run`.
 - The `airdesk control run --show` preview now uses the control pose resolver
   rather than the old static Sprint 0 preview recognizer, so visual labels
   should match command-safe poses and ambiguity suppression.
@@ -218,7 +220,7 @@ Recommended next implementation slice:
      fist returns near the anchor, clear on release/expiry, and log why they did
      or did not fire.
 4. Then run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --click-cooldown-seconds 0.16 --tap-max-seconds 0.55 --index-drag-hold-seconds 0.35 --index-drag-motion-threshold 0.025 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 5. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
 6. Only after dry-run feels stable, consider guarded real Hyprland/window

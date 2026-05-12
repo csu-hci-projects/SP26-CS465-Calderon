@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 
@@ -23,6 +24,10 @@ class PoseDebounceConfig:
     enter_frames: int = 2
     release_frames: int = 2
     held_interval_seconds: float = 0.35
+    pose_enter_frames: Mapping[str, int] = field(
+        default_factory=lambda: {"index_pinch": 1, "middle_pinch": 1}
+    )
+    pose_release_frames: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -64,7 +69,7 @@ class PoseDebouncer:
             if pose in active_poses:
                 state.seen_frames += 1
                 state.missing_frames = 0
-                if not state.active and state.seen_frames >= self.config.enter_frames:
+                if not state.active and state.seen_frames >= self._enter_frames(pose):
                     state.active = True
                     state.entered_at = timestamp
                     state.last_held_at = timestamp
@@ -88,7 +93,7 @@ class PoseDebouncer:
                 if not state.active:
                     continue
                 state.missing_frames += 1
-                if state.missing_frames >= self.config.release_frames:
+                if state.missing_frames >= self._release_frames(pose):
                     state.active = False
                     events.append(
                         PoseEvent(
@@ -103,3 +108,9 @@ class PoseDebouncer:
                     state.last_held_at = 0.0
 
         return events
+
+    def _enter_frames(self, pose: str) -> int:
+        return self.config.pose_enter_frames.get(pose, self.config.enter_frames)
+
+    def _release_frames(self, pose: str) -> int:
+        return self.config.pose_release_frames.get(pose, self.config.release_frames)

@@ -104,16 +104,18 @@ Immediate next-session checklist:
 
 Logic-control hardening note: `airdesk control run` exists and is dry-run by
 default. The grammar covers open-hand relative cursor movement, index-pinch
-left click/drag, middle-pinch right click/scroll, launcher combo, deliberate
+tap left click, index-pinch drag/select, middle-pinch drag scroll, launcher combo, deliberate
 close-window combo, and anchor-based fist workspace/window commands. Fist
 workspace/window commands now repeat while the fist is held past the threshold
 instead of forcing a release/re-form after each step. Fist is no longer a
 mostly single-axis fold check: the control pose layer uses
 rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
 suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
-respects ambiguity, middle pinch defaults to the same strict threshold as index
-pinch, and workspace selectors default to current-monitor relative `r+1` /
-`r-1` with post-dispatch verification during guarded execution. The remaining
+allows non-closed index/middle release ambiguity while still canceling
+forming-fist ambiguity, middle pinch defaults to the same strict threshold as
+index pinch, index pinch continues cursor motion for select/highlight, and
+workspace selectors default to current-monitor relative `r+1` / `r-1` with
+post-dispatch verification during guarded execution. The remaining
 MVP polish is richer live dashboard rendering and fresh live dry-run validation
 of repeated workspace switching and repeated `movetoworkspace` after the held
 fist grammar update.

@@ -765,12 +765,16 @@ The first deterministic control slice is now in place:
   uinput relative cursor target for cursor movement, not Hyprland `movecursor`.
   Hyprland cursor warps can visibly move the pointer without producing the
   ordinary client pointer-motion stream that clickable hover states expect.
-- Pinch behavior is now split so quick index/middle pinch releases become
-  left/right clicks, index-pinch hold presses and holds left button for
-  select/drag, and middle-pinch hold plus vertical palm motion emits scroll
-  ticks and suppresses the tap. Middle pinch now defaults to the same strict
-  `0.06` distance as index pinch, with `--index-pinch-threshold` and
-  `--middle-pinch-threshold` exposed separately for live tuning.
+- Pinch behavior is now split so quick pinch releases feel more like direct
+  tap/click: pinch poses can enter after one stable frame, tap max is `0.55s`,
+  and click cooldown is `0.16s`. Index pinch keeps cursor movement live and
+  starts a held left button on drag motion or a short hold for select/highlight.
+  Middle pinch drag emits scroll ticks continuously and suppresses the tap once
+  scrolling begins. A clean index tap can survive a non-closed index/middle
+  release ambiguity, but forming-fist/closed-hand ambiguity still cancels it.
+  Middle pinch defaults to the same strict `0.06` distance as index pinch, with
+  `--index-pinch-threshold` and `--middle-pinch-threshold` exposed separately
+  for live tuning.
 - Control pose facts are prioritized to reduce overlap from noisy sideways/fist
   tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
   artifacts, and clean pinch suppresses plain open-palm.
@@ -797,8 +801,9 @@ The first deterministic control slice is now in place:
   evidence, fingertip clustering, thumb support, low open-palm evidence, and
   the older `--fist-fold-threshold` vertical fold signal. This keeps relaxed
   curled hands out of the command pose while accepting a sideways closed fist.
-- Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
-  release can still click if tracking briefly drops on release.
+- Pinch taps are more forgiving: tap max is now `0.55s`, click cooldown is
+  `0.16s`, and a short pinch release can still click if tracking briefly drops
+  or if release passes through non-closed index/middle ambiguity.
 - Real pointer movement/click/scroll injection is available through explicit
   `--execute --pointer-execute` using `/dev/uinput`. Without `--pointer-execute`,
   cursor movement falls back to Hyprland `movecursor`, and pointer click/scroll

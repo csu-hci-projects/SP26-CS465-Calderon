@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from airdesk.actions.cursor import CursorBounds, CursorPosition, DryRunCursorTarget
+from airdesk.actions.dry_run import DryRunActionTarget
 from airdesk.control.combos import ComboBuffer
 from airdesk.control.debounce import PoseDebounceConfig, PoseDebouncer, PoseEvent
 from airdesk.control.grammar import POINTER_ACTION, ControlGrammar, ControlGrammarConfig
 from airdesk.control.poses import ControlPoseRecognizer
+from airdesk.control.runtime import ControlRuntime
 from airdesk.state.types import Landmark, NormalizedHand, TrackingFrame
 
 
@@ -175,6 +178,38 @@ def test_control_pose_blocks_forming_fist_pinch_artifact(
     assert {"index_pinch", "middle_pinch"}.issubset(features.suppressed_poses)
 
 
+def test_control_runtime_allows_cursor_motion_during_index_pinch(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    runtime = ControlRuntime(
+        tracker=object(),
+        cursor_target=DryRunCursorTarget(),
+        hyprland_target=DryRunActionTarget(),
+    )
+    bounds = CursorBounds(x=0, y=0, width=1000, height=1000)
+    cursor = CursorPosition(x=500, y=500)
+    start_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+    moved_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("pinch"), x=0.47))
+    )
+
+    first = runtime._move_cursor_from_features(
+        features=start_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+    moved = runtime._move_cursor_from_features(
+        features=moved_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+
+    assert first is None
+    assert moved is not None
+
+
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
     debouncer = PoseDebouncer(PoseDebounceConfig(enter_frames=2, release_frames=2))
 
@@ -188,6 +223,30 @@ def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
     assert entered == [PoseEvent("hand-0", "fist", "entered", 1.1)]
     assert held[0].event_type == "held"
     assert missing == []
+    assert released[0].event_type == "released"
+
+
+def test_pose_debouncer_enters_pinches_after_one_frame() -> None:
+    debouncer = PoseDebouncer(PoseDebounceConfig())
+
+    entered = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.0,
+        active_poses=frozenset({"index_pinch"}),
+    )
+    first_missing = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.03,
+        active_poses=frozenset(),
+    )
+    released = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.06,
+        active_poses=frozenset(),
+    )
+
+    assert entered == [PoseEvent("hand-0", "index_pinch", "entered", 1.0)]
+    assert first_missing == []
     assert released[0].event_type == "released"
 
 
@@ -558,6 +617,69 @@ def test_control_grammar_scrolls_on_middle_pinch_hold_and_suppresses_tap(
     assert click == []
 
 
+def test_control_grammar_scrolls_on_middle_pinch_drag_without_waiting_for_hold_event(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(ControlGrammarConfig(scroll_cooldown_seconds=0.0))
+    features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+
+    grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    scroll = grammar.update(
+        features=features,
+        events=[],
+        timestamp=1.05,
+        scroll_delta_by_hand={"hand-0": 1},
+    )
+    click = grammar.update(
+        features=features,
+        events=[PoseEvent("hand-0", "middle_pinch", "released", 1.1, duration=0.1)],
+        timestamp=1.1,
+    )
+
+    assert scroll[0].name == "scroll"
+    assert scroll[0].request.parameters["amount_y"] == 1
+    assert click == []
+
+
+def test_control_grammar_starts_index_drag_on_pinch_motion_without_waiting_for_hold(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    start_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+    moved_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("pinch"), x=0.54))
+    )
+
+    grammar.update(
+        features=start_features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    button_down = grammar.update(
+        features=moved_features,
+        events=[],
+        timestamp=1.05,
+    )
+    button_up = grammar.update(
+        features=moved_features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.1, duration=0.1)],
+        timestamp=1.1,
+    )
+
+    assert button_down[0].name == "left_button_down"
+    assert button_up[0].name == "left_button_up"
+
+
 def test_control_grammar_cancels_pinch_tap_when_release_becomes_fist(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
@@ -581,7 +703,7 @@ def test_control_grammar_cancels_pinch_tap_when_release_becomes_fist(
     assert click == []
 
 
-def test_control_grammar_cancels_pinch_tap_on_ambiguous_release(
+def test_control_grammar_allows_pinch_tap_through_non_closed_index_middle_conflict(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
@@ -604,19 +726,18 @@ def test_control_grammar_cancels_pinch_tap_on_ambiguous_release(
         timestamp=1.1,
     )
 
-    assert click == []
-    assert any("suppressed index_pinch tap" in item for item in grammar.last_diagnostics)
+    assert click[0].name == "left_click"
 
 
-def test_control_grammar_cancels_pinch_tap_after_ambiguous_tracking_dropout(
+def test_control_grammar_cancels_pinch_tap_on_forming_fist_ambiguity(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
     recognizer = ControlPoseRecognizer()
     grammar = ControlGrammar()
     pinch_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
-    ambiguous_features = recognizer.features_for_frame(
-        make_tracking_frame(_ambiguous_double_pinch_hand(make_hand("open_palm")))
+    forming_fist_features = recognizer.features_for_frame(
+        make_tracking_frame(_forming_fist_pinch_artifact(make_hand("open_palm")))
     )
 
     grammar.update(
@@ -624,7 +745,33 @@ def test_control_grammar_cancels_pinch_tap_after_ambiguous_tracking_dropout(
         events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
         timestamp=1.0,
     )
-    grammar.update(features=ambiguous_features, events=[], timestamp=1.05)
+    grammar.update(features=forming_fist_features, events=[], timestamp=1.05)
+    click = grammar.update(
+        features=forming_fist_features,
+        events=[PoseEvent("hand-0", "index_pinch", "released", 1.1, duration=0.1)],
+        timestamp=1.1,
+    )
+
+    assert click == []
+
+
+def test_control_grammar_cancels_pinch_tap_after_forming_fist_tracking_dropout(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    pinch_features = recognizer.features_for_frame(make_tracking_frame(make_hand("pinch")))
+    forming_fist_features = recognizer.features_for_frame(
+        make_tracking_frame(_forming_fist_pinch_artifact(make_hand("open_palm")))
+    )
+
+    grammar.update(
+        features=pinch_features,
+        events=[PoseEvent("hand-0", "index_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    grammar.update(features=forming_fist_features, events=[], timestamp=1.05)
     click = grammar.update(
         features=[],
         events=[PoseEvent("hand-0", "index_pinch", "released", 1.1, duration=0.1)],

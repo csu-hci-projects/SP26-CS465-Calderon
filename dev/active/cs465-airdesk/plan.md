@@ -187,10 +187,10 @@ Current MVP grammar candidate:
 | Input pattern | Intended action | Safety notes |
 | --- | --- | --- |
 | Open hand / relaxed tracked hand in cursor mode | Move cursor | Cursor movement should be modeful and visible. |
-| Index pinch tap | Left click | Requires pointer-button injection through an input adapter. |
-| Index pinch hold | Hold left button for select/drag | Press on hold threshold, release when pinch releases. |
+| Index pinch tap | Left click | One-frame pinch entry, short cooldown, and tolerant release through non-closed index/middle ambiguity. |
+| Index pinch drag | Hold left button for select/highlight | Cursor continues moving while index pinched; press starts on motion or short hold, release when pinch releases. |
 | Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
-| Thumb/middle pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
+| Thumb/middle pinch drag + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit; no separate two-finger scroll primitive. |
 | Fist held in center | Arm one fist command | Show target window title before any move-window action. |
 | Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace r-1` / `movetoworkspace r+1` by default; holding repeats after a cooldown, returning near the anchor stops repeats. |
 | Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace r-1` / `workspace r+1` by default; holding repeats after a cooldown, returning near the anchor stops repeats. |
@@ -203,12 +203,11 @@ window manager" grammar that strings together without accidental overlap.
 Live-control hardening update: the command fist gate should not depend mostly on
 image-y fingertip fold. It now combines closed-finger scores, intermediate-joint
 evidence, fingertip clustering, thumb support, low open-palm evidence, and the
-older fold threshold as one signal. Pinch taps must be canceled when an
-ambiguous or forming-fist frame appears, because live logs showed accidental
-clicks when a pinch briefly entered while Caden was making a fist and then
-released through an ambiguous frame. Hyprland workspace selectors default to
-current-monitor relative `r+1` / `r-1`; keep `+1` / `-1` available as a CLI
-override for live setup comparison.
+older fold threshold as one signal. Pinch taps are now less over-conservative:
+forming-fist/closed-hand ambiguity still cancels pending taps, but a clean
+index tap can survive non-closed index/middle release ambiguity. Hyprland
+workspace selectors default to current-monitor relative `r+1` / `r-1`; keep
+`+1` / `-1` available as a CLI override for live setup comparison.
 
 Held-repeat update: live testing after the fist primitive fix showed workspace
 and move-window dispatches working, but one-shot arm consumption made multi-step

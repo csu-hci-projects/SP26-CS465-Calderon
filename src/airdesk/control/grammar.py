@@ -29,9 +29,11 @@ class ControlGrammarConfig:
     """Cooldowns and safety timing for the deterministic grammar."""
 
     command_cooldown_seconds: float = 0.75
-    click_cooldown_seconds: float = 0.25
+    click_cooldown_seconds: float = 0.16
     close_cooldown_seconds: float = 2.0
-    tap_max_seconds: float = 0.45
+    tap_max_seconds: float = 0.55
+    index_drag_hold_seconds: float = 0.35
+    index_drag_motion_threshold: float = 0.025
     scroll_cooldown_seconds: float = 0.12
     fist_command_arm_seconds: float = 1.25
     fist_repeat_cooldown_seconds: float = 0.75
@@ -49,6 +51,13 @@ class _FistArm:
     expires_at: float
 
 
+@dataclass(frozen=True)
+class _PinchStart:
+    palm_x: float
+    palm_y: float
+    timestamp: float
+
+
 @dataclass
 class ControlGrammar:
     """Map pose transitions, holds, and combos to guarded action intents."""
@@ -57,6 +66,7 @@ class ControlGrammar:
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
+    _pinch_starts: dict[tuple[str, str], _PinchStart] = field(default_factory=dict)
     _blocked_taps: set[tuple[str, str]] = field(default_factory=set)
     _held_buttons: dict[tuple[str, str], str] = field(default_factory=dict)
     _fist_arms: dict[str, _FistArm] = field(default_factory=dict)
@@ -86,9 +96,11 @@ class ControlGrammar:
                 if event.pose == "index_pinch":
                     self._pending_taps[(event.hand_id, "index_pinch")] = True
                     self._blocked_taps.discard((event.hand_id, "index_pinch"))
+                    self._remember_pinch_start(event, hand_features)
                 elif event.pose == "middle_pinch":
                     self._pending_taps[(event.hand_id, "middle_pinch")] = True
                     self._blocked_taps.discard((event.hand_id, "middle_pinch"))
+                    self._remember_pinch_start(event, hand_features)
                 elif event.pose == "fist" and hand_features is not None:
                     self._cancel_pending_pinch_taps(
                         hand_id=event.hand_id,
@@ -115,38 +127,21 @@ class ControlGrammar:
 
             if event.event_type == "held":
                 if event.pose == "index_pinch":
-                    if event.duration > self.config.tap_max_seconds:
-                        self._pending_taps[(event.hand_id, "index_pinch")] = False
-                        intents.extend(
-                            self._button_hold_intent_if_needed(
-                                hand_id=event.hand_id,
-                                pose="index_pinch",
-                                button="left",
-                                reason="index pinch hold",
-                            )
+                    intents.extend(
+                        self._index_drag_intent_if_ready(
+                            hand_features=hand_features,
+                            timestamp=timestamp,
+                            reason="index pinch hold",
                         )
+                    )
                 elif event.pose == "middle_pinch":
-                    scroll_delta = scroll_delta_by_hand.get(event.hand_id, 0)
-                    if scroll_delta != 0:
-                        self._pending_taps[(event.hand_id, "middle_pinch")] = False
-                        intents.extend(
-                            self._intent_if_ready(
-                                key=f"{event.hand_id}:scroll",
-                                timestamp=timestamp,
-                                cooldown=self.config.scroll_cooldown_seconds,
-                                intent=ControlIntent(
-                                    name="scroll",
-                                    request=ActionRequest(
-                                        action_type=POINTER_ACTION,
-                                        command="scroll",
-                                        parameters={"amount_y": scroll_delta},
-                                        source="control",
-                                    ),
-                                    hand_id=event.hand_id,
-                                    reason="middle pinch hold with vertical motion",
-                                ),
-                            )
+                    intents.extend(
+                        self._middle_scroll_intent_if_ready(
+                            hand_id=event.hand_id,
+                            timestamp=timestamp,
+                            scroll_delta=scroll_delta_by_hand.get(event.hand_id, 0),
                         )
+                    )
                 if event.pose == "fist":
                     self._cancel_pending_pinch_taps(
                         hand_id=event.hand_id,
@@ -178,6 +173,7 @@ class ControlGrammar:
                         f"{event.hand_id}: fist arm released without firing"
                     )
                 if event.pose == "index_pinch":
+                    self._pinch_starts.pop((event.hand_id, "index_pinch"), None)
                     if self._button_is_held(event.hand_id, "index_pinch"):
                         intents.extend(
                             self._button_release_intent(
@@ -200,6 +196,7 @@ class ControlGrammar:
                             )
                         )
                 elif event.pose == "middle_pinch":
+                    self._pinch_starts.pop((event.hand_id, "middle_pinch"), None)
                     intents.extend(
                         self._click_intent_if_tap(
                             current_features=hand_features,
@@ -211,6 +208,24 @@ class ControlGrammar:
                             reason="thumb/middle pinch tap",
                         )
                     )
+
+        for hand_features in features:
+            if "index_pinch" in hand_features.poses:
+                intents.extend(
+                    self._index_drag_intent_if_ready(
+                        hand_features=hand_features,
+                        timestamp=timestamp,
+                        reason="index pinch drag motion",
+                    )
+                )
+            if "middle_pinch" in hand_features.poses:
+                intents.extend(
+                    self._middle_scroll_intent_if_ready(
+                        hand_id=hand_features.hand_id,
+                        timestamp=timestamp,
+                        scroll_delta=scroll_delta_by_hand.get(hand_features.hand_id, 0),
+                    )
+                )
 
         for hand_features in features:
             if self.combo_buffer.match(
@@ -252,10 +267,7 @@ class ControlGrammar:
 
     def _update_conflict_blocks(self, features: list[ControlPoseFeatures]) -> None:
         for hand_features in features:
-            pinch_conflict = (
-                hand_features.ambiguity is not None
-                and bool(hand_features.suppressed_poses & PINCH_POSES)
-            )
+            pinch_conflict = self._ambiguity_blocks_pending_tap(hand_features)
             closed_hand_conflict = (
                 "fist" in hand_features.poses
                 or hand_features.ambiguity == "forming_fist_pinch_conflict"
@@ -279,6 +291,18 @@ class ControlGrammar:
                 f"{hand_id}: canceled pending pinch tap(s) "
                 f"{','.join(sorted(blocked))} due to {reason}"
             )
+            for pose in blocked:
+                self._pinch_starts.pop((hand_id, pose), None)
+
+    @staticmethod
+    def _ambiguity_blocks_pending_tap(hand_features: ControlPoseFeatures) -> bool:
+        if hand_features.ambiguity is None:
+            return False
+        if not hand_features.suppressed_poses & PINCH_POSES:
+            return False
+        if hand_features.ambiguity != "index_middle_pinch_conflict":
+            return True
+        return _has_closed_hand_conflict(hand_features)
 
     def armed_summary(self, *, now: float) -> str:
         """Return a compact runtime summary of currently armed control states."""
@@ -335,6 +359,7 @@ class ControlGrammar:
         duration: float,
     ) -> list[ControlIntent]:
         if pose == "index_pinch":
+            self._pinch_starts.pop((hand_id, pose), None)
             if self._button_is_held(hand_id, pose):
                 return self._button_release_intent(
                     hand_id=hand_id,
@@ -352,6 +377,7 @@ class ControlGrammar:
                 reason="index pinch tap after tracking dropout",
             )
         if pose == "middle_pinch":
+            self._pinch_starts.pop((hand_id, pose), None)
             return self._click_intent_if_tap(
                 current_features=None,
                 hand_id=hand_id,
@@ -416,6 +442,76 @@ class ControlGrammar:
 
     def _button_is_held(self, hand_id: str, pose: str) -> bool:
         return (hand_id, pose) in self._held_buttons
+
+    def _remember_pinch_start(
+        self,
+        event: PoseEvent,
+        hand_features: ControlPoseFeatures | None,
+    ) -> None:
+        if hand_features is None:
+            return
+        self._pinch_starts[(event.hand_id, event.pose)] = _PinchStart(
+            palm_x=hand_features.palm_x,
+            palm_y=hand_features.palm_y,
+            timestamp=event.timestamp,
+        )
+
+    def _index_drag_intent_if_ready(
+        self,
+        *,
+        hand_features: ControlPoseFeatures,
+        timestamp: float,
+        reason: str,
+    ) -> list[ControlIntent]:
+        hand_id = hand_features.hand_id
+        pose = "index_pinch"
+        if self._button_is_held(hand_id, pose):
+            return []
+        pending_key = (hand_id, pose)
+        start = self._pinch_starts.get(pending_key)
+        if start is None:
+            return []
+        dx = hand_features.palm_x - start.palm_x
+        dy = hand_features.palm_y - start.palm_y
+        duration = timestamp - start.timestamp
+        moved = (dx * dx + dy * dy) ** 0.5 >= self.config.index_drag_motion_threshold
+        held = duration >= self.config.index_drag_hold_seconds
+        if not moved and not held:
+            return []
+        self._pending_taps[pending_key] = False
+        return self._button_hold_intent_if_needed(
+            hand_id=hand_id,
+            pose=pose,
+            button="left",
+            reason=f"{reason} duration={duration:.3f} dx={dx:.3f} dy={dy:.3f}",
+        )
+
+    def _middle_scroll_intent_if_ready(
+        self,
+        *,
+        hand_id: str,
+        timestamp: float,
+        scroll_delta: int,
+    ) -> list[ControlIntent]:
+        if scroll_delta == 0:
+            return []
+        self._pending_taps[(hand_id, "middle_pinch")] = False
+        return self._intent_if_ready(
+            key=f"{hand_id}:scroll",
+            timestamp=timestamp,
+            cooldown=self.config.scroll_cooldown_seconds,
+            intent=ControlIntent(
+                name="scroll",
+                request=ActionRequest(
+                    action_type=POINTER_ACTION,
+                    command="scroll",
+                    parameters={"amount_y": scroll_delta},
+                    source="control",
+                ),
+                hand_id=hand_id,
+                reason="middle pinch drag with vertical motion",
+            ),
+        )
 
     def _arm_fist(
         self,
@@ -623,6 +719,12 @@ class ControlGrammar:
 
     @staticmethod
     def _is_clean_pinch_release(features: ControlPoseFeatures, *, pose: str) -> bool:
+        if features.ambiguity == "index_middle_pinch_conflict":
+            return (
+                pose in features.suppressed_poses
+                and features.pose_scores.get(pose, 0.0) > 0.0
+                and not _has_closed_hand_conflict(features)
+            )
         if features.ambiguity is not None:
             return False
         blocked = {
@@ -666,3 +768,12 @@ class ControlGrammar:
             for hand_id, arm in self._fist_arms.items()
             if arm.expires_at >= timestamp
         }
+
+
+def _has_closed_hand_conflict(features: ControlPoseFeatures) -> bool:
+    if "fist" in features.poses or features.ambiguity == "forming_fist_pinch_conflict":
+        return True
+    fist_evidence = features.pose_evidence.get("fist")
+    if not isinstance(fist_evidence, dict):
+        return False
+    return bool(fist_evidence.get("forming_fist"))

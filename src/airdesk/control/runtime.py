@@ -300,7 +300,13 @@ class ControlRuntime:
         current_cursor: CursorPosition,
     ) -> CursorPosition | None:
         hand_features = next(
-            (item for item in features if "open_palm" in item.poses or not item.poses),
+            (
+                item
+                for item in features
+                if "open_palm" in item.poses
+                or "index_pinch" in item.poses
+                or not item.poses
+            ),
             None,
         )
         if hand_features is None:
