@@ -62,6 +62,21 @@ def test_control_pose_suppresses_ambiguous_sideways_palm_pinch(
     assert features.ambiguity == "sideways_palm_pinch_conflict"
 
 
+def test_control_pose_middle_pinch_default_threshold_matches_index_pinch(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    borderline_middle = _borderline_middle_pinch_hand(make_hand("open_palm"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(borderline_middle))[0]
+
+    assert recognizer.middle_pinch_threshold == recognizer.index_pinch_threshold
+    assert features.middle_pinch_distance > recognizer.middle_pinch_threshold
+    assert "middle_pinch" not in features.poses
+    assert features.ambiguity is None
+
+
 def test_control_pose_requires_strong_finger_fold_for_fist(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
@@ -333,7 +348,7 @@ def test_window_move_arm_expires_and_clears_on_fist_release(
     assert cleared == []
 
 
-def test_fist_move_window_uses_horizontal_motion_from_anchor(
+def test_fist_move_window_repeats_while_held_after_cooldown(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
@@ -341,12 +356,16 @@ def test_fist_move_window_uses_horizontal_motion_from_anchor(
     grammar = ControlGrammar(
         ControlGrammarConfig(
             command_cooldown_seconds=0.0,
+            fist_repeat_cooldown_seconds=0.5,
             move_window_motion_threshold=0.12,
         )
     )
     center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
     side_features = recognizer.features_for_frame(
         make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
+    )
+    neutral_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), x=0.52))
     )
 
     grammar.update(
@@ -359,16 +378,34 @@ def test_fist_move_window_uses_horizontal_motion_from_anchor(
         events=[PoseEvent("hand-0", "fist", "held", 1.2, duration=0.2)],
         timestamp=1.2,
     )
-    after_consumed = grammar.update(
+    repeat_blocked = grammar.update(
         features=side_features,
         events=[PoseEvent("hand-0", "fist", "held", 1.3, duration=0.3)],
         timestamp=1.3,
+    )
+    repeated = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.8, duration=0.8)],
+        timestamp=1.8,
+    )
+    recentered = grammar.update(
+        features=neutral_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.9, duration=0.9)],
+        timestamp=1.9,
+    )
+    after_release = grammar.update(
+        features=side_features,
+        events=[PoseEvent("hand-0", "fist", "released", 2.0, duration=1.0)],
+        timestamp=2.0,
     )
 
     assert move_window[0].name == "move_window_r-1"
     assert move_window[0].request.command == "movetoworkspace"
     assert move_window[0].request.parameters["args"] == ["r-1"]
-    assert after_consumed == []
+    assert repeat_blocked == []
+    assert repeated[0].name == "move_window_r-1"
+    assert recentered == []
+    assert after_release == []
 
 
 def test_fist_motion_ambiguity_does_not_fire_command(
@@ -404,7 +441,7 @@ def test_fist_motion_ambiguity_does_not_fire_command(
     assert any("fist motion ambiguous" in item for item in grammar.last_diagnostics)
 
 
-def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
+def test_fist_workspace_motion_repeats_while_held_and_release_clears_anchor(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
 ) -> None:
@@ -413,6 +450,7 @@ def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
         ControlGrammarConfig(
             command_cooldown_seconds=0.0,
             fist_command_arm_seconds=0.5,
+            fist_repeat_cooldown_seconds=0.4,
         )
     )
     center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
@@ -430,10 +468,15 @@ def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
         events=[PoseEvent("hand-0", "fist", "held", 1.2, duration=0.2)],
         timestamp=1.2,
     )
+    still_held = grammar.update(
+        features=top_features,
+        events=[PoseEvent("hand-0", "fist", "held", 1.7, duration=0.7)],
+        timestamp=1.7,
+    )
     grammar.update(
         features=center_features,
-        events=[PoseEvent("hand-0", "fist", "released", 1.3, duration=0.3)],
-        timestamp=1.3,
+        events=[PoseEvent("hand-0", "fist", "released", 1.8, duration=0.8)],
+        timestamp=1.8,
     )
     grammar.update(
         features=center_features,
@@ -448,6 +491,8 @@ def test_fist_workspace_motion_fires_once_and_release_clears_anchor(
 
     assert workspace[0].request.command == "workspace"
     assert workspace[0].request.parameters["args"] == ["r-1"]
+    assert still_held[0].request.command == "workspace"
+    assert still_held[0].request.parameters["args"] == ["r-1"]
     assert reanchored[0].request.command == "workspace"
 
 
@@ -762,6 +807,24 @@ def _ambiguous_double_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
 def _weak_middle_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
     landmarks = list(hand.landmarks.landmarks)
     landmarks[4] = Landmark(0.42, 0.30, 0.0)
+    landmarks[12] = Landmark(0.47, 0.30, 0.0)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _borderline_middle_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    landmarks[4] = Landmark(0.408, 0.30, 0.0)
     landmarks[12] = Landmark(0.47, 0.30, 0.0)
     return NormalizedHand(
         hand_id=hand.hand_id,

@@ -34,6 +34,7 @@ class ControlGrammarConfig:
     tap_max_seconds: float = 0.45
     scroll_cooldown_seconds: float = 0.12
     fist_command_arm_seconds: float = 1.25
+    fist_repeat_cooldown_seconds: float = 0.75
     workspace_motion_threshold: float = 0.10
     move_window_motion_threshold: float = 0.12
     fist_axis_margin: float = 0.04
@@ -156,6 +157,10 @@ class ControlGrammar:
                         hand_features=hand_features,
                         timestamp=timestamp,
                         reason="fist held without anchor",
+                    )
+                    self._refresh_fist_arm(
+                        hand_id=event.hand_id,
+                        timestamp=timestamp,
                     )
                     intents.extend(
                         self._fist_motion_intent_if_ready(
@@ -448,6 +453,17 @@ class ControlGrammar:
             reason=reason,
         )
 
+    def _refresh_fist_arm(self, *, hand_id: str, timestamp: float) -> None:
+        arm = self._fist_arms.get(hand_id)
+        if arm is None:
+            return
+        self._fist_arms[hand_id] = _FistArm(
+            anchor_x=arm.anchor_x,
+            anchor_y=arm.anchor_y,
+            anchor_zone=arm.anchor_zone,
+            expires_at=timestamp + self.config.fist_command_arm_seconds,
+        )
+
     def _fist_motion_intent_if_ready(
         self, *, hand_features: ControlPoseFeatures, timestamp: float
     ) -> list[ControlIntent]:
@@ -491,25 +507,49 @@ class ControlGrammar:
         if vertical_ready:
             direction = "-1" if dy < 0 else "+1"
             workspace_arg = self._workspace_arg(direction)
-            self._fist_arms.pop(hand_features.hand_id, None)
+            key = f"{hand_features.hand_id}:workspace:{workspace_arg}"
+            cooldown_remaining = self._cooldown_remaining(
+                key=key,
+                timestamp=timestamp,
+                cooldown=self.config.fist_repeat_cooldown_seconds,
+            )
+            if cooldown_remaining > 0:
+                self.last_diagnostics.append(
+                    f"{hand_features.hand_id}: holding workspace {workspace_arg} "
+                    f"repeat cooldown {cooldown_remaining:.2f}s dy={dy:.3f}"
+                )
+                return []
             self.last_diagnostics.append(
                 f"{hand_features.hand_id}: firing workspace {workspace_arg} "
                 f"from fist dy={dy:.3f}"
             )
             return self._hyprland_intent_if_ready(
-                key=f"{hand_features.hand_id}:workspace:{workspace_arg}",
+                key=key,
                 timestamp=timestamp,
                 name=f"workspace_{workspace_arg}",
                 command="workspace",
                 args=[workspace_arg],
                 hand_id=hand_features.hand_id,
                 reason=f"fist vertical motion from anchor dy={dy:.3f}",
+                cooldown=self.config.fist_repeat_cooldown_seconds,
             )
 
         if horizontal_ready:
             direction = "+1" if dx < 0 or hand_features.palm_zone == "left" else "-1"
             workspace_arg = self._workspace_arg(direction)
-            self._fist_arms.pop(hand_features.hand_id, None)
+            key = f"{hand_features.hand_id}:move_window:{workspace_arg}"
+            cooldown_remaining = self._cooldown_remaining(
+                key=key,
+                timestamp=timestamp,
+                cooldown=self.config.fist_repeat_cooldown_seconds,
+            )
+            if cooldown_remaining > 0:
+                self.last_diagnostics.append(
+                    f"{hand_features.hand_id}: holding movetoworkspace {workspace_arg} "
+                    f"repeat cooldown {cooldown_remaining:.2f}s dx={dx:.3f} "
+                    f"zone={hand_features.palm_zone}"
+                )
+                return []
             self.last_diagnostics.append(
                 f"{hand_features.hand_id}: firing movetoworkspace {workspace_arg} "
                 f"from fist dx={dx:.3f} zone={hand_features.palm_zone}"
@@ -525,6 +565,7 @@ class ControlGrammar:
                     "fist horizontal motion from anchor "
                     f"dx={dx:.3f} zone={hand_features.palm_zone}"
                 ),
+                cooldown=self.config.fist_repeat_cooldown_seconds,
             )
 
         self.last_diagnostics.append(
@@ -595,6 +636,15 @@ class ControlGrammar:
     def _workspace_arg(self, direction: str) -> str:
         prefix = self.config.workspace_selector_prefix
         return f"{prefix}{direction}" if prefix else direction
+
+    def _cooldown_remaining(self, *, key: str, timestamp: float, cooldown: float) -> float:
+        last = self._last_fired.get(key)
+        if last is None:
+            return 0.0
+        elapsed = timestamp - last
+        if elapsed >= cooldown:
+            return 0.0
+        return cooldown - elapsed
 
     def _intent_if_ready(
         self,

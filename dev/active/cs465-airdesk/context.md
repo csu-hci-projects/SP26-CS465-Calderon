@@ -275,8 +275,12 @@ Current next step:
   `grammar_diagnostics`.
 - Fist workspace/window commands now arm from a fist anchor. Vertical motion
   from that anchor switches workspaces; horizontal motion or side-zone crossing
-  moves the active/window-under-cursor to a neighboring workspace; release,
-  expiry, or one fired command consumes the arm.
+  moves the active/window-under-cursor to a neighboring workspace. The anchor
+  remains active while stable fist tracking continues, so holding past the
+  motion threshold repeats steps after `--fist-repeat-cooldown-seconds`; moving
+  back near the anchor stops repeats, and release/expiry clears the arm.
+- Middle pinch now defaults to the same `0.06` threshold as index pinch, and
+  both thresholds are exposed on `airdesk control run`.
 - Pinch tap grammar now cancels pending taps when a forming-fist or ambiguous
   pinch frame appears, and it rejects releases onto another pinch pose. This
   blocks the live failure where a pinch briefly entered while Caden was making a
@@ -294,7 +298,8 @@ Current next step:
 - Focused tests cover relaxed curl, partial curl, real fist, pinch-like fist
   artifacts, sideways closed fist, forming-fist pinch conflict, noisy/sideways
   hand conflicts, ambiguous pinch-release suppression, anchored
-  workspace/window moves, consumed arms, and diagonal ambiguity suppression.
+  workspace/window moves, held-repeat behavior, and diagonal ambiguity
+  suppression.
 
 MVP grammar candidate:
 
@@ -303,11 +308,12 @@ MVP grammar candidate:
 - Index pinch hold: hold left button for select/drag through a future input target.
 - Thumb/middle pinch tap: right click through a future input target.
 - Thumb/middle pinch hold plus vertical movement: scroll through a future input target.
-- Fist held: arm one command from the fist anchor and show active window title.
+- Fist held: arm a command from the fist anchor and show active window title.
 - Fist moved left/right from anchor or across side zone:
-  `hyprctl dispatch movetoworkspace r-1` / `r+1` by default.
+  `hyprctl dispatch movetoworkspace r-1` / `r+1` by default; holding repeats
+  after the repeat cooldown.
 - Fist moved up/down from fist start: `hyprctl dispatch workspace r-1` / `r+1`
-  by default.
+  by default; holding repeats after the repeat cooldown.
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via
   `hyprctl dispatch killactive`, with visible close-armed feedback.
@@ -755,18 +761,22 @@ The first deterministic control slice is now in place:
 - Pinch behavior is now split so quick index/middle pinch releases become
   left/right clicks, index-pinch hold presses and holds left button for
   select/drag, and middle-pinch hold plus vertical palm motion emits scroll
-  ticks and suppresses the tap.
+  ticks and suppresses the tap. Middle pinch now defaults to the same strict
+  `0.06` distance as index pinch, with `--index-pinch-threshold` and
+  `--middle-pinch-threshold` exposed separately for live tuning.
 - Control pose facts are prioritized to reduce overlap from noisy sideways/fist
   tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
   artifacts, and clean pinch suppresses plain open-palm.
 - Guarded Hyprland move/close actions can query the active window title so the
   status/log surface can show a target window before real testing.
 - Live Hyprland testing showed move-window was too touchy when any side-zone
-  fist could fire repeatedly. The current control grammar now uses fist as the
-  command clutch: center fist arms one short command window, left/right fist
-  movement fires one `movetoworkspace`, and up/down fist movement fires one
-  `workspace` switch without moving a window. Firing, fist release, or expiry
-  returns to neutral.
+  fist could fire repeatedly. The control grammar now uses fist as the command
+  clutch: a stable fist creates an anchor, left/right fist movement fires
+  `movetoworkspace`, and up/down fist movement fires `workspace` without moving
+  a window. The anchor now stays alive while fist tracking remains stable, so
+  holding past the movement threshold repeats workspace/window steps after
+  `--fist-repeat-cooldown-seconds`; moving back near the anchor stops repeats,
+  and fist release or tracking expiry returns to neutral.
 - Live testing also showed sideways-hand shapes and open-palm workspace arming
   are too unreliable for workspace switching during cursor use, so open palm no
   longer triggers workspace changes.
@@ -788,21 +798,24 @@ The first deterministic control slice is now in place:
 
 Latest live-test stop point:
 
-- Latest logs inspected this pass:
+- Latest logs inspected before the repeat-hold grammar update:
   `data/logs/control-live-dry-run.jsonl` and
   `data/logs/control-live-execute.jsonl`.
-- Dry-run: 326 seen frames, 224 frames with hand features, no stable fist, no
-  workspace or move-window intents, 35 `index_middle_pinch_conflict` frames, and
-  four pointer click intents.
-- Execute: 2,549 seen frames, 2,133 frames with hand features, no stable fist,
-  no workspace or move-window intents, 1,120 `index_middle_pinch_conflict`
-  frames, and 25 pointer click/hold intents. Several clicks were emitted when
-  the current frame was ambiguous or when the hand disappeared after a pinch.
-- Interpretation: the latest workspace/move-window failures are currently
-  primitive/grammar-input failures, not Hyprland dispatch failures: the grammar
-  had no stable `fist` events to arm from. The next live dry-run should first
-  verify that a sideways/near-face fist now appears as stable `fist` with clear
-  evidence; only then tune anchor movement or Hyprland selectors.
+- The newest `control-live-dry-run.jsonl` session had 3,960 `control_seen`
+  frames, 1,219 frames with stable `fist`, 57 `fist:entered` events, 76
+  `fist:held` events, 18 workspace intents (`workspace_r-1` / `workspace_r+1`)
+  and three move-window intents (`move_window_r-1` / `move_window_r+1`). This
+  means the primitive fist fix is now taking effect live and Hyprland grammar
+  input exists.
+- The remaining live feel problem is interaction design, not a total primitive
+  failure: the previous grammar consumed the fist arm after each workspace or
+  move-window dispatch, forcing Caden to release/re-form fist for every step.
+  The next live pass should validate the new held-repeat behavior and tune
+  `--fist-repeat-cooldown-seconds` if the repeat is too fast or too slow.
+- Middle-pinch evidence is still noisy in the latest logs, so its default
+  threshold was tightened to match index pinch. If middle-pinch still enters
+  during normal fist formation, inspect `pose_evidence.middle_pinch.distance`
+  and lower `--middle-pinch-threshold` before weakening grammar suppression.
 
 ### Sprint 3: Pilot-Safe Live Command Mode
 

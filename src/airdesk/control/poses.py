@@ -90,7 +90,7 @@ class ControlPoseRecognizer:
     fist_fold_threshold: float = 0.09
     open_spread_threshold: float = 0.16
     index_pinch_threshold: float = 0.06
-    middle_pinch_threshold: float = 0.065
+    middle_pinch_threshold: float = 0.06
     min_fist_folded_fingers: int = 4
     min_fist_closed_fingers: int = 3
     fist_closed_finger_threshold: float = 0.58

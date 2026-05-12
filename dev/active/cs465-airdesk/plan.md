@@ -192,8 +192,8 @@ Current MVP grammar candidate:
 | Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
 | Thumb/middle pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
 | Fist held in center | Arm one fist command | Show target window title before any move-window action. |
-| Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace r-1` / `movetoworkspace r+1` by default; cooldown to avoid repeated moves. |
-| Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace r-1` / `workspace r+1` by default; consume the arm after one switch. |
+| Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace r-1` / `movetoworkspace r+1` by default; holding repeats after a cooldown, returning near the anchor stops repeats. |
+| Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace r-1` / `workspace r+1` by default; holding repeats after a cooldown, returning near the anchor stops repeats. |
 | Open palm -> sideways open palm | Open launcher | Dispatch `global caelestia:launcher` on Caden's setup. |
 | Open palm -> fist -> open palm | Close active window | Dispatch `killactive`; show "close armed" and focused window before firing. |
 
@@ -209,6 +209,14 @@ clicks when a pinch briefly entered while Caden was making a fist and then
 released through an ambiguous frame. Hyprland workspace selectors default to
 current-monitor relative `r+1` / `r-1`; keep `+1` / `-1` available as a CLI
 override for live setup comparison.
+
+Held-repeat update: live testing after the fist primitive fix showed workspace
+and move-window dispatches working, but one-shot arm consumption made multi-step
+workspace travel clumsy. The fist anchor now remains active while the fist stays
+stable, repeated workspace/window steps are rate-limited by
+`--fist-repeat-cooldown-seconds`, and moving back near the original anchor or
+releasing fist returns to neutral. Middle pinch now defaults to the same strict
+`0.06` threshold as index pinch.
 
 Cleanup rule: do not delete or rewrite the old recognizer stack during the first
 logic-control implementation. Park it as preview/replay/evaluation future work,

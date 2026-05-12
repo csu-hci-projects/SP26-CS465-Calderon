@@ -460,6 +460,18 @@ def control_run(
         float,
         typer.Option(help="Finger-tip fold distance required before a hand counts as fist."),
     ] = 0.09,
+    index_pinch_threshold: Annotated[
+        float,
+        typer.Option(help="Thumb/index distance required before a hand counts as index pinch."),
+    ] = 0.06,
+    middle_pinch_threshold: Annotated[
+        float,
+        typer.Option(help="Thumb/middle distance required before a hand counts as middle pinch."),
+    ] = 0.06,
+    fist_repeat_cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds between repeated fist workspace/window steps."),
+    ] = 0.75,
     mirror_x: Annotated[
         bool,
         typer.Option(help="Mirror hand X movement for webcam control."),
@@ -516,12 +528,15 @@ def control_run(
             top_zone_max=top_zone_max,
             bottom_zone_min=bottom_zone_min,
             fist_fold_threshold=fist_fold_threshold,
+            index_pinch_threshold=index_pinch_threshold,
+            middle_pinch_threshold=middle_pinch_threshold,
         ),
         grammar=ControlGrammar(
             ControlGrammarConfig(
                 workspace_motion_threshold=workspace_motion_threshold,
                 move_window_motion_threshold=move_window_motion_threshold,
                 workspace_selector_prefix=workspace_selector_prefix,
+                fist_repeat_cooldown_seconds=fist_repeat_cooldown_seconds,
             )
         ),
         event_writer=event_writer,

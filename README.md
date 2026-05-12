@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -190,15 +190,23 @@ control runtime is suppressing an ambiguous frame. Cursor gain defaults to
 `12.0`; `--fist-fold-threshold 0.09` remains available as one closed-hand
 signal, but the command fist gate is no longer mostly a vertical fold threshold.
 
-Fist is the explicit command clutch. A stable fist arms a short command window
-from its starting anchor; moving that fist left/right by
+Fist is the explicit command clutch. A stable fist arms a command window from
+its starting anchor and keeps that anchor while the fist remains stable; moving
+that fist left/right by
 `--move-window-motion-threshold` or across a side zone sends the
 active/window-under-cursor to the neighbor workspace, while moving it up/down by
 `--workspace-motion-threshold` switches workspaces without carrying a window.
-Releasing fist, firing one action, or waiting out the short arming window
-returns to neutral so stale command state does not trigger after hand reset.
-Ambiguous diagonal motion logs a suppression reason instead of choosing a
-workspace/window command arbitrarily.
+Holding the fist past the threshold repeats the same workspace/window step at
+`--fist-repeat-cooldown-seconds`, so a window can be carried multiple
+workspaces without releasing. Moving back near the original anchor stops the
+repeat; releasing fist or losing stable fist tracking clears the arm. Ambiguous
+diagonal motion logs a suppression reason instead of choosing a workspace/window
+command arbitrarily.
+
+Index and middle pinch thresholds default to the same strict distance
+(`0.06`). They are exposed separately as `--index-pinch-threshold` and
+`--middle-pinch-threshold` for live tuning, but the middle-pinch default is no
+longer looser than index pinch.
 
 Workspace commands now default to Hyprland's current-monitor relative workspace
 selector prefix: `workspace r-1` / `r+1` and `movetoworkspace r-1` / `r+1`.

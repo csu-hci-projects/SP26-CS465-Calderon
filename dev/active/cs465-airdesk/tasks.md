@@ -59,10 +59,17 @@ Immediate next-session checklist:
       scroll; center-fist armed workspace up/down; center-fist armed move-window
       left/right; open palm -> sideways palm launcher; open palm -> fist -> open
       palm close-window combo.
-- [x] Rework fist workspace/move-window grammar around a consumed fist anchor:
+- [x] Rework fist workspace/move-window grammar around an anchored fist clutch:
       vertical motion from the anchor switches workspaces, horizontal motion or
       a side-zone crossing from the anchor moves the window, diagonal ambiguity
       suppresses both, and JSONL diagnostics explain why it did or did not fire.
+- [x] Rework fist workspace/move-window grammar again after live testing: the
+      fist anchor now remains active while stable fist tracking continues, so
+      holding past the movement threshold repeats workspace/window steps after a
+      cooldown; moving back near the anchor stops repeats, and release clears
+      the arm.
+- [x] Tighten middle-pinch detection to match the index-pinch default threshold
+      and expose both pinch thresholds on `airdesk control run`.
 - [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
       and pointer button/scroll injection. Execution must stay guarded.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
@@ -95,15 +102,18 @@ Immediate next-session checklist:
 Logic-control hardening note: `airdesk control run` exists and is dry-run by
 default. The grammar covers open-hand relative cursor movement, index-pinch
 left click/drag, middle-pinch right click/scroll, launcher combo, deliberate
-close-window combo, and anchor-based fist workspace/window commands. Fist is no
-longer a mostly single-axis fold check: the control pose layer uses
+close-window combo, and anchor-based fist workspace/window commands. Fist
+workspace/window commands now repeat while the fist is held past the threshold
+instead of forcing a release/re-form after each step. Fist is no longer a
+mostly single-axis fold check: the control pose layer uses
 rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
 suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
-respects ambiguity, and workspace selectors default to current-monitor relative
-`r+1` / `r-1` with post-dispatch verification during guarded execution. The
-remaining MVP polish is richer live dashboard rendering and fresh live dry-run
-validation of workspace switching and `movetoworkspace` after this primitive
-hardening.
+respects ambiguity, middle pinch defaults to the same strict threshold as index
+pinch, and workspace selectors default to current-monitor relative `r+1` /
+`r-1` with post-dispatch verification during guarded execution. The remaining
+MVP polish is richer live dashboard rendering and fresh live dry-run validation
+of repeated workspace switching and repeated `movetoworkspace` after the held
+fist grammar update.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,

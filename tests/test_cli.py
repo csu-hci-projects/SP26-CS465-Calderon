@@ -227,6 +227,9 @@ def test_control_run_help_exposes_control_controls() -> None:
     assert "--top-zone-max" in result.stdout
     assert "--bottom-zone-min" in result.stdout
     assert "--fist-fold-threshold" in result.stdout
+    assert "--index-pinch-threshold" in result.stdout
+    assert "--middle-pinch-threshold" in result.stdout
+    assert "--fist-repeat-cooldown-seconds" in result.stdout
     assert "--events-out" in result.stdout
     assert "--pause-on-start" in result.stdout
 
