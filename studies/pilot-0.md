@@ -1,92 +1,91 @@
-# AirDesk Pilot 0 Protocol
+# AirDesk Pilot Summary
+
+This file summarizes the final small pilot used in the CS465 paper. The more
+complete paper-facing evidence log is [paper/findings/evidence-log.md](../paper/findings/evidence-log.md).
 
 ## Purpose
 
-Pilot 0 is a Caden-only dry-run-first check of Sprint 3 command mode before any broader CS465 study work.
+The pilot was a formative check of whether the current AirDesk prototype could
+complete a realistic desktop workflow with only mid-air hand gestures.
 
-The goal is not to prove that gestures replace keyboard and mouse. The goal is to decide whether AirDesk's clutch-based mid-air command layer is observable, safe, and reliable enough for a narrow desktop-control evaluation.
+The goal was not to prove that gestures replace keyboard and mouse. The goal was
+to test the situational-impairment framing: gestures may be useful when ordinary
+input is temporarily inconvenient or costly.
 
-## Research Question
+## Participants
 
-Can a small open-palm-clutched gesture vocabulary support common Hyprland command actions with acceptable false activation, latency, and perceived control during a short local pilot?
+- Author/developer.
+- One roommate participant.
+
+## Apparatus
+
+- Linux laptop.
+- Built-in laptop webcam at approximately 640x480 and 30 FPS.
+- Good indoor lighting.
+- Hyprland desktop.
+- AirDesk deterministic MediaPipe landmark-control runtime.
+
+## Task
+
+Participants started on workspace 1. A Google Docs tab was open on workspace 8.
+The task was:
+
+1. Navigate to workspace 8.
+2. Click/open the correct document.
+3. Scroll to page 4.
+4. Select/highlight/copy the keyword/code string.
+5. Navigate back to workspace 4.
+6. Click into another Google Docs tab.
+7. Paste the code into the target "paste here" area.
+
+This task was chosen because it requires workspace navigation, pointer movement,
+clicking, scrolling, text selection, copy/paste behavior, and returning to a
+previous context.
 
 ## Conditions
 
-- Baseline keyboard/mouse.
-- AirDesk live dry-run.
-- AirDesk guarded execute mode only if dry-run logs show no concerning false activations.
+Normal condition:
 
-## Task Set
+- Keyboard/mouse available immediately.
+- AirDesk hand control using the deterministic control runtime.
 
-- Switch workspace left.
-- Switch workspace right.
-- Move focus left.
-- Move focus right.
-- Cancel or recover from listening mode.
-- Pause/resume the runtime using the preview `p` key.
+Dirty-hands condition:
 
-Do not include destructive actions in Pilot 0.
+- Participants started with hands covered in olive oil, flour, and honey.
+- Keyboard/mouse runs required washing hands first.
+- AirDesk runs skipped washing and used gestures directly.
 
-## AirDesk Setup
+## Results
 
-Use dry-run first:
+Normal condition:
 
-```bash
-uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --profile configs/profiles/window-manager.toml --dry-run --show --events-out data/studies/pilot-0/live-dry-run.jsonl
-```
+| Participant | Keyboard/mouse runs | AirDesk runs | Mean difference |
+| --- | --- | --- | --- |
+| Author | 22s, 20s | 41s, 39s | AirDesk 19.0s slower |
+| Roommate | 24s, 22s | 44s, 42s | AirDesk 20.0s slower |
+| Overall | 22.0s mean | 41.5s mean | AirDesk 19.5s slower |
 
-If dry-run behavior is acceptable, guarded execute mode can be tried locally:
+Dirty-hands condition:
 
-```bash
-uv run airdesk run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --profile configs/profiles/window-manager.toml --execute --allow-profile-execute --show --events-out data/studies/pilot-0/live-execute.jsonl
-```
+| Participant | Keyboard/mouse runs | AirDesk runs | Mean difference |
+| --- | --- | --- | --- |
+| Author | 46s, 43s | 38s, 40s | AirDesk 5.5s faster |
+| Roommate | 44s, 42s | 40s, 42s | AirDesk 2.0s faster |
+| Overall | 43.8s mean | 40.0s mean | AirDesk 3.8s faster |
 
-Use `--pause-on-start` when setting up the camera or when testing pause behavior.
+## Qualitative Notes
 
-## Procedure
+- Cursor movement and pinch-to-click felt best.
+- Scrolling was harder and less familiar.
+- Pinch-to-click sometimes missed on the first attempt and needed a second pinch.
+- Good lighting and a front-facing hand position helped tracking.
+- Camera angle and hand distance mattered. Farther hands compressed landmarks
+  together and made threshold-based pinches easier to trigger unintentionally.
 
-1. Run a 2-minute normal desk motion dry-run with hands occasionally entering frame.
-2. Record false activations and any unexpected listening/action events.
-3. Perform five repetitions of each task in dry-run.
-4. Rest for at least one minute.
-5. Repeat the task set with keyboard/mouse baseline timing.
-6. Only if dry-run is stable, perform guarded execute mode for workspace and focus commands.
+## Interpretation
 
-## Measures
-
-- Task success or failure.
-- False activations per minute.
-- Missed intended gestures.
-- Repeated-fire events.
-- Gesture-to-action latency from the event log.
-- Tracking loss or unstable landmark notes.
-- Pause/resume success.
-- Fatigue, discomfort, frustration, and perceived control notes.
-
-## Abort Rules
-
-- Stop immediately if real execution controls the wrong workspace or focus target twice.
-- Stop if pause does not suppress actions.
-- Stop if false activations occur during normal desk motion.
-- Stop if wrist, shoulder, or arm fatigue becomes noticeable.
-
-## Data Files
-
-- Runtime event logs in ignored `data/studies/pilot-0/`.
-- Optional replay recordings in ignored `data/recordings/`.
-- Notes in this file or a copied local notes file.
-
-Raw video is not collected by default.
-
-## Results Notes
-
-Pilot not yet run in this repository session. Caden should fill in:
-
-- camera settings:
-- lighting:
-- hand distance:
-- dry-run false activations:
-- dry-run missed gestures:
-- execute-mode result, if attempted:
-- fatigue/discomfort:
-- design changes before Sprint 4:
+Keyboard/mouse was clearly faster in normal desktop conditions. In the
+dirty-hands condition, AirDesk became competitive and slightly faster because it
+avoided the cleanup interruption. This supports the paper's main framing:
+mid-air gestures are useful as an optional input layer when ordinary input has a
+real access cost.

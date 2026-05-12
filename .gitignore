@@ -24,3 +24,20 @@ data/*
 
 # Study exports may contain participant data.
 studies/data/
+
+# Local submission/package artifacts
+*.zip
+CS465-3.pdf
+link.txt
+
+# Local planning/handoff notes
+dev/
+paper/README.md
+paper/assets/figures/
+paper/drafts/
+paper/final-package/
+paper/findings/
+paper/latex-source/README.md
+paper/PDFs-LiteratureSurvey/README.md
+paper/research/
+paper/videos/

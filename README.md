@@ -1,36 +1,57 @@
 # AirDesk
 
-## Submission Links
+AirDesk is a CS465 HCI / 3DUI project about using webcam-based mid-air hand gestures as a secondary desktop control layer for Hyprland Linux. The project is not trying to replace the keyboard and mouse. It focuses on moments where ordinary input is temporarily inconvenient, unavailable, dirty, painful, or physically costly.
 
-Final videos: TBD
+The final prototype uses MediaPipe hand landmarks and deterministic landmark math to control a small desktop vocabulary: pointer movement, click, drag/select, scroll, right click, workspace switching, moving windows between workspaces, opening a launcher, and closing a window with a deliberate combo.
 
-Project overview video: TBD
+## Start Here
 
-Latex file in repo, link: [paper/latex-source/main.tex](paper/latex-source/main.tex)
+For grading or review:
 
-Overleaf link: TBD
+1. Read the final paper PDF from the submitted zip, or the paper source at `paper/latex-source/main.tex`.
+2. Read `Final_Report.pdf` in this repository.
+3. Check the literature PDFs in `paper/PDFs-LiteratureSurvey/`.
+4. Watch the project and programming videos linked below.
+5. Run the safe replay smoke test below.
+6. If reviewing on a Linux laptop with webcam support, run the live practice-mode demo.
 
-PDF Literature Survey Link: [paper/PDFs-LiteratureSurvey/](paper/PDFs-LiteratureSurvey/)
+Project links:
 
-Work Allocation: I worked solo, with AI assistance for parts of the code.
+- GitHub: https://github.com/csu-hci-projects/SP26-CS465-Calderon
+- Overleaf: https://www.overleaf.com/read/ttdzxcqmcknp#c89490
+- Project / presentation video: https://youtu.be/k68HIlHOwME
+- Programming / technical walkthrough video: https://youtu.be/k68HIlHOwME
 
-Technical Demo/Videos: TBD
+## What Is Implemented
 
-Research Paper: [paper/latex-source/main.tex](paper/latex-source/main.tex)
+The main live-control path is:
 
-Other notes: AirDesk's current live demo path is deterministic MediaPipe control through `airdesk control run`; learned TCN/IPN/DTW work is retained as research and diagnostic infrastructure, not the live action recognizer.
+```text
+webcam or replay
+  -> MediaPipe/replay hand landmarks
+  -> deterministic landmark features
+  -> stable gesture events
+  -> action rules
+  -> practice logs, Hyprland commands, or Linux pointer events
+```
 
-AirDesk is a webcam-based mid-air desktop control prototype for Hyprland Linux. It uses MediaPipe hand landmarks to turn a small, deliberate hand vocabulary into pointer, click, scroll, launcher, workspace, and window-management actions, with dry-run logging as the default safety mode. The project is designed with situationally impaired interaction in mind: dirty hands, gloves, limited reach, standing away from the desk, temporary pain, presentation contexts, or other moments when touching the keyboard and mouse is inconvenient.
+Implemented controls:
 
-## What to Grade / What Works
+| Gesture | Behavior |
+| --- | --- |
+| Open or relaxed hand | Move the pointer. |
+| Index pinch tap | Left click. |
+| Index pinch hold or drag | Hold left button for selection/drag. |
+| Middle pinch tap | Right click on clean release. |
+| Middle pinch hold plus vertical movement | Scroll while the cursor is locked. |
+| Stable fist, then up/down motion | Switch workspaces. |
+| Stable fist, then left/right motion | Move the active or targeted window between workspaces. |
+| Open palm -> sideways palm | Open the configured launcher. |
+| Open palm -> fist -> open palm | Close the active window. |
 
-- The current live demo path is deterministic MediaPipe control: `airdesk control run`.
-- Live actions are dry-run by default. Commands can be demonstrated safely without moving windows or clicking the real desktop.
-- Optional real execution exists for the tested Hyprland/Linux setup. Pointer movement, click, and scroll should use `--execute --pointer-execute` so `/dev/uinput` sends normal mouse events with hover/click behavior.
-- The implemented control loop includes open-hand cursor movement, index-pinch left click/drag, middle-pinch right click/scroll, fist workspace switching, fist window movement, launcher combo, close-window combo, live preview feedback, and JSONL event logs.
-- Learned TCN/IPN/DTW recognizers are retained as research and diagnostic infrastructure. They are not the live global desktop action recognizer because live preview produced too many false activations for safe OS commands.
+Earlier DTW, TCN, IPN, and motion-recognition code remains in the repository as research infrastructure because it shaped the project direction. It is not the final live-control path. The final demo uses deterministic MediaPipe landmark logic because it was more reliable for live OS control within the course timeline.
 
-## Quick Setup
+## Setup
 
 AirDesk uses Python 3.12 and `uv`.
 
@@ -39,21 +60,34 @@ uv sync --dev
 uv run airdesk --help
 ```
 
-For live webcam control, install the live extras:
+For live webcam tracking:
 
 ```bash
 uv sync --dev --extra live
 ```
 
-For optional offline ML/research commands, install the ML extras too:
+For optional ML/research commands:
 
 ```bash
 uv sync --dev --extra live --extra ml
 ```
 
-## Safe Dry-Run Demo
+## Safe Replay Smoke Test
 
-This is the recommended grading/demo command. It shows the webcam overlay, logs what AirDesk sees, and routes actions to dry-run targets.
+This command does not require a webcam, Hyprland, or live desktop control. It checks that the CLI and deterministic control runtime can read a recorded frame and write an event log.
+
+```bash
+uv run airdesk control run \
+  --backend replay \
+  --recording tests/fixtures/replay-one-frame.jsonl \
+  --events-out /tmp/airdesk-control-replay.jsonl \
+  --max-frames 1 \
+  --no-show
+```
+
+## Live Practice Demo
+
+This is the recommended live demo command. It opens the webcam preview and records what the system would do. It does not click, scroll, move the pointer, or send Hyprland commands unless execution flags are added.
 
 ```bash
 uv run airdesk control run \
@@ -63,26 +97,18 @@ uv run airdesk control run \
   --height 480 \
   --fps 30 \
   --fourcc MJPG \
-  --events-out data/logs/control-demo-dry-run.jsonl \
+  --events-out /tmp/airdesk-control-demo.jsonl \
   --show
 ```
 
-Useful smoke test without a webcam:
+Preview controls:
 
-```bash
-uv run airdesk control run \
-  --backend replay \
-  --recording tests/fixtures/replay-one-frame.jsonl \
-  --events-out data/logs/control-replay-dry-run.jsonl \
-  --max-frames 1 \
-  --no-show
-```
+- `p`: pause/resume actions while tracking continues.
+- `q` or `esc`: exit the preview.
 
-Press `p` in the preview to pause/resume actions while tracking continues. Press `q` or `esc` to exit the preview.
+## Optional Live Execution
 
-## Optional Live Execute
-
-Real execution is Linux/Hyprland/uinput-specific and should only be used on a machine where `hyprctl` works and `/dev/uinput` is writable by the user.
+Real execution is Linux/Hyprland/uinput-specific. Use it only on a machine where `hyprctl` works and `/dev/uinput` is writable by the user.
 
 ```bash
 uv run airdesk control run \
@@ -94,92 +120,71 @@ uv run airdesk control run \
   --fourcc MJPG \
   --execute \
   --pointer-execute \
-  --events-out data/logs/control-demo-execute.jsonl \
+  --events-out /tmp/airdesk-control-execute.jsonl \
   --show
 ```
 
-`--execute` enables guarded Hyprland dispatches. `--pointer-execute` enables real relative pointer movement, button presses, and scroll through `/dev/uinput`. Without `--pointer-execute`, pointer button/scroll actions remain dry-run and cursor movement falls back to Hyprland cursor dispatch.
+`--execute` enables guarded Hyprland commands. `--pointer-execute` enables real pointer movement, click, drag, and scroll through `/dev/uinput`.
 
-## Gesture / Control Cheat Sheet
+## Pilot Summary
 
-| Input | Current behavior |
-| --- | --- |
-| Open or relaxed tracked hand | Move the pointer. |
-| Index pinch tap | Left click. |
-| Index pinch hold or drag | Hold left button for selection/drag. |
-| Middle pinch tap | Right click on clean release. |
-| Middle pinch hold plus vertical movement | Scroll; cursor locks while scrolling. |
-| Stable fist, then up/down motion | Switch workspace with Hyprland `workspace r-1` / `r+1`. |
-| Stable fist, then left/right motion or side zone | Move active/window-under-cursor with `movetoworkspace r-1` / `r+1`. |
-| Open palm -> sideways open palm | Open the configured launcher. |
-| Open palm -> fist -> open palm | Close the active window with `killactive`. |
+The pilot used a Google Docs workspace task that required workspace navigation, cursor movement, clicking, scrolling, text selection/copying, and pasting. Two people participated: the author and one roommate participant.
 
-The live preview/status line reports what the system is seeing, combo state, armed state, target window, executed action, and suppression reason.
+Normal desktop condition:
+
+- Keyboard/mouse mean: 22.0 seconds.
+- AirDesk hand-control mean: 41.5 seconds.
+- Result: keyboard/mouse was clearly faster under ideal desk conditions.
+
+Dirty-hands condition:
+
+- Participants started with hands covered in olive oil, flour, and honey.
+- Keyboard/mouse runs required washing hands first.
+- AirDesk runs skipped washing and used gestures directly.
+- Keyboard/mouse mean: 43.8 seconds.
+- AirDesk hand-control mean: 40.0 seconds.
+- Result: AirDesk became competitive and slightly faster because it avoided the cleanup interruption.
+
+This is a small formative pilot. It supports the situational-impairment framing, not a broad claim that mid-air gestures replace keyboard and mouse input.
 
 ## Repo Map
 
 - `src/airdesk/control/` - deterministic live-control poses, debouncing, combos, grammar, and runtime.
-- `src/airdesk/actions/` - dry-run targets, guarded Hyprland dispatch, cursor targets, and uinput pointer injection.
+- `src/airdesk/actions/` - practice targets, guarded Hyprland dispatch, cursor targets, and uinput pointer injection.
 - `src/airdesk/tracking/` - MediaPipe and replay tracking backends.
-- `src/airdesk/gestures/` - DTW, motion, learned-filter, and event-decoder diagnostic/research code.
+- `src/airdesk/gestures/` - DTW, motion, learned-filter, and event-decoder research code.
 - `src/airdesk/ml/` and `src/airdesk/public_datasets/` - optional TCN/IPN training and evaluation infrastructure.
-- `configs/profiles/` - older profile-driven runtime configs.
-- `tests/` - unit and CLI coverage, including deterministic control tests.
-- `dev/active/cs465-airdesk/` - internal planning/provenance docs for development continuity, not the primary grader entrypoint.
+- `tests/` - unit and CLI coverage.
+- `configs/profiles/` - profile examples from runtime work.
+- `Final_Report.pdf` - final paper PDF.
+- `paper/latex-source/` - ACM LaTeX source and template files.
+- `paper/PDFs-LiteratureSurvey/` - literature PDFs used in the related-work section.
+- `studies/pilot-0.md` - small pilot task summary and timings.
 
-## Architecture Summary
+## Verification
 
-The live demo path is intentionally simple and dry-run-first:
-
-```text
-webcam or replay
-  -> MediaPipe/replay hand tracking
-  -> normalized hand landmarks
-  -> deterministic pose facts
-  -> stable pose events and short combo buffer
-  -> control grammar with cooldowns/suppression
-  -> dry-run, Hyprland, and uinput action targets
-  -> preview status and JSONL logs
-```
-
-This separates the class-demo control path from the research recognizer path. Learned models can still be trained, replayed, and evaluated, but they do not trigger desktop actions.
-
-## Testing / Verification
-
-Run the standard checks:
+Standard checks:
 
 ```bash
 uv run ruff check .
 uv run pytest
 ```
 
-Useful CLI smoke checks:
+Useful CLI checks:
 
 ```bash
 uv run airdesk --help
 uv run airdesk control run --help
-uv run airdesk gesture --help
-uv run airdesk cursor run --help
-```
-
-Optional environment checks:
-
-```bash
 uv run airdesk doctor
-uv run airdesk camera list
-uv run airdesk camera probe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG
-uv run airdesk profile validate configs/profiles/study-safe.toml
 ```
 
-## Limitations and Known Issues
+The final PDF is included as `Final_Report.pdf`. To rebuild locally, compile `paper/latex-source/main.tex` with a LaTeX distribution such as `pdflatex` or `latexmk`, or use the Overleaf link above.
 
-- AirDesk has not been validated with accessibility populations. It is designed with situational and temporary input constraints in mind and may be relevant to broader accessibility use cases, but the repo should not be read as evidence of validated accessibility benefit.
-- The current live path is tuned for Caden's Hyprland/Linux setup. Real execution depends on `hyprctl` and `/dev/uinput`.
-- Webcam hand tracking is sensitive to lighting, camera angle, occlusion, and hand pose ambiguity.
-- Learned TCN/IPN/DTW models are useful for evaluation and future work, but the current checkpoints are not safe enough for live global desktop actions.
-- Raw recordings, logs, models, and public-dataset imports are ignored under `data/` and are not required for the core grader demo.
-- Internal planning docs under `dev/active/` and `dev/archive/` are tracked for provenance. For a clean grading submission, prefer a generated export/zip or submission branch that keeps this README, source, configs, tests, scripts, and selected study docs while excluding internal agent/session planning docs and local artifacts.
+## Known Limitations
 
-## Grader Notes
-
-For a fast grading pass, start with `airdesk control run` and the safe dry-run command above. That is the current implemented demo surface. The older `airdesk run`, `airdesk cursor run`, and `airdesk gesture ...` commands remain available for compatibility and diagnostics, but they are not the primary live-control story.
+- The pilot has only two participants, including the author.
+- The live prototype is tuned for a Linux/Hyprland laptop setup.
+- Webcam tracking depends heavily on lighting, distance from the camera, hand angle, and occlusion.
+- The deterministic landmark thresholds are understandable and tunable, but not robust across every camera setup.
+- The project is accessibility-motivated, but it is not validated with a disability population.
+- The learned recognizer work is future/research infrastructure, not the final live-control recognizer.

@@ -20,20 +20,12 @@
   \state{Colorado}
   \country{USA}
 }
-\email{TODO}
-
-\author{TODO Roommate Participant or Acknowledgment}
-\affiliation{%
-  \institution{Independent pilot participant}
-  \city{TODO}
-  \state{TODO}
-  \country{USA}
-}
+\email{cadencc@colostate.edu}
 
 \renewcommand{\shortauthors}{Calderon}
 
 \begin{abstract}
-AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop with mid-air hand gestures. The project is motivated by situationally impaired interaction: moments when keyboard and mouse input is unavailable, undesirable, dirty, painful, or physically costly. AirDesk does not try to replace traditional desktop input. Instead, it explores whether a small, clutch-based gesture vocabulary can work as a secondary control channel for coarse commands such as workspace switching, focus movement, and pause or cancel actions. This paper describes the AirDesk system, gesture vocabulary, safety model, logging and replay pipeline, and a small pilot evaluation with the project developer and one additional participant. Early prototype evidence suggests that naive rule-based recognition is not reliable enough for natural dynamic swipes. It also shows why fixed sliding-window recognition is a poor fit for continuous command streams: windows can cut gestures apart, merge adjacent gestures, or include background motion. DTW, motion-based spotting, and a newer TCN v2 recognizer are treated as competing pilot candidates until fresh continuous-session evidence shows which one is reliable enough to use. The paper contributes a focused system design and an evidence-bounded evaluation plan for mid-air desktop control under situational impairment.
+AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop with mid-air hand gestures. The project is motivated by situationally impaired interaction: moments when keyboard and mouse input is unavailable, undesirable, dirty, painful, or physically costly. The system does not try to replace traditional desktop input. Instead, it explores whether a small gesture vocabulary can work as a secondary control channel for coarse desktop actions and occasional mouse-like interaction. This paper describes the interaction design, MediaPipe landmark pipeline, gesture-to-action mapping, and a small two-person pilot evaluation. Early recognition experiments showed why continuous dynamic gestures are difficult in a live desktop stream, so the final prototype uses deterministic landmark logic for a smaller but more reliable mid-air mouse and window-manager grammar. In a normal desktop condition, keyboard and mouse were faster. In a dirty-hands condition where keyboard and mouse required hand washing before input, AirDesk became competitive and slightly faster on average. The paper contributes a focused system design and an evidence-bounded evaluation of mid-air desktop control under situational impairment.
 \end{abstract}
 
 \begin{CCSXML}
@@ -67,13 +59,13 @@ AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop wit
 
 \section{Introduction}
 
-Keyboard and mouse input are still excellent for most desktop work. They are precise, familiar, and fast. The problem is that people do not always use desktops under ideal conditions. A user may be cooking while following instructions on a monitor, painting or soldering with dirty hands, wearing gloves, standing away from a desk during a presentation, or avoiding repeated wrist movement during a long work session. In those moments, even simple operations such as switching workspaces, pausing media, moving window focus, or cancelling a command can become awkward.
+Keyboard and mouse input are still excellent for most desktop work. They are precise, familiar, and fast. The problem is that people do not always use desktops under ideal conditions. A user may be cooking while following instructions on a monitor, painting or soldering with dirty hands, wearing gloves, standing away from a desk during a presentation, or avoiding repeated wrist movement during a long work session. In those moments, even simple operations such as switching workspaces, pausing media, moving window focus, or cancelling a command can become awkward. A recipe video is a simple example: if the user's hands are covered in flour or oil, rewinding ten seconds, scrolling back to an ingredient, or copying a note may require stopping, washing, touching the computer, and then returning to the food.
 
-AirDesk explores whether webcam-based mid-air hand gestures can help in these situations. The goal is not to replace keyboard and mouse input during normal desktop work. Instead, AirDesk focuses on coarse commands where availability matters more than precision: moving between workspaces, changing focus, pausing or cancelling the recognizer, and eventually controlling small profile-specific actions. A useful AirDesk command does not need to beat a keyboard shortcut when someone is already sitting at the keyboard. It needs to be available when touching the keyboard or mouse is inconvenient.
+AirDesk explores whether webcam-based mid-air hand gestures can help in these situations. The goal is not to replace keyboard and mouse input during normal desktop work. Instead, AirDesk focuses on a secondary control loop where availability matters more than maximum speed: moving between workspaces, moving a pointer, clicking, scrolling, selecting, copying, pasting, and controlling small profile-specific actions. A useful AirDesk command does not need to beat a keyboard shortcut when someone is already sitting at the keyboard. It needs to be available when touching the keyboard or mouse is inconvenient.
 
-This paper presents AirDesk as a system paper with pilot evidence. The prototype is a Python-based webcam-to-desktop pipeline for Hyprland Linux. It includes camera capture, MediaPipe hand tracking, normalized hand-state events, command-mode gesture policy, dry-run action routing, guarded Hyprland dispatch, replayable JSONL logs, labeling tools, feature export, and offline recognizer evaluation. The evaluation is intentionally formative: the project developer and one roommate participant are used to identify which parts of the interaction are promising and which parts are not yet reliable enough for live desktop control.
+This paper presents AirDesk as a system paper with pilot evidence. The prototype is a Python-based webcam-to-desktop pipeline for Hyprland Linux. It includes camera capture, MediaPipe hand tracking, normalized hand-state events, deterministic control policy, practice/logging mode, guarded desktop actions, pointer event injection, replayable logs, labeling tools, feature export, and offline recognizer evaluation. The evaluation is intentionally formative: I tested the system with one roommate participant to identify which parts of the interaction are promising and which parts are not yet reliable enough for live desktop control.
 
-This paper makes three contributions. First, it describes a safety-conscious interaction design for mid-air desktop commands based on explicit clutching, a small gesture vocabulary, dry-run defaults, and recovery gestures. Second, it documents a prototype pipeline that records, replays, labels, and evaluates hand-tracking sessions without repeatedly re-performing gestures. Third, it reports early prototype evidence showing how the recognizer evolved from simple rules, to DTW and motion baselines, toward a continuous TCN v2 spotting architecture.
+This paper makes three contributions. First, it describes an interaction design for mid-air desktop control based on a small vocabulary, explicit intent, and visible recovery behavior. Second, it documents a prototype pipeline that records, replays, labels, and evaluates hand-tracking sessions without repeatedly re-performing gestures. Third, it reports pilot evidence showing when a practical mid-air mouse and window-manager workflow is useful, especially when ordinary input has a cleanup or access cost.
 
 \section{Related Work}
 
@@ -81,27 +73,27 @@ This paper makes three contributions. First, it describes a safety-conscious int
 
 Situationally induced impairments and disabilities describe contexts where environmental or temporary constraints make ordinary input harder to use \cite{sarsenbayeva2019siids}. Much SIID work is mobile-centered, but the idea also fits desktop computing. A keyboard and mouse may be physically present, yet still be a poor fit when a user's hands are dirty, gloved, occupied, painful, or far away from the desk. AirDesk uses this framing to motivate optional desktop gestures without treating them as universally better input.
 
-Ability-based design provides the accessibility frame for this project. Rather than assuming one ideal input method, ability-based systems adapt to what users can do in a given context \cite{wobbrock2011ability}. AirDesk is best understood as an additional ability-aware input mode. It is accessibility-motivated, but this paper does not claim that AirDesk has been validated for any specific disability population. The current pilot can evaluate prototype feasibility and perceived usefulness under simulated constraints. Broader accessibility claims would require studies with the relevant users.
+Ability-based design provides the accessibility frame for this project. Rather than assuming one ideal input method, ability-based systems adapt to what users can do in a given context \cite{wobbrock2011ability}. AirDesk is best understood as an additional ability-aware input mode: it gives the user another way to act when the normal way is temporarily a poor fit. The pilot focuses on that situational idea rather than making broad claims about disability access.
 
 \subsection{Mid-Air Gesture Design}
 
 Prior work on mid-air interaction shows both the appeal and difficulty of gesture input. Mid-air gestures can be expressive and easy to demonstrate, but their usability depends heavily on the application, task, evaluation method, feedback, training, prior experience, and participant factors \cite{koutsabasis2019empiricalmidair,catalano2025usablewithouttouch}. Gesture elicitation work also pushes against the idea of a universal mid-air vocabulary. Vogiatzidakis and Koutsabasis report that gesture identification depends on context of use \cite{vogiatzidakis2018gestureelicitation}, while Aigner et al. show that preferred gesture types vary by intended meaning and action \cite{aigner2012midairgestures}. Work on wall-display gestures makes the same point in another setting: the display and task shape the gesture set \cite{wittorf2016wallgestures}.
 
-AirDesk applies these findings by choosing a small vocabulary for desktop commands instead of importing a broad gesture set from another domain. Workspace navigation maps naturally to directional swipes, focus movement can use short pointing-like gestures, and cancel or exit actions need a distinct recovery gesture. The design goal is not to find a universal vocabulary. It is to choose a vocabulary that is plausible, learnable, and measurable for AirDesk's desktop-command setting.
+AirDesk applies these findings by choosing a small vocabulary for desktop control instead of importing a broad gesture set from another domain. Workspace navigation maps naturally to directional movement, clicking and dragging map to pinch, and higher-risk window actions need deliberate clutching or combos. The design goal is not to find a universal vocabulary. It is to choose a vocabulary that is plausible, learnable, and measurable for AirDesk's desktop setting.
 
 \subsection{Interaction Costs and Intent}
 
 Mid-air input also has real costs. Hincapie-Ramos et al. show that upper-limb fatigue is a measurable design issue in mid-air interaction \cite{hincapie2014consumedendurance}. Error-prone in-air recognizers can affect user behavior and perceived control, especially when errors come from both human performance and system ambiguity \cite{arif2014errorprone}. These concerns matter for desktop control because a false activation can change the user's actual workspace.
 
-Prior systems have handled unintended activation by separating activation gestures from command gestures. For example, mid-air smart-home control work uses registration gestures to decide which device should respond before accepting commands \cite{vogiatzidakis2020homedevices}. Public-display selection work also emphasizes clear phases and immediate feedback \cite{walter2014cuenesics}. AirDesk uses the same basic idea: an open-palm clutch enters listening mode, the recognizer accepts a short command gesture, and the system exits or cools down after the command. Continuous hand motion should not be treated as continuous command input.
+Prior systems have handled unintended activation by separating activation gestures from command gestures. For example, mid-air smart-home control work uses registration gestures to decide which device should respond before accepting commands \cite{vogiatzidakis2020homedevices}. Public-display selection work also emphasizes clear phases and immediate feedback \cite{walter2014cuenesics}. AirDesk uses the same basic idea through stable pose events, command clutches, and cooldowns. Continuous hand motion should not automatically become continuous high-impact command input.
 
 Work comparing touch and mid-air interaction also supports AirDesk's secondary-channel framing. Jakobsen et al. found that touch can outperform mid-air for direct target acquisition, but users become more willing to choose mid-air as the movement cost of touch increases \cite{jakobsen2015touchmidair}. AirDesk follows that logic for desktop input. The important question is not whether a gesture beats a keyboard shortcut under ideal desk conditions. The question is whether a gesture becomes useful when ordinary input becomes costly.
 
 \subsection{Recognition and Implementation Background}
 
-AirDesk uses MediaPipe Hand Landmarker as its first hand-tracking backend \cite{zhang2020mediapipehands}. MediaPipe provides practical RGB hand landmarks, but it is not the contribution of this paper. The contribution is the desktop-control system built around tracking: safety policy, mode handling, replayable logs, labeling, and evaluation.
+AirDesk uses MediaPipe Hand Landmarker as its first hand-tracking backend \cite{zhang2020mediapipehands}. MediaPipe provides practical RGB hand landmarks, but it is not the contribution of this paper. The contribution is the desktop-control system built around tracking: safety policy, mode handling, replayable logs, deterministic landmark logic, and evaluation.
 
-For gesture recognition, AirDesk separates static pose primitives, rule-based dynamic phrases, template or DTW matching, deterministic motion spotting, and learned temporal models. Template-based recognizers have a long history in HCI prototyping, including Wobbrock et al.'s work comparing simple recognizers with DTW and other baselines \cite{wobbrock2007dollar}. Temporal convolutional networks are useful for action segmentation and detection because they can model evidence over time rather than treating each frame in isolation \cite{lea2017tcn}. AirDesk uses this distinction to keep model claims honest: rules and DTW are practical baselines, while TCN v2 is an architecture for continuous gesture spotting that still needs fresh pilot evidence before it can drive live commands.
+For gesture recognition, AirDesk explored static pose primitives, rule-based dynamic phrases, template or DTW matching, deterministic motion spotting, and learned temporal models. Template-based recognizers have a long history in HCI prototyping, including Wobbrock et al.'s work comparing simple recognizers with DTW and other baselines \cite{wobbrock2007dollar}. Temporal convolutional networks are useful for action segmentation and detection because they can model evidence over time rather than treating each frame in isolation \cite{lea2017tcn}. AirDesk uses this distinction to keep model claims honest: learned models remain a promising future direction, but the current live-control prototype uses direct landmark logic because it was more reliable under the course timeline.
 
 A key recognition challenge is the sliding-window problem. Many prototype recognizers classify a fixed window of recent frames. That works best when the gesture has already been neatly clipped, but live desktop control is not neatly clipped. A window may contain only the first half of a swipe, the end of one gesture plus the beginning of the next, or ordinary hand motion that happens to look gesture-like. Increasing the window size can capture more context, but also adds latency and makes repeated gestures blur together. Decreasing it improves responsiveness, but makes partial gestures more likely. AirDesk's TCN v2 direction is motivated by this trade-off: the model can still use a causal rolling window as context, but the window should not be treated as the gesture itself.
 
@@ -109,20 +101,20 @@ A key recognition challenge is the sliding-window problem. Many prototype recogn
 
 AirDesk is built around four design goals.
 
-\textbf{G1: Support coarse desktop commands rather than precision input.} The first target actions are workspace movement, focus movement, pause/cancel, and profile-specific commands. These actions are useful enough to evaluate, but they do not require mouse-level precision or text entry.
+\textbf{G1: Support practical desktop control without pretending to replace the mouse.} The current target actions are pointer movement, click, drag, scroll, workspace movement, moving windows between workspaces, and a few profile-specific commands. These actions expose most of the system without requiring broad text entry or fine-grained drawing precision.
 
-\textbf{G2: Require explicit user intent before executing commands.} The system should not interpret every visible hand movement as a command. AirDesk uses a clutch/listen phase so that command gestures happen inside a short intentional window.
+\textbf{G2: Require explicit user intent before high-impact actions.} The system should not interpret every visible hand movement as a command. AirDesk uses stable pose events, fist clutching, cooldowns, and deliberate combos so that workspace movement or window actions are harder to trigger by accident.
 
-\textbf{G3: Make live desktop control safe to test.} Recognizer errors can affect the real desktop, so AirDesk defaults to dry-run routing, logs actions before execution, and limits guarded execution to allowlisted non-destructive Hyprland dispatchers.
+\textbf{G3: Make mistakes easy to see and recover from.} Gesture errors are more serious when they control a real desktop. AirDesk therefore supports a practice/logging mode, records actions, and keeps higher-risk commands behind clearer gestures.
 
 \textbf{G4: Make recognition behavior replayable and measurable.} Gesture systems are easy to demo and hard to trust. AirDesk records hand-state streams, runtime events, labels, features, and evaluation outputs so recognizers can be tested against the same sessions. This is especially important for continuous gesture spotting, where window accuracy can look good even when event timing, repeated gestures, or background rejection fail.
 
 These goals lead to the following research questions for the formative pilot:
 
 \begin{enumerate}
-  \item Can a small open-palm-clutched gesture vocabulary support common desktop command actions with acceptable false activation, latency, and perceived control?
-  \item Which commands and recognizers are promising enough for future evaluation, and which fail under natural desktop motion?
-  \item How does gesture control compare with keyboard/mouse input for coarse commands in a simulated situational impairment context?
+  \item Can a small deterministic hand-control vocabulary support a realistic desktop workflow with acceptable false activation, latency, and perceived control?
+  \item Which parts of the workflow are promising for mid-air input, and which remain slower or more awkward than keyboard and mouse?
+  \item How does gesture control compare with keyboard/mouse input when ordinary input is immediately available versus when it is temporarily costly to use?
 \end{enumerate}
 
 \section{System Overview}
@@ -139,15 +131,15 @@ AirDesk is implemented as a Python prototype with a modular pipeline. Hyprland i
     arrow/.style={-{Latex[length=2mm]}, thick}
   ]
     \node[stage] (camera) {Webcam\\capture};
-    \node[stage, right=of camera] (tracking) {Hand\\tracking};
-    \node[stage, right=of tracking] (features) {Normalized\\feature stream};
-    \node[stage, right=of features] (evidence) {Recognizer\\evidence};
-    \node[stage, right=of evidence] (decoder) {Event\\decoder};
-    \node[stage, right=of decoder] (policy) {Command\\policy};
-    \node[stage, right=of policy] (action) {Dry-run log\\or Hyprland};
+    \node[stage, right=of camera] (tracking) {Hand\\landmarks};
+    \node[stage, right=of tracking] (features) {Hand\\features};
+    \node[stage, right=of features] (evidence) {Gesture\\cues};
+    \node[stage, right=of evidence] (decoder) {Stable\\events};
+    \node[stage, right=of decoder] (policy) {Action\\rules};
+    \node[stage, right=of policy] (action) {Desktop\\actions};
 
-    \node[artifact, below=of features] (replay) {JSONL replay\\labels/features};
-    \node[artifact, below=of decoder] (eval) {Offline scoring\\pilot tables};
+    \node[artifact, below=of features] (replay) {Replayable\\session logs};
+    \node[artifact, below=of decoder] (eval) {Pilot\\results};
 
     \draw[arrow] (camera) -- (tracking);
     \draw[arrow] (tracking) -- (features);
@@ -159,53 +151,111 @@ AirDesk is implemented as a Python prototype with a modular pipeline. Hyprland i
     \draw[arrow] (replay) -- (eval);
     \draw[arrow] (decoder) -- (eval);
   \end{tikzpicture}}
-  \caption{AirDesk's current architecture. The live path moves from webcam frames to guarded desktop actions, while the same feature and event streams feed replay, labeling, and offline evaluation.}
+  \caption{AirDesk's current architecture. Webcam frames become hand landmarks, gesture cues, stable events, and finally desktop actions. The same streams can be saved for replay and pilot analysis.}
   \label{fig:pipeline}
 \end{figure}
 
-The current prototype includes OpenCV camera capture, MediaPipe hand tracking, replayable JSONL recordings, a replay backend, typed profile files, static gesture primitives, command-mode policy, dry-run action routing, guarded Hyprland dispatch, cursor-control experiments, label files, feature export, and offline gesture evaluation. Figure~\ref{fig:pipeline} shows the main architecture.
+The current prototype includes OpenCV camera capture, MediaPipe hand tracking, replayable session logs, deterministic control poses, stable pose debouncing, a short combo buffer, practice/logging mode, guarded Hyprland commands, Linux pointer events, label files, feature export, and offline gesture evaluation. Figure~\ref{fig:pipeline} shows the main architecture.
 
 \subsection{Pipeline Components}
 
 The capture layer reads webcam frames through OpenCV. The first tracking backend uses MediaPipe to infer hand landmarks from RGB frames. AirDesk converts those landmarks into normalized hand-state records with timing, hand presence, landmark positions, and derived pose features. This normalization step keeps the rest of the system from depending too tightly on MediaPipe. Future depth cameras or alternative hand trackers could emit the same hand-state shape.
 
-The recognition layer converts hand states into candidate gesture events. Static primitives identify hand configurations such as open palm, fist, pointing, and pinch. Dynamic recognizers evaluate motion over short windows for actions such as left and right swipes. The policy layer then decides whether a gesture matters in the current mode. For example, a swipe outside command mode should be logged as background motion, not executed as a workspace command.
+The control layer converts hand states into observable facts: open or relaxed hand, fist, index pinch, middle pinch, palm zone, vertical movement, and ambiguity signals. A debouncer turns noisy frame-level pose facts into stable enter, hold, and release events. A small grammar then maps those events to pointer movement, clicks, scroll, workspace movement, window movement, launcher activation, or close-window combos. Learned and DTW recognizers remain available in the project as replay and diagnostic tools, but they are not the live action path for the final prototype.
 
-The action layer maps accepted commands to either dry-run logs or guarded Hyprland dispatches. Hyprland is a useful first target because workspace and focus actions are already exposed through dispatcher commands. That makes real desktop control testable without writing a custom window manager integration. AirDesk keeps this layer replaceable so other desktops or action targets can be added later.
+\subsection{Landmarks to Control Events}
+
+The live prototype uses MediaPipe's hand landmarker output as geometry rather than as a gesture classifier. For each visible hand, MediaPipe reports a standard 21-point hand skeleton with normalized coordinates for the wrist, thumb joints, finger joints, and fingertips. AirDesk stores these points in a tracker-independent hand record with a palm center, bounding box, handedness, and confidence score. The important design choice is that later code does not ask MediaPipe to decide what a command means. AirDesk computes its own pose facts from the landmark geometry.
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}[scale=0.72, every node/.style={font=\scriptsize}]
+    \coordinate (wrist) at (0,0);
+    \coordinate (thumb1) at (-1.2,1.0);
+    \coordinate (thumb2) at (-1.8,1.7);
+    \coordinate (thumb3) at (-2.3,2.2);
+    \coordinate (thumb4) at (-2.8,2.5);
+    \coordinate (index1) at (-0.9,2.0);
+    \coordinate (index2) at (-1.0,3.0);
+    \coordinate (index3) at (-1.1,3.8);
+    \coordinate (index4) at (-1.2,4.6);
+    \coordinate (middle1) at (0,2.2);
+    \coordinate (middle2) at (0,3.3);
+    \coordinate (middle3) at (0,4.2);
+    \coordinate (middle4) at (0,5.0);
+    \coordinate (ring1) at (0.9,2.0);
+    \coordinate (ring2) at (1.0,3.0);
+    \coordinate (ring3) at (1.1,3.8);
+    \coordinate (ring4) at (1.2,4.5);
+    \coordinate (pinky1) at (1.6,1.6);
+    \coordinate (pinky2) at (1.9,2.4);
+    \coordinate (pinky3) at (2.1,3.0);
+    \coordinate (pinky4) at (2.3,3.6);
+    \draw[thick] (wrist)--(thumb1)--(thumb2)--(thumb3)--(thumb4);
+    \draw[thick] (wrist)--(index1)--(index2)--(index3)--(index4);
+    \draw[thick] (wrist)--(middle1)--(middle2)--(middle3)--(middle4);
+    \draw[thick] (wrist)--(ring1)--(ring2)--(ring3)--(ring4);
+    \draw[thick] (wrist)--(pinky1)--(pinky2)--(pinky3)--(pinky4);
+    \draw[thick] (index1)--(middle1)--(ring1)--(pinky1);
+    \foreach \p/\n in {wrist/0,thumb1/1,thumb2/2,thumb3/3,thumb4/4,index1/5,index2/6,index3/7,index4/8,middle1/9,middle2/10,middle3/11,middle4/12,ring1/13,ring2/14,ring3/15,ring4/16,pinky1/17,pinky2/18,pinky3/19,pinky4/20} {
+      \fill[black] (\p) circle (2pt);
+      \node[anchor=south west] at (\p) {\n};
+    }
+    \draw[red, very thick, dashed] (thumb4) -- (index4);
+    \node[red, align=center] at (-3.25,3.7) {pinch\\distance};
+    \node[align=left] at (5.0,3.4) {AirDesk uses these 21 landmarks\\to measure fingertip distance,\\finger curl, spread, and palm motion.};
+  \end{tikzpicture}
+  \caption{Simplified 21-landmark hand model used by MediaPipe. In the prototype, a pinch is detected by measuring normalized distance between the thumb tip and a fingertip, while fist/open-palm evidence uses finger curl and spread.}
+  \label{fig:hand-landmarks}
+\end{figure}
+
+Pinch detection is the simplest example. The system measures the distance from the thumb tip to the index fingertip for index pinch, and from the thumb tip to the middle fingertip for middle pinch. If that normalized distance falls below a threshold, the pose becomes a pinch candidate. A short pinch release becomes a click; a pinch held long enough or moved far enough becomes a drag; a middle pinch with vertical palm motion becomes scroll. For example, selecting and copying text in the pilot meant moving the open hand to the text, using index pinch to click or drag over it, using middle pinch to scroll when needed, then using a right-click gesture to open the copy menu.
+
+Fist and open-palm detection use more evidence because they are higher-impact controls. Open palm combines extended-finger count and finger spread. Fist combines finger curl, fingertip clustering, thumb support, low open-palm score, and palm-relative scale. This is more robust than a single threshold such as ``finger tips below knuckles,'' because webcam angle and hand distance can distort one measurement. Even with multiple signals, the prototype treats ambiguous frames conservatively. If a hand looks partly like a fist and partly like a pinch, or if index and middle pinch are both plausible, the control layer can suppress the frame rather than firing both commands.
+
+The raw pose facts are still too noisy to become commands directly, so the system waits for a pose to be stable across frames. In practice, this means one noisy frame does not immediately click or switch workspaces. The system emits simple events such as entered, held, and released. A quick pinch enter-and-release becomes a click. A pinch that stays active becomes a drag. A fist that stays active creates an anchor point, and only then does motion away from that anchor become a workspace or window command. This design gives the user a clutch: the fist means ``the next motion is a window-manager command,'' while ordinary open-hand motion remains pointer control.
 
 \section{Interaction Design}
 
-\subsection{Command Mode and Safety}
+\subsection{Control Mode and Safety}
 
-Safety is central because false activations can affect the real desktop. AirDesk defaults to dry-run execution, logs events, and requires explicit opt-in for real Hyprland actions. The command-mode profile uses an open-palm clutch to enter listening mode, then accepts a small set of commands before exiting or cooling down. In the current prototype, real execution is allowlisted and non-destructive.
+Safety is central because false activations can affect the real desktop. The prototype can run in a practice mode that records what it would do before sending real commands. The current control runtime treats ordinary hand movement as pointer movement, while higher-impact actions require clearer poses or held movement. Fist is the main command clutch for workspace and window-manager actions. Destructive commands, such as closing a window, are mapped to deliberate combos rather than a single accidental pose.
 
-The clutch is also an interaction design choice. It gives the user a visible boundary between ordinary motion and command motion, and it gives the recognizer a shorter window to inspect. This matters in a webcam setting, where normal desk motion such as reaching for a phone, adjusting posture, or moving near the keyboard can resemble parts of a command gesture.
+The clutch is also an interaction design choice. It gives the user a visible boundary between ordinary motion and command motion. This matters in a webcam setting, where normal desk motion such as reaching for a phone, adjusting posture, or moving near the keyboard can resemble parts of a command gesture.
 
 \subsection{Gesture Vocabulary}
 
 The current command vocabulary is intentionally small:
 
 \begin{itemize}
-  \item open palm hold: enter listening mode;
-  \item fist: cancel or exit command mode;
-  \item swipe left/right: workspace navigation candidate;
-  \item point left/right: focus movement candidate;
-  \item pinch: cursor-mode or confirmation primitive in separate modes.
+  \item relaxed or open hand: move the pointer;
+  \item index pinch tap: left click;
+  \item index pinch hold and move: drag or select;
+  \item middle pinch hold and vertical movement: scroll;
+  \item middle pinch tap: right click;
+  \item fist held and moved up/down: switch workspaces;
+  \item fist held and moved left/right: move the active or targeted window to another workspace;
+  \item open palm, fist, open palm: deliberate close-window combo;
+  \item open palm followed by sideways palm: launcher command.
 \end{itemize}
 
-This vocabulary emphasizes coarse command actions rather than text entry or continuous precision pointing.
+This vocabulary emphasizes a small desktop workflow rather than a large symbolic gesture language. The mappings were chosen to make the gesture meaning visible and to separate low-risk continuous control from higher-risk window-manager commands. Open or relaxed hand movement controls the pointer because it is the least effortful resting pose and can be used continuously. Pinch maps to click because bringing two fingers together has a clear commit feeling and is already familiar from touch, mobile, and spatial interfaces. Holding that same pinch naturally extends into drag or selection. Middle pinch keeps scrolling and right click separate from normal left click while staying in the same pinch family.
+
+Fist is used differently. It acts as a clutch for workspace and window movement because it is visually distinct from an open hand and feels closer to grabbing or carrying. That makes it a better fit for commands that change the desktop state. Closing a window is even riskier, so AirDesk maps it to an intentionally deliberate open-palm, fist, open-palm combo rather than to a single pose. These choices reflect the interaction goal: common actions should be quick, but destructive or disorienting actions should require clearer intent.
+
+The system is also multimodal in a practical desktop sense. It does not ask gestures to do every job. It combines camera-based hand input, pointer emulation, Hyprland window-manager commands, visible runtime feedback, practice logs, and ordinary keyboard/mouse fallback. This makes gestures one layer in a broader interaction loop rather than a replacement for all other input.
 
 \subsection{Feedback and Recovery}
 
-AirDesk treats recovery actions as part of the core vocabulary rather than as an afterthought. A command system that can switch workspaces or change focus must give users a way to stop listening, cancel an uncertain command, and recover from accidental recognition. The current design includes pause/cancel behavior and cooldowns after accepted commands. The pilot will pay attention not only to whether intended commands fire, but also to whether participants feel they can keep the system under control.
+Recovery is part of the interaction, not an afterthought. A command system that can switch workspaces, move windows, or click inside documents must give users a way to stop, wait, and recover from accidental recognition. The current design includes pause behavior, cooldowns after accepted commands, ambiguity suppression, and practice logs. The pilot pays attention not only to whether intended commands fire, but also to whether participants feel they can keep the system under control.
 
 \section{Implementation and Reproducibility}
 
 \subsection{Runtime and Profiles}
 
-The implementation is organized as a Python command-line prototype. Runtime commands can capture live webcam input, replay recorded sessions, route recognized events to dry-run output, or invoke guarded Hyprland dispatchers. Profiles define which gestures are active, how they map to actions, and whether the system is operating in dry-run or execution mode.
+The implementation is organized as a Python command-line prototype. Runtime commands can capture live webcam input, replay recorded sessions, route recognized events to practice logs, or invoke guarded Hyprland dispatchers. Profiles define which gestures are active, how they map to actions, and whether the system is operating in practice mode or execution mode.
 
-The default safety posture is dry-run-first. This lets AirDesk show what would have happened without actually changing the desktop. For live execution, the dispatcher layer is intentionally narrow: only explicit, non-destructive actions such as workspace movement and focus movement are candidates for guarded execution.
+The default testing posture is practice-first. This lets the prototype show what would have happened without actually changing the desktop. For live execution, the dispatcher layer is intentionally narrow: only explicit actions such as workspace movement, window movement, focus movement, pointer movement, click, drag, and scroll are connected during the pilot.
 
 \subsection{Logging, Replay, and Labeling}
 
@@ -215,109 +265,144 @@ This replay workflow makes the system easier to evaluate honestly. A recognizer 
 
 \subsection{Recognizer Evolution}
 
-AirDesk's recognizer changed as the project moved from isolated gestures toward continuous desktop use. This shift was partly motivated by prior project experience with an LSTM-based smart-home gesture recognizer. That recognizer used a traditional sliding window over recent frames. It could work when the window happened to contain a full gesture, but it was fragile when the timing was not perfect. Sometimes the window captured only part of the gesture. Sometimes it included the reset motion after the gesture. Sometimes it caught the end of one gesture and the start of the next. It was also slower than desired for interactive control.
+AirDesk's recognizer changed as the project moved from isolated gestures toward continuous desktop use. This shift was partly motivated by prior project experience with an LSTM-based smart-home gesture recognizer. That recognizer used a traditional sliding window over recent frames. It could work when the window happened to contain a full gesture, but it was fragile when the timing was not perfect: the window might capture only part of a gesture, include the reset motion afterward, or contain the end of one gesture and the start of the next. It was also slower than desired for interactive control.
 
-That experience shaped AirDesk's model search. The goal was not simply to find a higher-accuracy classifier, but to find a recognizer that could handle fast commands, repeated gestures, and short chains without requiring a long pause between actions. DTW and TCNs became the two practical directions. DTW is useful because it aligns variable-length motion traces and can work with a small number of personal examples. A causal TCN is useful because it can process a stream with explicit, bounded latency rather than waiting for a recurrent model to summarize the sequence.
+That experience shaped AirDesk's model search. The goal was not just a higher-accuracy classifier, but a recognizer that could handle fast commands, repeated gestures, and short chains without requiring a long pause between actions. DTW and TCNs became the two practical directions. DTW can align variable-length motion traces with a small number of personal examples, but it still needs the system to decide where a gesture starts and ends. In continuous use, that boundary problem is often the hard part.
 
-The first AirDesk dynamic recognizer was rule-based: it looked for simple motion patterns over a recent time window and emitted a swipe when the motion crossed a threshold. This was easy to inspect, but it failed under natural motion. Normal desk activity could look enough like a command to trigger false activations, while some real swipes were missed because tracking dropped or the hand did not move in the exact expected way.
+TCN v2 was a response to the same boundary problem. The first learned AirDesk model still treated rolling windows too much like gesture clips: each window received one label, and the model tried to classify the window. That is a weak match for live desktop gestures, where the stream contains partial gestures, pauses, resets, fast repeated commands, tracking loss, and ordinary background motion. TCN v2 instead treats a rolling window as compute context. The model can produce frame-level evidence such as intentional motion, stroke direction, and start/end boundaries, while a separate decoder turns that evidence into one command event.
 
-The next step was a DTW-style template baseline. DTW is practical for a small personal vocabulary because it compares a new motion trace against examples instead of relying only on hand-written thresholds. However, DTW still depends on good segmentation. The system has to decide when a gesture starts and ends before comparing it to a template. In continuous use, that boundary problem is often the hard part.
+In practice, learned recognition still did not become reliable quickly enough for the class prototype. Rule-based swipes were inspectable but brittle under natural motion. DTW was promising as a personalized research baseline, but still depended on segmentation. IPN Hand and TCN models produced useful diagnostic evidence, but live preview still showed unsafe activations from ordinary open-hand presence, posture changes, and non-command movement. That result changed the implementation goal. Instead of forcing a learned recognizer into live Hyprland control, AirDesk moved the learned stack into a replay and future-work lane and used deterministic landmark logic for the working prototype.
 
-The current TCN v2 direction is a response to the same boundary problem. The first learned AirDesk model still treated rolling windows too much like gesture clips: each window received one label, and the model tried to classify the window. That is a weak match for live desktop gestures. A real hand stream contains partial gestures, pauses, resets, fast repeated commands, tracking loss, and ordinary background motion. TCN v2 instead treats a rolling window as compute context. The model produces frame-level evidence such as intentional motion, left/right stroke evidence, and start/end boundaries. An event decoder then turns that evidence into one command event. The key design change is that the window provides context, but the emitted gesture is defined by evidence and boundaries rather than by the arbitrary start and end of a fixed buffer.
+\subsection{Deterministic Control Pivot}
 
-This does not mean TCN v2 is assumed to be the final recognizer. The final pilot should use whichever recognizer is most reliable after fresh continuous validation. If TCN v2 produces clean event-level behavior, it can become the pilot recognizer. If it remains underconfident or false-activation prone, a gated DTW or deterministic motion baseline is a better choice for the pilot, and TCN v2 should be reported as an architectural improvement and future-work path.
+The final prototype uses deterministic landmark logic for live control. This was not the original plan, but it was the more practical design after the learned-recognition experiments. The system now reads direct MediaPipe facts such as fingertip distances, finger curl, fingertip clustering, palm position, palm zone, and vertical movement. Those facts are converted into stable poses such as relaxed hand, fist, index pinch, and middle pinch. The grammar then maps those stable events into desktop actions.
 
-\subsection{Recognizer Baselines}
-
-AirDesk currently uses four levels of recognition evidence. Static pose recognizers provide simple primitives such as open palm, fist, point, and pinch. Rule-based dynamic recognizers inspect recent hand motion to identify candidate swipes. A DTW-style template baseline compares observed motion against personalized examples. A TCN v2 sequence-evidence model is being prepared for continuous gesture spotting. The final evaluation should compare recognizers using event-level behavior: matches, misses, false activations, repeated fires, latency, and sequence order. Clip accuracy alone is not enough for a desktop command system because it does not show whether commands can be chained, repeated, or rejected during normal background motion.
+This pivot also made the interaction more legible. A user does not need to learn whether a hidden model classified a window correctly. They can see that an open hand moves the cursor, a pinch clicks, a middle pinch scrolls, and a fist becomes a window-manager clutch. The system still uses thresholds, smoothing, cooldowns, and ambiguity suppression, but the behavior is easier to tune and explain than a multi-class learned model under time pressure.
 
 \section{Pilot Method}
 
 \subsection{Participants}
 
-The pilot will include the project developer and one roommate participant. This is a small formative pilot, not a generalizable user study. The participant count reflects the course timeline and solo-project constraints.
+The pilot included me and one non-developer roommate participant. This is a small formative pilot, not a generalizable user study. The participant count reflects the course timeline and solo-project constraints. The roommate participant is treated as an informal pilot participant rather than as a project author.
 
 \subsection{Apparatus}
 
-The pilot will run on the developer's Linux desktop using a commodity webcam and the AirDesk prototype. The current camera baseline is approximately 640 by 480 pixels at 30 FPS. Hyprland is the live desktop target, but dry-run logs will be used before any guarded live execution. The final paper will report the exact machine, webcam, lighting conditions, and AirDesk commit used for the pilot.
+The pilot ran on my Linux laptop using the built-in laptop webcam and the AirDesk prototype. The camera was configured at approximately 640 by 480 pixels and 30 FPS. The session was run in good indoor lighting to give MediaPipe the best practical tracking conditions available for the prototype. Hyprland was the live desktop target. This setup is intentionally modest: it represents the kind of camera already available on many laptops, but it also makes tracking sensitive to lighting, distance, and camera angle.
 
 \subsection{Conditions and Tasks}
 
-The intended conditions are:
+The pilot compared the same task under two contexts. The first context was normal desktop use, where keyboard and mouse could be used immediately. The second context simulated dirty-hand interaction. Participants covered their hands with a messy mixture of olive oil, flour, and honey. In the keyboard/mouse condition, participants first washed their hands, then used the keyboard and mouse. In the AirDesk condition, participants skipped washing and completed the task using hand gestures.
+
+The input conditions were:
 
 \begin{itemize}
   \item keyboard/mouse baseline at the desk;
-  \item AirDesk live dry-run;
-  \item optional AirDesk guarded execution if dry-run behavior is stable;
-  \item optional simulated situational impairment, such as standing away from the keyboard or wearing gloves.
+  \item AirDesk hand-only control using the deterministic control runtime.
 \end{itemize}
 
-Candidate tasks include switching workspace left, switching workspace right, moving focus left, moving focus right, cancelling command mode, and pausing or resuming the runtime. The final task set should stay small so the pilot evaluates command reliability rather than participant endurance. Text entry and small-target cursor manipulation are outside the main evaluation.
+The task was designed to expose most of the current gesture vocabulary in one realistic workflow. The participant started on workspace 1. A Google Docs tab was open on workspace 8. The goal was to navigate to that workspace, click the correct document, scroll to page 4, select a keyword/code string, highlight or copy it, return to workspace 4, click into a second Google Docs tab, paste the code into a ``paste here'' location, and stop the run. This task requires workspace navigation, cursor movement, clicking, scrolling, text selection, right click or copy behavior, returning across workspaces, and paste placement.
+
+The workflow was chosen because it is closer to an interruption task than to a gesture checklist. The participant has to move between contexts, recover a small piece of information, manipulate a document, and return to another workspace. That pattern matches the project motivation: a user may not want to perform a long desktop session with gestures, but may need to quickly retrieve, scroll, copy, paste, or control something when normal input is temporarily costly.
 
 \subsection{Procedure}
 
-Each participant will complete a short practice phase, a keyboard/mouse baseline, an AirDesk dry-run condition, and optionally a guarded-execution or simulated-impairment condition if dry-run behavior is stable. Participants will be told that the system is a prototype and can be stopped at any time. The session will stop if false activations repeatedly occur during normal motion, if the participant reports fatigue or discomfort, or if live execution controls the wrong target more than once.
+The roommate participant first explored the gestures and workflow for about 5--10 minutes until the controls felt understandable. In the normal desktop comparison, I first demonstrated the workflow, then both participants completed two keyboard/mouse runs followed by two AirDesk hand-control runs. The dirty-hands comparison repeated the same workflow with two keyboard/mouse runs and two AirDesk hand-control runs per participant. Participants were told that the system was a prototype and could be stopped at any time. The session would stop if false activations repeatedly occurred during normal motion, if the participant reported fatigue or discomfort, or if live execution controlled the wrong target more than once.
 
 \subsection{Measures}
 
-Objective measures include task success, completion time, false activations, missed intended gestures, repeated fires, gesture-to-action latency, fallback keyboard or mouse use, and tracking loss. Subjective measures include perceived control, fatigue or discomfort, frustration, perceived usefulness, preference versus keyboard/mouse baseline, and short interview notes. The final analysis will report these values descriptively rather than using inferential statistics, because the pilot sample is too small for population-level claims.
+Objective measures include task success, completion time, false activations, missed intended gestures, repeated fires, fallback keyboard or mouse use, and tracking loss. Subjective measures include perceived control, fatigue or discomfort, frustration, perceived usefulness, preference versus keyboard/mouse baseline, and short interview notes.
 
-\section{Prototype Evidence and Findings}
+\section{Pilot Results and Findings}
 
-The current evidence comes from recorded local gesture sessions and replay evaluation. A Sprint 4 batch contains 24 recordings: eight left-swipe takes, eight right-swipe takes, and eight normal desk-motion negative takes. Labels, features, DTW models, TCN v2 manifests, and evaluation summaries were generated from those recordings. These data are not a substitute for the planned pilot, but they are useful for deciding which recognizer is credible enough to test.
+The results focus on the working interaction technique: deterministic landmark control for a realistic desktop task. Earlier model experiments explain why the final prototype used direct landmark logic, but the pilot itself evaluates the system that participants actually used.
+
+\subsection{Two-Person Pilot}
+
+In the normal two-person pilot workflow, keyboard and mouse were faster. Across both participants, the keyboard/mouse condition averaged 22.0 seconds, while the hand-control condition averaged 41.5 seconds. This result was expected. AirDesk is not designed to beat a mouse and keyboard when the user is already seated at the desk with both devices available. The more important result is that the hand-control condition completed the same multi-step workflow using only mid-air gestures.
 
 \begin{table}[h]
-  \caption{Current offline recognizer evidence from the Sprint 4 swipe batch. Same-batch DTW is optimistic because calibration and evaluation used the same small distribution. The gated holdout result was tuned after inspecting the split. The first TCN v2 model validates the training/evaluation surface, but does not yet provide usable event-level recognition.}
-  \label{tab:offline-evidence}
+  \caption{Normal desktop pilot comparison for the Google Docs workspace task. Keyboard and mouse were available immediately.}
+  \label{tab:pilot-results}
   \centering
   \begin{tabular}{llll}
     \hline
-    Recognizer & Positive matches & False activations & Mean latency \\
+    Participant & Keyboard/mouse runs & AirDesk runs & Mean difference \\
     \hline
-    Rule swipe & 0/16 & high & n/a \\
-    Same-batch DTW & 16/16 & 2 & 0.44s \\
-    Initial holdout DTW & 2/4 & 0 & 0.40s \\
-    Gated holdout DTW & 4/4 & 0 & 0.36s \\
-    TCN v2 quick smoke & 1/16 & 2 & n/a \\
+    Author & 22s, 20s & 41s, 39s & AirDesk 19.0s slower \\
+    Roommate & 24s, 22s & 44s, 42s & AirDesk 20.0s slower \\
+    Overall & 22.0s mean & 41.5s mean & AirDesk 19.5s slower \\
     \hline
   \end{tabular}
 \end{table}
 
-Rule-based dynamic swipe recognition performed poorly on this batch. It matched zero of sixteen intended positive swipe events and produced many false activations, especially from crude static-pose recognizers firing during natural motion.
+The pilot also clarified where AirDesk is most useful. For normal desktop use, mouse and keyboard remain faster and less tiring. For situationally impaired use, the hand-control workflow becomes more meaningful because the alternative may not be a perfect keyboard shortcut; it may be touching the computer with dirty hands, leaving a task to return to the desk, or being unable to comfortably use the mouse. In that setting, a slower hands-free command can still be useful.
 
-A personalized DTW baseline performed better on the same batch, matching all sixteen intended swipes with two false activations and approximately 0.44 seconds mean latency. However, this same-batch result is optimistic because calibration and evaluation used the same small data distribution.
+\subsection{Dirty-Hands Condition}
 
-A deterministic holdout evaluation trained on takes 001--006 and tested on takes 007--008. The first holdout matched both right swipes but missed both left swipes, with no false activations on held-out negatives. A later horizontal-displacement-gated variant matched all four held-out swipes with no held-out false activations, but it was tuned after inspecting that split. The gated result is promising but should be validated on a fresh continuous chained recording before being used as live-control evidence.
+The dirty-hands condition better matched AirDesk's motivating use case. Participants began with messy hands using olive oil, flour, and honey. For keyboard/mouse runs, they had to wash their hands before using the devices. For AirDesk runs, they could keep their hands dirty and complete the task with gestures. This made the comparison less about whether mid-air input can beat a mouse in ideal conditions and more about whether it can avoid the transition cost of cleaning up before touching the computer.
 
-The first TCN v2 smoke test shows the opposite kind of result. The data/model/evaluation surface works, and the model can be trained over frame-level evidence heads. However, the initial old-data model was underconfident at the event level. A permissive replay pass matched only one of sixteen intended swipes and produced two false activations. This result does not mean the TCN v2 direction is wrong. It means the architecture needs fresh continuous training data and event-level decoding before it can be compared fairly with DTW.
+\begin{table}[h]
+  \caption{Dirty-hands pilot results. Keyboard/mouse time includes washing hands before using the devices. AirDesk time skips washing and uses hand control.}
+  \label{tab:dirty-hands-results}
+  \centering
+  \begin{tabular}{llll}
+    \hline
+    Participant & Keyboard/mouse runs & AirDesk runs & Mean difference \\
+    \hline
+    Author & 46s, 43s & 38s, 40s & AirDesk 5.5s faster \\
+    Roommate & 44s, 42s & 40s, 42s & AirDesk 2.0s faster \\
+    Overall & 43.8s mean & 40.0s mean & AirDesk 3.8s faster \\
+    \hline
+  \end{tabular}
+\end{table}
 
-The pilot results will extend this evidence with live-session task outcomes and short interview notes. The main values to report are task success, false activations, missed gestures, repeated fires, completion time, perceived control, fatigue, and perceived usefulness. The qualitative summary will focus on which commands felt natural, which commands felt unreliable, and when participants would actually prefer AirDesk over keyboard or mouse input.
+The margin changed substantially between contexts. In normal use, hand control was about twice as slow as keyboard and mouse. With dirty hands, the keyboard/mouse condition added cleanup time, and the difference nearly disappeared. AirDesk was slightly faster overall because it let participants act immediately instead of washing, returning to the computer, completing the task, and then getting their hands dirty again. This supports the central project claim: mid-air gestures are not generally better than keyboard and mouse, but they can be useful when ordinary input has a real access cost.
+
+The practical comparison is therefore not just ``gesture versus mouse.'' It is ``gesture now'' versus ``stop the surrounding task, clean up, interact with the computer, and resume.'' AirDesk becomes more compelling when that transition cost is part of the real workflow.
+
+\subsection{Qualitative Observations}
+
+Both participants completed the workflow in both contexts, but the interaction did not feel equally strong across all gestures. Cursor movement and pinch-to-click felt the most natural. They are direct, visible, and similar to ordinary pointing behavior: move the hand to move the cursor, pinch to commit. Dragging and text selection were usable but required patience because the prototype still depends on stable tracking and clean pinch timing.
+
+Scrolling was the hardest part of the workflow. The middle-pinch scroll gesture worked, but it was less familiar than clicking and more sensitive to vertical hand motion. Participants sometimes had to adjust their hand position to get the scroll direction and amount they wanted. Pinch-to-click also occasionally missed on the first attempt, requiring a second pinch. These misses did not stop the task, but they explain part of the time difference between AirDesk and keyboard/mouse in the normal condition.
+
+The pilot also reinforced how much webcam-based landmark control depends on setup. Good lighting and a front-facing hand improved tracking. Darker lighting, angled hands, or a hand too far from the camera made the landmarks less stable. When the hand was far away, the landmarks compressed together in the image, which made distance thresholds such as pinch more fragile. These observations shaped the limitations and future-work sections: AirDesk can work as a prototype under favorable conditions, but robust everyday use would need better calibration, depth information, or a recognizer that adapts to distance and camera angle.
+
+\subsection{Research Question Summary}
+
+The pilot gives formative answers to the research questions. For RQ1, the small deterministic vocabulary was sufficient to complete a realistic desktop workflow, but only under favorable lighting and with practice. For RQ2, cursor movement, clicking, workspace navigation, and the dirty-hands use case were the most promising; scrolling, selection, and occasional missed pinches remained slower or more awkward. For RQ3, keyboard/mouse was clearly faster when ordinary input was immediately available, but the comparison changed when ordinary input required cleanup first. In that situationally impaired context, AirDesk became competitive and slightly faster on average.
 
 \section{Discussion}
 
-AirDesk's current results support the project framing: the most valuable contribution so far is not a final gesture recognizer, but an instrumented system for making desktop gesture control measurable. The rule recognizer failure is useful because it shows that clean synthetic gestures are not enough. Natural desktop motion creates false activations, and dynamic command gestures require explicit intent gates, background rejection, and replay-based evaluation.
+The pilot supports the central framing of the project: mid-air gestures are most useful when they are treated as an optional interaction layer, not as a universal mouse replacement. Under normal desk conditions, keyboard and mouse were clearly faster. That result is not a failure of the design. It shows that the comparison only becomes interesting when the surrounding situation changes the cost of ordinary input.
 
-The DTW results suggest that personalized gesture templates may be viable for a small vocabulary, especially when combined with motion-direction gates. The TCN v2 work suggests a different lesson: the learned-model problem is not simply ``classify this window.'' The model and decoder have to spot gesture events inside a continuous stream. This matters because a desktop command system should allow repeated or chained gestures without forcing the user to pause until a fixed window resets. That is why the current paper should compare recognizers at the event level, not by window accuracy. The final pilot should use the most reliable recognizer available at that point, even if that is DTW rather than TCN v2.
+The dirty-hands condition is the clearest example. In that context, the interaction problem is not just pointing or clicking. It is the interruption around pointing or clicking: leaving the task, washing hands, using the computer, and then returning to the task. AirDesk helped because it removed that transition. The current prototype is still slower and rougher than normal desktop input, but it can be useful when the alternative includes extra physical steps outside the computer.
 
-The design also suggests a useful boundary for future development. Command mode is a better first paper target than cursor mode because workspace and focus actions are discrete, recoverable, and easy to log. Cursor takeover, click, drag, and text entry are more demanding because small errors are more disruptive and fatigue accumulates quickly. AirDesk can still grow into those modes, but the first evaluation should focus on commands that match the strengths of mid-air input.
+The design also suggests a useful boundary for future development. Mid-air input works best when it is optional and task-specific. Cursor movement, click, drag, and scroll are possible, but they are slower and more tiring than a real mouse during normal use. The strongest future versions should therefore focus on moments where a small number of gestures can remove a larger interruption, not on replacing every precise desktop action.
 
-Finally, the small pilot should be interpreted as a formative design check. If the roommate participant finds the clutch confusing, the gesture vocabulary tiring, or dry-run feedback hard to understand, those are valuable results. The goal is not to prove that AirDesk is finished. The goal is to identify the smallest credible desktop gesture loop that works well enough to justify broader evaluation.
+Finally, the small pilot should be interpreted as a formative design check. The goal is not to prove that AirDesk is finished. The goal is to identify the smallest credible desktop gesture loop that works well enough to justify broader evaluation, and to understand which parts of the workflow still feel slower, tiring, or less precise than ordinary input.
 
 \section{Limitations}
 
-This project has several limitations. The pilot participant count is small, and one participant is the developer. The current hardware baseline is a commodity webcam at approximately 30 FPS, which may limit tracking quality under poor lighting, occlusion, or fast movement. The evaluation so far is developer-centered and may overfit to one user's gesture style. Dynamic gesture recognition is not yet validated for real-time live control in a fresh continuous session. Cursor mode exists as a guarded prototype but is not part of the main paper evaluation. Accessibility benefits are design motivations, not validated claims.
+This project has several limitations. The pilot participant count is small, and one participant is the author. The current hardware baseline is a built-in laptop webcam at approximately 30 FPS, which limits tracking quality under poor lighting, occlusion, fast movement, unusual camera angles, or larger camera-to-hand distances. The pilot was intentionally run in good lighting, so the results should not be read as evidence that the system works equally well in dark rooms or cluttered backgrounds. The evaluation is formative and may overfit to one setup, one workspace layout, and one user's gesture style. The dirty-hands condition uses a simple simulated mess rather than a full cooking or workshop task, so it captures only one kind of situational impairment. Accessibility benefits are design motivations, not validated claims.
 
-The recognizer evidence also has limits. Same-batch DTW results are optimistic, and the gated holdout result was tuned after observing the first holdout behavior. The current TCN v2 result is also preliminary: it validates the pipeline shape more than the recognition quality. These results are useful engineering signals, but the paper should not present them as final model performance. The final pilot should add fresh continuous motion and normal background activity before making any stronger reliability claims.
+The recognition approach also has limits. The final prototype uses deterministic landmark math, which is easier to explain and tune than a learned model, but it depends on camera geometry and threshold choices. Hand distance, hand rotation, and lighting can change the landmark layout enough to affect pinch or fist detection. Future studies should add more participants, more camera setups, natural background motion, and stricter timing logs before making stronger reliability claims.
 
 \section{Future Work}
 
-Future work includes a larger participant study, improved continuous-session labeling, a stronger continuous-spotting recognizer, richer overlay feedback, safer real cursor click and drag injection, depth or Kinect context, and profile-specific gesture vocabularies for media, presentation, and accessibility use cases. A larger study should include participants who actually experience the target constraints rather than only simulating them. For example, future work could separately study gloves, distance-from-keyboard use, wrist-pain scenarios, and presentation contexts.
+Future work includes a larger participant study, improved continuous-session labeling, a stronger continuous-spotting recognizer, richer overlay feedback, more robust cursor click and drag behavior, depth or Kinect context, and profile-specific gesture vocabularies for media, presentation, and accessibility use cases. A larger study should include participants who actually experience the target constraints rather than only simulating them. For example, future work could separately study gloves, distance-from-keyboard use, wrist-pain scenarios, and presentation contexts.
 
-The system could also support user-specific calibration. The early DTW results suggest that personalized templates may work for a small vocabulary, but future versions should make calibration explicit, measure how many examples are needed, and determine whether templates transfer across days, lighting conditions, and camera positions. For TCN v2, the next step is not simply more epochs. It is better continuous data, reviewed labels, event-boundary evidence, and decoder thresholds that are evaluated on full streams. The long-term target is a recognizer that can handle partial gestures, adjacent gestures, and repeated commands without treating a fixed frame window as the unit of meaning.
+The system could also support user-specific calibration. The current threshold-based approach would benefit from a short setup step that learns a user's hand size, preferred distance from the camera, and comfortable pinch/fist shapes. Longer term, DTW or TCN-style continuous recognizers may still be useful for richer gesture shortcuts, but they need better continuous data and boundary labels before they should control a live desktop.
+
+AirDesk should also be treated as a beta prototype rather than the ceiling of the interaction. The current pilot uses direct landmark logic and a small vocabulary because that was the most reliable path for this version. A stronger learned recognizer could support richer gesture shortcuts, chained commands, and user-specific command vocabularies that reduce the number of steps in a workflow. Since the prototype already supports mouse-like control, a future version could also combine gestures with voice input for text entry and command naming. In that version, AirDesk would not only avoid dirty-hand cleanup costs; it might also become faster than keyboard and mouse for some ideal-condition workflows because complex actions could collapse into a small number of gestures or voice-plus-gesture commands.
 
 \section{Conclusion}
 
-AirDesk explores mid-air gestures as a secondary desktop command layer for situationally impaired interaction. The current prototype provides a pluggable architecture, explicit command mode, dry-run-first execution, replayable logs, labeling, feature extraction, and early recognition baselines. The system is strongest when framed as an optional command channel for moments when keyboard and mouse input is inconvenient, not as a replacement for ordinary desktop input. The main lesson so far is that credible desktop gesture systems need explicit intent, safety boundaries, and continuous-stream evaluation rather than isolated gesture demos. The planned pilot will use that framing to determine which recognizer and interaction loop are ready for broader evaluation and which should remain future work.
+AirDesk explores mid-air gestures as a secondary desktop control layer for situationally impaired interaction. The current prototype provides a pluggable architecture, deterministic hand-control grammar, practice-first execution, guarded desktop actions, replayable logs, labeling, feature extraction, and pilot evidence. The system is strongest when framed as an optional input channel for moments when keyboard and mouse input is inconvenient, not as a replacement for ordinary desktop input. The main lesson is that credible desktop gesture systems need explicit intent, recoverable interaction design, and realistic workflow evaluation rather than isolated gesture demos. The pilot shows that AirDesk is slower than keyboard and mouse under normal desk conditions, but becomes competitive when ordinary input requires cleanup before use.
+
+\begin{acks}
+Thanks to the informal pilot participant who helped test the prototype workflow and provided feedback on the gesture controls.
+\end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
