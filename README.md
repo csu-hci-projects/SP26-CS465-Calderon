@@ -1,5 +1,25 @@
 # AirDesk
 
+## Submission Links
+
+Final videos: TBD
+
+Project overview video: TBD
+
+Latex file in repo, link: [paper/latex-source/main.tex](paper/latex-source/main.tex)
+
+Overleaf link: TBD
+
+PDF Literature Survey Link: [paper/PDFs-LiteratureSurvey/](paper/PDFs-LiteratureSurvey/)
+
+Work Allocation: I worked solo, with AI assistance for parts of the code.
+
+Technical Demo/Videos: TBD
+
+Research Paper: [paper/latex-source/main.tex](paper/latex-source/main.tex)
+
+Other notes: AirDesk's current live demo path is deterministic MediaPipe control through `airdesk control run`; learned TCN/IPN/DTW work is retained as research and diagnostic infrastructure, not the live action recognizer.
+
 AirDesk is a webcam-based mid-air desktop control prototype for Hyprland Linux. It uses MediaPipe hand landmarks to turn a small, deliberate hand vocabulary into pointer, click, scroll, launcher, workspace, and window-management actions, with dry-run logging as the default safety mode. The project is designed with situationally impaired interaction in mind: dirty hands, gloves, limited reach, standing away from the desk, temporary pain, presentation contexts, or other moments when touching the keyboard and mouse is inconvenient.
 
 ## What to Grade / What Works
