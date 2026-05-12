@@ -32,6 +32,8 @@ class ControlGrammarConfig:
     click_cooldown_seconds: float = 0.16
     close_cooldown_seconds: float = 2.0
     tap_max_seconds: float = 0.55
+    middle_click_max_seconds: float = 1.25
+    middle_click_release_margin: float = 0.02
     index_drag_hold_seconds: float = 0.35
     index_drag_motion_threshold: float = 0.025
     scroll_cooldown_seconds: float = 0.12
@@ -206,6 +208,7 @@ class ControlGrammar:
                             timestamp=timestamp,
                             duration=event.duration,
                             reason="thumb/middle pinch tap",
+                            max_duration=self.config.middle_click_max_seconds,
                         )
                     )
 
@@ -378,15 +381,12 @@ class ControlGrammar:
             )
         if pose == "middle_pinch":
             self._pinch_starts.pop((hand_id, pose), None)
-            return self._click_intent_if_tap(
-                current_features=None,
-                hand_id=hand_id,
-                pose=pose,
-                button="right",
-                timestamp=timestamp,
-                duration=duration,
-                reason="thumb/middle pinch tap after tracking dropout",
+            self._pending_taps.pop((hand_id, pose), None)
+            self._blocked_taps.discard((hand_id, pose))
+            self.last_diagnostics.append(
+                f"{hand_id}: suppressed middle_pinch tap after tracking dropout"
             )
+            return []
         return []
 
     def _button_hold_intent_if_needed(
@@ -680,6 +680,7 @@ class ControlGrammar:
         timestamp: float,
         duration: float,
         reason: str,
+        max_duration: float | None = None,
     ) -> list[ControlIntent]:
         pending_key = (hand_id, pose)
         pending = self._pending_taps.pop(pending_key, False)
@@ -690,7 +691,8 @@ class ControlGrammar:
                 f"{hand_id}: suppressed {pose} tap because the release was ambiguous"
             )
             return []
-        if not pending or duration > self.config.tap_max_seconds:
+        max_click_duration = max_duration or self.config.tap_max_seconds
+        if not pending or duration > max_click_duration:
             return []
         if current_features is not None and not self._is_clean_pinch_release(
             current_features,
@@ -717,8 +719,9 @@ class ControlGrammar:
             ),
         )
 
-    @staticmethod
-    def _is_clean_pinch_release(features: ControlPoseFeatures, *, pose: str) -> bool:
+    def _is_clean_pinch_release(self, features: ControlPoseFeatures, *, pose: str) -> bool:
+        if pose == "middle_pinch":
+            return self._is_clean_middle_pinch_release(features)
         if features.ambiguity == "index_middle_pinch_conflict":
             return (
                 pose in features.suppressed_poses
@@ -734,6 +737,29 @@ class ControlGrammar:
             *(PINCH_POSES - {pose}),
         }
         return features.poses.isdisjoint(blocked)
+
+    def _is_clean_middle_pinch_release(self, features: ControlPoseFeatures) -> bool:
+        if features.ambiguity is not None:
+            return False
+        blocked = {
+            "fist",
+            "index_pinch",
+            "middle_pinch",
+            "sideways_open_palm_left",
+            "sideways_open_palm_right",
+        }
+        if not features.poses.isdisjoint(blocked):
+            return False
+        evidence = features.pose_evidence.get("middle_pinch")
+        threshold = 0.0
+        if isinstance(evidence, dict):
+            threshold_value = evidence.get("threshold")
+            if isinstance(threshold_value, (int, float)):
+                threshold = float(threshold_value)
+        return (
+            features.middle_pinch_distance
+            >= threshold + self.config.middle_click_release_margin
+        )
 
     def _workspace_arg(self, direction: str) -> str:
         prefix = self.config.workspace_selector_prefix

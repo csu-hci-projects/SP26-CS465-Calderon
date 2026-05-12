@@ -225,11 +225,14 @@ def test_control_run_help_exposes_control_controls() -> None:
     assert "--execute" in result.stdout
     assert "--pointer-execute" in result.stdout
     assert "--cursor-gain" in result.stdout
+    assert "--cursor-jitter-gate-px" in result.stdout
     assert "--workspace-motion-threshold" in result.stdout
     assert "--workspace-selector-prefix" in result.stdout
     assert "--scroll-motion-threshold" in result.stdout
     assert "--click-cooldown-seconds" in result.stdout
     assert "--tap-max-seconds" in result.stdout
+    assert "--middle-click-max-seconds" in result.stdout
+    assert "--middle-click-release-margin" in result.stdout
     assert "--index-drag-hold-seconds" in result.stdout
     assert "--index-drag-motion-threshold" in result.stdout
     assert "--left-zone-max" in result.stdout

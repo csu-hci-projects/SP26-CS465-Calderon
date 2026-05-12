@@ -154,8 +154,9 @@ Current implementation status:
   `left <= 0.30` and `right >= 0.70`; workspace motion defaults to `0.10`;
   move-window motion defaults to `0.12`; workspace selectors default to
   current-monitor relative `r+1` / `r-1`; cursor gain defaults to `12.0` with
-  smoother `0.25` alpha and a `1px` dead zone. The control runtime filters to
-  one active hand, and the recommended live command now uses `--max-num-hands 1`.
+  `0.16` smoothing alpha, a `4px` output dead zone, and a `10px` raw jitter
+  gate. The control runtime filters to one active hand, and the recommended live
+  command now uses `--max-num-hands 1`.
 - Fist detection tests cover relaxed curl, partial curl, real fist, sideways
   closed fist, pinch-like fist artifacts, forming-fist pinch artifacts, and noisy
   sideways hands.
@@ -165,10 +166,13 @@ Current implementation status:
   index/middle pinch ambiguity. Pending taps are still canceled by
   forming-fist/closed-hand ambiguity, and releases onto the other clean pinch
   pose are rejected. Index pinch keeps cursor movement live and starts a held
-  left button on drag motion or a `0.35s` hold for select/highlight;
-  middle-pinch drag scrolls continuously instead of waiting for a long held
-  event. Middle-pinch detection defaults to the same stricter distance as index
-  pinch (`0.06`) and both thresholds are exposed on `airdesk control run`.
+  left button on drag motion or a `0.35s` hold for select/highlight. Middle
+  pinch locks the cursor, keeps a fixed scroll anchor until release, uses the
+  start zone as the pause zone, and scrolls continuously while held outside that
+  zone. Middle right-click emits only on clean release, not on contact, tracking
+  dropout, fuzzy threshold release, or after any scroll. Middle-pinch detection
+  defaults to the same stricter distance as index pinch (`0.06`) and both
+  thresholds are exposed on `airdesk control run`.
 - The `airdesk control run --show` preview now uses the control pose resolver
   rather than the old static Sprint 0 preview recognizer, so visual labels
   should match command-safe poses and ambiguity suppression.
@@ -191,12 +195,12 @@ Latest live-test findings and next priority:
   `fist`, 57 `fist:entered` events, 76 `fist:held` events, 18 workspace intents,
   and three move-window intents. Workspace and move-window are now firing, but
   the one-shot arm-consumption design is too clumsy for multi-workspace travel.
-- Current next priority is validating the held-repeat grammar: fist creates one
-  anchor, moving past a threshold fires, continuing to hold repeats after
-  `--fist-repeat-cooldown-seconds`, moving back near the anchor stops repeats,
-  and release clears the arm. Middle pinch is tightened to the index threshold
-  by default, but if live logs still show accidental middle-pinch entry, tune
-  `--middle-pinch-threshold` downward and inspect `pose_evidence.middle_pinch`.
+- Current next priority is validating the feel of the latest live-control
+  polish: cursor jitter should be calmer without losing screen reach; middle
+  pinch should lock the cursor while scrolling, pause near its start anchor, and
+  right-click only on clean non-scroll release; held fist should still repeat
+  workspace/window steps after `--fist-repeat-cooldown-seconds` and stop when
+  moved back near the anchor.
 - The next live pass should inspect `features[].pose_evidence`,
   `features[].ambiguity`, `event_summaries`, `intents`, and
   `grammar_diagnostics` before changing thresholds. If fist never stabilizes,
@@ -219,8 +223,11 @@ Recommended next implementation slice:
    - both should repeat while held after the repeat cooldown, stop when the
      fist returns near the anchor, clear on release/expiry, and log why they did
      or did not fire.
+   - middle pinch: enter, hold in the start zone without moving the cursor,
+     drag up/down to scroll, return to the start zone to pause, release without
+     scroll to right-click, and release after scroll without right-click.
 4. Then run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --click-cooldown-seconds 0.16 --tap-max-seconds 0.55 --index-drag-hold-seconds 0.35 --index-drag-motion-threshold 0.025 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.16 --cursor-dead-zone-px 4 --cursor-jitter-gate-px 10 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --click-cooldown-seconds 0.16 --tap-max-seconds 0.55 --middle-click-max-seconds 1.25 --middle-click-release-margin 0.02 --index-drag-hold-seconds 0.35 --index-drag-motion-threshold 0.025 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 5. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
 6. Only after dry-run feels stable, consider guarded real Hyprland/window

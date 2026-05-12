@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from airdesk.actions.cursor import CursorBounds, CursorPosition, DryRunCursorTarget
 from airdesk.actions.dry_run import DryRunActionTarget
@@ -208,6 +209,126 @@ def test_control_runtime_allows_cursor_motion_during_index_pinch(
 
     assert first is None
     assert moved is not None
+
+
+def test_control_runtime_ignores_tiny_cursor_jitter_until_motion_accumulates(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    runtime = ControlRuntime(
+        tracker=object(),
+        cursor_target=DryRunCursorTarget(),
+        hyprland_target=DryRunActionTarget(),
+    )
+    bounds = CursorBounds(x=0, y=0, width=1000, height=1000)
+    cursor = CursorPosition(x=500, y=500)
+    start_features = recognizer.features_for_frame(make_tracking_frame(make_hand("open_palm")))
+    jitter_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.5002))
+    )
+    moved_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("open_palm"), x=0.54))
+    )
+
+    runtime._move_cursor_from_features(
+        features=start_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+    jitter = runtime._move_cursor_from_features(
+        features=jitter_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+    moved = runtime._move_cursor_from_features(
+        features=moved_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+
+    assert jitter is None
+    assert moved is not None
+
+
+def test_control_runtime_locks_cursor_during_middle_pinch_scroll_release_gap(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    runtime = ControlRuntime(
+        tracker=object(),
+        cursor_target=DryRunCursorTarget(),
+        hyprland_target=DryRunActionTarget(),
+    )
+    bounds = CursorBounds(x=0, y=0, width=1000, height=1000)
+    cursor = CursorPosition(x=500, y=500)
+    open_features = recognizer.features_for_frame(make_tracking_frame(make_hand("open_palm")))
+    middle_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+    relaxed_gap_features = [
+        replace(middle_features[0], palm_x=0.45, poses=frozenset(), suppressed_poses=frozenset())
+    ]
+
+    runtime._move_cursor_from_features(
+        features=open_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+    runtime._prepare_scroll_locks(
+        features=middle_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+    )
+    runtime._scroll_delta_by_hand(middle_features)
+    runtime._scroll_delta_by_hand(relaxed_gap_features)
+    anchor_after_gap = dict(runtime._pinch_scroll_anchor_y)
+    moved_during_gap = runtime._move_cursor_from_features(
+        features=relaxed_gap_features,
+        bounds=bounds,
+        current_cursor=cursor,
+    )
+    runtime._release_scroll_locks(
+        [PoseEvent("hand-0", "middle_pinch", "released", 1.1, duration=0.1)]
+    )
+
+    assert moved_during_gap is None
+    assert anchor_after_gap == {"hand-0": middle_features[0].palm_y}
+    assert runtime._pinch_scroll_anchor_y == {}
+    assert not runtime._scroll_locked_hands
+
+
+def test_control_runtime_scroll_anchor_is_fixed_until_middle_pinch_release(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    runtime = ControlRuntime(
+        tracker=object(),
+        cursor_target=DryRunCursorTarget(),
+        hyprland_target=DryRunActionTarget(),
+    )
+    start_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+    moved_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(_move_hand(make_hand("open_palm"), y=0.62)))
+    )
+
+    runtime._prepare_scroll_locks(
+        features=start_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+    )
+    assert runtime._scroll_delta_by_hand(start_features) == {}
+    first_scroll = runtime._scroll_delta_by_hand(moved_features)
+    repeated_scroll = runtime._scroll_delta_by_hand(moved_features)
+    runtime._release_scroll_locks(
+        [PoseEvent("hand-0", "middle_pinch", "released", 1.2, duration=0.2)]
+    )
+
+    assert first_scroll == {"hand-0": 1}
+    assert repeated_scroll == {"hand-0": 1}
+    assert runtime._pinch_scroll_anchor_y == {}
 
 
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
@@ -615,6 +736,91 @@ def test_control_grammar_scrolls_on_middle_pinch_hold_and_suppresses_tap(
     assert scroll[0].name == "scroll"
     assert scroll[0].request.parameters["amount_y"] == -1
     assert click == []
+
+
+def test_control_grammar_middle_pinch_right_clicks_only_on_clean_release(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    middle_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+    release_features = recognizer.features_for_frame(make_tracking_frame(make_hand("open_palm")))
+
+    entered = grammar.update(
+        features=middle_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    held = grammar.update(
+        features=middle_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "held", 1.4, duration=0.4)],
+        timestamp=1.4,
+    )
+    click = grammar.update(
+        features=release_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "released", 2.0, duration=1.0)],
+        timestamp=2.0,
+    )
+
+    assert entered == []
+    assert held == []
+    assert click[0].name == "right_click"
+    assert click[0].request.parameters == {"button": "right", "action": "click"}
+
+
+def test_control_grammar_suppresses_middle_click_on_fuzzy_release(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    middle_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+    fuzzy_release_features = recognizer.features_for_frame(
+        make_tracking_frame(_borderline_middle_pinch_hand(make_hand("open_palm")))
+    )
+
+    grammar.update(
+        features=middle_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    click = grammar.update(
+        features=fuzzy_release_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "released", 1.2, duration=0.2)],
+        timestamp=1.2,
+    )
+
+    assert click == []
+
+
+def test_control_grammar_suppresses_middle_click_after_tracking_dropout(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar()
+    middle_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
+    )
+
+    grammar.update(
+        features=middle_features,
+        events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    click = grammar.update(
+        features=[],
+        events=[PoseEvent("hand-0", "middle_pinch", "released", 1.2, duration=0.2)],
+        timestamp=1.2,
+    )
+
+    assert click == []
+    assert any("tracking dropout" in item for item in grammar.last_diagnostics)
 
 
 def test_control_grammar_scrolls_on_middle_pinch_drag_without_waiting_for_hold_event(

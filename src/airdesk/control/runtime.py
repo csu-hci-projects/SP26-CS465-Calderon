@@ -27,8 +27,9 @@ class ControlRuntimeConfig:
     execute: bool = False
     pause_on_start: bool = False
     cursor_gain: float = 12.0
-    cursor_smoothing_alpha: float = 0.25
-    cursor_dead_zone_px: int = 1
+    cursor_smoothing_alpha: float = 0.16
+    cursor_dead_zone_px: int = 4
+    cursor_jitter_gate_px: int = 10
     mirror_x: bool = True
     scroll_motion_threshold: float = 0.045
     scroll_amount_per_step: int = 1
@@ -63,6 +64,7 @@ class ControlRuntime:
     paused: bool = False
     _last_hand_point: tuple[str, float, float] | None = None
     _pinch_scroll_anchor_y: dict[str, float] = field(default_factory=dict)
+    _scroll_locked_hands: set[str] = field(default_factory=set)
     _last_status: dict[str, object] = field(default_factory=dict)
     _active_hand_id: str | None = None
 
@@ -120,6 +122,7 @@ class ControlRuntime:
                             active_poses=frozenset(),
                         )
                     )
+                self._prepare_scroll_locks(features=features, events=events)
                 scroll_delta_by_hand = self._scroll_delta_by_hand(features)
                 intents: list[ControlIntent] = []
 
@@ -133,6 +136,7 @@ class ControlRuntime:
                         grammar_diagnostics=self.grammar.last_diagnostics,
                         intents=intents,
                     )
+                    self._release_scroll_locks(events)
                     continue
 
                 moved = self._move_cursor_from_features(
@@ -175,6 +179,7 @@ class ControlRuntime:
                             "result": result.to_dict(),
                         },
                     )
+                self._release_scroll_locks(events)
                 self._emit_frame_status(
                     features,
                     events,
@@ -312,6 +317,9 @@ class ControlRuntime:
         if hand_features is None:
             self._last_hand_point = None
             return None
+        if hand_features.hand_id in self._scroll_locked_hands:
+            self._last_hand_point = None
+            return None
         hand_point = (hand_features.hand_id, hand_features.palm_x, hand_features.palm_y)
         if self._last_hand_point is None or self._last_hand_point[0] != hand_features.hand_id:
             self._last_hand_point = hand_point
@@ -322,10 +330,14 @@ class ControlRuntime:
         dy = hand_features.palm_y - last_y
         if self.config.mirror_x:
             dx = -dx
+        raw_dx = dx * bounds.width * self.config.cursor_gain
+        raw_dy = dy * bounds.height * self.config.cursor_gain
+        if (raw_dx * raw_dx + raw_dy * raw_dy) ** 0.5 <= self.config.cursor_jitter_gate_px:
+            return None
         target = bounds.clamp(
             CursorPosition(
-                x=round(current_cursor.x + dx * bounds.width * self.config.cursor_gain),
-                y=round(current_cursor.y + dy * bounds.height * self.config.cursor_gain),
+                x=round(current_cursor.x + raw_dx),
+                y=round(current_cursor.y + raw_dy),
             )
         )
         alpha = self.config.cursor_smoothing_alpha
@@ -333,10 +345,34 @@ class ControlRuntime:
             x=round(current_cursor.x + (target.x - current_cursor.x) * alpha),
             y=round(current_cursor.y + (target.y - current_cursor.y) * alpha),
         )
-        self._last_hand_point = hand_point
         if _distance_px(current_cursor, smoothed) <= self.config.cursor_dead_zone_px:
             return None
+        self._last_hand_point = hand_point
         return smoothed
+
+    def _prepare_scroll_locks(
+        self,
+        *,
+        features: list[ControlPoseFeatures],
+        events: list[PoseEvent],
+    ) -> None:
+        active_hand_ids = {feature.hand_id for feature in features}
+        for hand_id in list(self._scroll_locked_hands):
+            if hand_id not in active_hand_ids:
+                self._scroll_locked_hands.discard(hand_id)
+                self._pinch_scroll_anchor_y.pop(hand_id, None)
+        for event in events:
+            if event.pose == "middle_pinch" and event.event_type == "entered":
+                self._scroll_locked_hands.add(event.hand_id)
+        for feature in features:
+            if "middle_pinch" in feature.poses:
+                self._scroll_locked_hands.add(feature.hand_id)
+
+    def _release_scroll_locks(self, events: list[PoseEvent]) -> None:
+        for event in events:
+            if event.pose == "middle_pinch" and event.event_type == "released":
+                self._scroll_locked_hands.discard(event.hand_id)
+                self._pinch_scroll_anchor_y.pop(event.hand_id, None)
 
     def _scroll_delta_by_hand(self, features: list[ControlPoseFeatures]) -> dict[str, int]:
         deltas: dict[str, int] = {}
@@ -346,7 +382,8 @@ class ControlRuntime:
                 self._pinch_scroll_anchor_y.pop(hand_id, None)
         for feature in features:
             if "middle_pinch" not in feature.poses:
-                self._pinch_scroll_anchor_y.pop(feature.hand_id, None)
+                if feature.hand_id not in self._scroll_locked_hands:
+                    self._pinch_scroll_anchor_y.pop(feature.hand_id, None)
                 continue
             anchor = self._pinch_scroll_anchor_y.setdefault(feature.hand_id, feature.palm_y)
             dy = feature.palm_y - anchor
@@ -357,7 +394,6 @@ class ControlRuntime:
                 if dy < 0
                 else self.config.scroll_amount_per_step
             )
-            self._pinch_scroll_anchor_y[feature.hand_id] = feature.palm_y
         return deltas
 
     def _emit_frame_status(
@@ -415,6 +451,7 @@ class ControlRuntime:
                 "executed": self._last_status.get("executed", "none"),
                 "suppressed": suppressed,
                 "scroll_delta_by_hand": scroll_delta_by_hand,
+                "scroll_locked_hands": sorted(self._scroll_locked_hands),
             },
         )
 

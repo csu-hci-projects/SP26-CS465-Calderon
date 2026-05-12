@@ -769,12 +769,16 @@ The first deterministic control slice is now in place:
   tap/click: pinch poses can enter after one stable frame, tap max is `0.55s`,
   and click cooldown is `0.16s`. Index pinch keeps cursor movement live and
   starts a held left button on drag motion or a short hold for select/highlight.
-  Middle pinch drag emits scroll ticks continuously and suppresses the tap once
-  scrolling begins. A clean index tap can survive a non-closed index/middle
-  release ambiguity, but forming-fist/closed-hand ambiguity still cancels it.
-  Middle pinch defaults to the same strict `0.06` distance as index pinch, with
-  `--index-pinch-threshold` and `--middle-pinch-threshold` exposed separately
-  for live tuning.
+  Middle pinch is now a scroll clutch first: it locks the cursor in place,
+  keeps one fixed scroll anchor until release, uses the start zone as the
+  no-scroll/pause zone, and suppresses right-click if any scroll fired. A
+  stationary middle pinch can right-click only on clean release, not on contact
+  or tracking dropout; release distance has an extra margin so a threshold
+  flicker while still pinched does not open a context menu. A clean index tap can
+  survive a non-closed index/middle release ambiguity, but forming-fist/
+  closed-hand ambiguity still cancels it. Middle pinch defaults to the same
+  strict `0.06` distance as index pinch, with `--index-pinch-threshold` and
+  `--middle-pinch-threshold` exposed separately for live tuning.
 - Control pose facts are prioritized to reduce overlap from noisy sideways/fist
   tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
   artifacts, and clean pinch suppresses plain open-palm.
@@ -793,17 +797,22 @@ The first deterministic control slice is now in place:
   longer triggers workspace changes.
 - The default side zones are pushed outward (`left <= 0.30`, `right >= 0.70`)
   and workspace switching uses fist up/down motion from the fist start point
-  instead of top/bottom zones. Cursor gain defaults to `12.0` with smoother
-  `0.25` alpha and a `1px` dead zone; all are exposed on `airdesk control run`
-  for live tuning. The control runtime filters to one active hand, and the
+  instead of top/bottom zones. Cursor gain defaults to `12.0`; cursor smoothing
+  now defaults to `0.16` alpha with a `4px` output dead zone and `10px` raw
+  jitter gate, and the runtime only advances its hand-motion anchor after an
+  actual cursor move. These controls are exposed on `airdesk control run` for
+  live tuning. The control runtime filters to one active hand, and the
   recommended live command uses `--max-num-hands 1`.
 - Fist detection now combines closed-finger scores, intermediate-joint
   evidence, fingertip clustering, thumb support, low open-palm evidence, and
   the older `--fist-fold-threshold` vertical fold signal. This keeps relaxed
   curled hands out of the command pose while accepting a sideways closed fist.
-- Pinch taps are more forgiving: tap max is now `0.55s`, click cooldown is
-  `0.16s`, and a short pinch release can still click if tracking briefly drops
-  or if release passes through non-closed index/middle ambiguity.
+- Pinch taps are more forgiving for index pinch: tap max is now `0.55s`, click
+  cooldown is `0.16s`, and a short index release can still click if tracking
+  briefly drops or if release passes through non-closed index/middle ambiguity.
+  Middle right-click is deliberately stricter because accidental context menus
+  are more disruptive: no dropout click, no ambiguous/fuzzy release click, and
+  no click after scroll.
 - Real pointer movement/click/scroll injection is available through explicit
   `--execute --pointer-execute` using `/dev/uinput`. Without `--pointer-execute`,
   cursor movement falls back to Hyprland `movecursor`, and pointer click/scroll

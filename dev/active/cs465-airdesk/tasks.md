@@ -75,6 +75,12 @@ Immediate next-session checklist:
 - [x] Route guarded real control cursor movement through `/dev/uinput` when
       `--execute --pointer-execute` is enabled, so clients receive normal
       pointer-motion events and clickable hover states can update.
+- [x] Reduce cursor jitter by default with stricter smoothing/dead-zone gating
+      and by accumulating small hand movement until it is large enough to move
+      the cursor.
+- [x] Rework middle pinch as a scroll clutch: lock the cursor while held, keep a
+      fixed scroll anchor until release, use the start zone as the pause zone,
+      and allow right-click only on clean non-scroll release.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
       `Target window`, `Executed`, and `Suppressed`.
 - [x] Route `airdesk control run --show` preview labels through the control pose
@@ -111,14 +117,16 @@ instead of forcing a release/re-form after each step. Fist is no longer a
 mostly single-axis fold check: the control pose layer uses
 rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
 suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
-allows non-closed index/middle release ambiguity while still canceling
-forming-fist ambiguity, middle pinch defaults to the same strict threshold as
-index pinch, index pinch continues cursor motion for select/highlight, and
-workspace selectors default to current-monitor relative `r+1` / `r-1` with
-post-dispatch verification during guarded execution. The remaining
+allows non-closed index/middle release ambiguity for index clicks while still
+canceling forming-fist ambiguity. Middle pinch defaults to the same strict
+threshold as index pinch, but its click path is stricter: right-click emits only
+on clean release, never after tracking dropout/fuzzy release/scroll. Index pinch
+continues cursor motion for select/highlight, middle pinch locks the cursor for
+scrolling, and workspace selectors default to current-monitor relative `r+1` /
+`r-1` with post-dispatch verification during guarded execution. The remaining
 MVP polish is richer live dashboard rendering and fresh live dry-run validation
-of repeated workspace switching and repeated `movetoworkspace` after the held
-fist grammar update.
+of cursor jitter, middle-pinch scroll/right-click feel, repeated workspace
+switching, and repeated `movetoworkspace` after the held fist grammar update.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,

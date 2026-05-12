@@ -415,11 +415,15 @@ def control_run(
     cursor_smoothing_alpha: Annotated[
         float,
         typer.Option(help="Open-hand cursor smoothing alpha from 0 to 1."),
-    ] = 0.25,
+    ] = 0.16,
     cursor_dead_zone_px: Annotated[
         int,
         typer.Option(help="Ignore cursor movements below this pixel size."),
-    ] = 1,
+    ] = 4,
+    cursor_jitter_gate_px: Annotated[
+        int,
+        typer.Option(help="Ignore raw cursor deltas below this pixel size before smoothing."),
+    ] = 10,
     scroll_motion_threshold: Annotated[
         float,
         typer.Option(help="Normalized vertical palm movement needed per scroll tick."),
@@ -436,6 +440,16 @@ def control_run(
         float,
         typer.Option(help="Maximum pinch duration that still counts as a tap click."),
     ] = 0.55,
+    middle_click_max_seconds: Annotated[
+        float,
+        typer.Option(
+            help="Maximum stationary middle-pinch duration that can right-click on release."
+        ),
+    ] = 1.25,
+    middle_click_release_margin: Annotated[
+        float,
+        typer.Option(help="Extra thumb/middle release distance required before right-click."),
+    ] = 0.02,
     index_drag_hold_seconds: Annotated[
         float,
         typer.Option(help="Stationary index-pinch duration before select/drag begins."),
@@ -560,6 +574,8 @@ def control_run(
             ControlGrammarConfig(
                 click_cooldown_seconds=click_cooldown_seconds,
                 tap_max_seconds=tap_max_seconds,
+                middle_click_max_seconds=middle_click_max_seconds,
+                middle_click_release_margin=middle_click_release_margin,
                 index_drag_hold_seconds=index_drag_hold_seconds,
                 index_drag_motion_threshold=index_drag_motion_threshold,
                 workspace_motion_threshold=workspace_motion_threshold,
@@ -575,6 +591,7 @@ def control_run(
             cursor_gain=cursor_gain,
             cursor_smoothing_alpha=cursor_smoothing_alpha,
             cursor_dead_zone_px=cursor_dead_zone_px,
+            cursor_jitter_gate_px=cursor_jitter_gate_px,
             scroll_motion_threshold=scroll_motion_threshold,
             scroll_amount_per_step=scroll_amount_per_step,
             mirror_x=mirror_x,

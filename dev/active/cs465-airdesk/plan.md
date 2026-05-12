@@ -269,11 +269,14 @@ Important design constraints:
 - cursor control must be modeful, never always-on
 - show a visible cursor-mode indicator
 - use smoothing and configurable gain
-- support a dead zone to avoid jitter
+- support dead-zone/jitter gating to avoid cursor shake from landmark tremor
 - route real clicks/scroll through an isolated input adapter, with dry-run and
   visible event logs before global execution
 - route real control cursor movement through a real pointer-motion source when
   hover feedback matters; compositor cursor warps are not enough for every app
+- treat middle pinch as a scroll clutch: lock the cursor while held, use the
+  pinch start as the no-scroll zone, and emit right-click only on clean
+  non-scroll release
 
 Possible implementation path:
 
@@ -282,7 +285,8 @@ Possible implementation path:
 3. Use the Linux `uinput` target for `airdesk control run --execute
    --pointer-execute` cursor movement and pointer clicks/scroll, so apps receive
    normal relative pointer motion and hover states update.
-4. Add index-pinch click, middle-pinch right click, and pinch-drag scroll.
+4. Add index-pinch click/select-drag, middle-pinch release-right-click, and
+   middle-pinch clutch scrolling with cursor lock.
 5. Keep a fake/diagnostic overlay view for tuning thresholds safely.
 
 ### Text Mode / Virtual Keyboard
