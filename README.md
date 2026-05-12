@@ -4,6 +4,10 @@ AirDesk is a CS465 HCI / 3DUI project about using webcam-based mid-air hand gest
 
 The final prototype uses MediaPipe hand landmarks and deterministic landmark math to control a small desktop vocabulary: pointer movement, click, drag/select, scroll, right click, workspace switching, moving windows between workspaces, opening a launcher, and closing a window with a deliberate combo.
 
+## Grader Note
+
+I worked on this project solo as a group of one. If anything is unclear or you have questions while grading, feel free to message me on Teams or email me at cadencc@colostate.edu.
+
 ## Start Here
 
 For grading or review:
@@ -11,7 +15,7 @@ For grading or review:
 1. Read the final paper PDF from the submitted zip, or the paper source at `paper/latex-source/main.tex`.
 2. Read `Final_Report.pdf` in this repository.
 3. Check the literature PDFs in `paper/PDFs-LiteratureSurvey/`.
-4. Watch the project and programming videos linked below.
+4. Watch the presentation and short demo videos linked below.
 5. Run the safe replay smoke test below.
 6. If reviewing on a Linux laptop with webcam support, run the live practice-mode demo.
 
