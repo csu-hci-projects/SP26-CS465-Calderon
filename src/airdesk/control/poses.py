@@ -8,7 +8,9 @@ from math import dist
 from airdesk.gestures.primitives import FINGER_MCPS, FINGER_TIPS, INDEX_TIP, THUMB_TIP
 from airdesk.state.types import NormalizedHand, TrackingFrame
 
+WRIST = 0
 MIDDLE_TIP = 12
+FINGER_JOINTS = ((5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20))
 FINGER_PIPS = (6, 10, 14, 18)
 FINGER_DIPS = (7, 11, 15, 19)
 PINCH_POSES = frozenset({"index_pinch", "middle_pinch"})
@@ -90,10 +92,16 @@ class ControlPoseRecognizer:
     index_pinch_threshold: float = 0.06
     middle_pinch_threshold: float = 0.065
     min_fist_folded_fingers: int = 4
+    min_fist_closed_fingers: int = 3
+    fist_closed_finger_threshold: float = 0.58
     fist_tip_spread_max: float = 0.30
     fist_tip_cluster_max: float = 0.34
+    fist_tip_cluster_scale_max: float = 0.95
     fist_thumb_cluster_max: float = 0.22
-    fist_confidence_threshold: float = 0.72
+    fist_thumb_cluster_scale_max: float = 0.95
+    fist_open_score_max: float = 0.42
+    fist_confidence_threshold: float = 0.68
+    forming_fist_confidence_threshold: float = 0.45
     clean_pinch_confidence_threshold: float = 0.55
     conflict_margin: float = 0.18
     left_zone_max: float = 0.30
@@ -174,6 +182,7 @@ class ControlPoseRecognizer:
         poses, ambiguity, suppression_reason = self._resolve_control_poses(
             raw_poses,
             pose_scores=pose_scores,
+            pose_evidence=pose_evidence,
         )
         suppressed_poses = raw_poses - poses
 
@@ -204,8 +213,18 @@ class ControlPoseRecognizer:
         raw_poses: set[str],
         *,
         pose_scores: dict[str, float],
+        pose_evidence: dict[str, object],
     ) -> tuple[set[str], str | None, str | None]:
         """Apply control-lane priority so noisy landmark facts do not all fire."""
+        fist_evidence = pose_evidence.get("fist")
+        forming_fist = (
+            isinstance(fist_evidence, dict)
+            and bool(fist_evidence.get("forming_fist"))
+            and bool(raw_poses & PINCH_POSES)
+        )
+        if forming_fist and "fist" not in raw_poses:
+            return set(), "forming_fist_pinch_conflict", "closed hand is not a clean pinch"
+
         if "fist" in raw_poses:
             competing_scores = [
                 pose_scores[pose]
@@ -213,10 +232,6 @@ class ControlPoseRecognizer:
                 if pose != "fist" and pose in pose_scores
             ]
             strongest_competitor = max(competing_scores, default=0.0)
-            if strongest_competitor > 0.0 and (
-                pose_scores["fist"] - strongest_competitor < self.conflict_margin
-            ):
-                return set(), "fist_pose_conflict", "fist evidence is not dominant"
             reason = (
                 "fist dominated overlapping pose evidence"
                 if strongest_competitor > 0.0
@@ -281,6 +296,7 @@ class ControlPoseRecognizer:
 
     def _fist_evidence(self, hand: NormalizedHand) -> tuple[float, dict[str, object]]:
         landmarks = hand.landmarks.landmarks
+        palm_scale = self._palm_scale(hand)
         fold_depths = [
             landmarks[tip_index].y - landmarks[mcp_index].y
             for tip_index, mcp_index in zip(FINGER_TIPS, FINGER_MCPS, strict=True)
@@ -294,9 +310,24 @@ class ControlPoseRecognizer:
             for tip_index, dip_index in zip(FINGER_TIPS, FINGER_DIPS, strict=True)
         ]
         strong_folded = sum(depth >= self.fist_fold_threshold for depth in fold_depths)
-        fold_score = sum(
+        legacy_fold_score = sum(
             _clamp(depth / self.fist_fold_threshold) for depth in fold_depths
         ) / len(fold_depths)
+        curl_facts = [
+            self._finger_curl_fact(
+                hand,
+                mcp_index=mcp_index,
+                pip_index=pip_index,
+                dip_index=dip_index,
+                tip_index=tip_index,
+                palm_scale=palm_scale,
+            )
+            for mcp_index, pip_index, dip_index, tip_index in FINGER_JOINTS
+        ]
+        finger_curl_scores = [fact["score"] for fact in curl_facts]
+        closed_fingers = sum(
+            score >= self.fist_closed_finger_threshold for score in finger_curl_scores
+        )
         tip_points = [landmarks[index] for index in FINGER_TIPS]
         tip_cluster = max(
             dist((a.x, a.y, a.z), (b.x, b.y, b.z))
@@ -317,46 +348,155 @@ class ControlPoseRecognizer:
                 sum(tip.z for tip in tip_points) / len(tip_points),
             ),
         )
+        tip_cluster_ratio = tip_cluster / palm_scale
+        thumb_cluster_ratio = min(thumb_to_cluster, thumb_to_tip) / palm_scale
         tip_spread_ok = tip_spread <= self.fist_tip_spread_max
-        tip_cluster_ok = tip_cluster <= self.fist_tip_cluster_max
+        tip_cluster_ok = tip_cluster_ratio <= self.fist_tip_cluster_scale_max
         thumb_ok = (
             thumb_to_cluster <= self.fist_thumb_cluster_max
             or thumb_to_tip <= self.fist_thumb_cluster_max
+            or thumb_cluster_ratio <= self.fist_thumb_cluster_scale_max
         )
+        open_score = self._open_palm_score(
+            extended_fingers=self._extended_fingers(hand),
+            finger_spread=tip_spread,
+        )
+        closed_shape_score = sum(finger_curl_scores) / len(finger_curl_scores)
+        cluster_score = _inverse_ratio_score(
+            tip_cluster_ratio,
+            closed_at=0.42,
+            open_at=self.fist_tip_cluster_scale_max,
+        )
+        thumb_support_score = _inverse_ratio_score(
+            thumb_cluster_ratio,
+            closed_at=0.35,
+            open_at=self.fist_thumb_cluster_scale_max,
+        )
+        low_open_score = 1.0 - _clamp(open_score / self.fist_open_score_max)
         score = (
-            fold_score * 0.55
-            + (1.0 if tip_cluster_ok else 0.0) * 0.20
-            + (1.0 if tip_spread_ok else 0.0) * 0.15
-            + (1.0 if thumb_ok else 0.0) * 0.10
+            closed_shape_score * 0.52
+            + cluster_score * 0.18
+            + thumb_support_score * 0.14
+            + low_open_score * 0.10
+            + legacy_fold_score * 0.06
+        )
+        forming_fist = (
+            score >= self.forming_fist_confidence_threshold
+            and closed_fingers >= 2
+            and thumb_support_score > 0.35
+            and open_score <= 0.75
         )
         evidence: dict[str, object] = {
             "score": round(score, 4),
+            "closed_fingers": closed_fingers,
+            "required_closed_fingers": self.min_fist_closed_fingers,
+            "closed_finger_threshold": self.fist_closed_finger_threshold,
+            "finger_curl_scores": [round(score, 4) for score in finger_curl_scores],
+            "finger_curl_facts": [
+                {
+                    key: round(value, 4) if isinstance(value, float) else value
+                    for key, value in fact.items()
+                }
+                for fact in curl_facts
+            ],
             "strong_folded_fingers": strong_folded,
             "required_folded_fingers": self.min_fist_folded_fingers,
             "fold_depths": [round(depth, 4) for depth in fold_depths],
+            "legacy_fold_score": round(legacy_fold_score, 4),
             "tip_minus_pip_depths": [round(depth, 4) for depth in pip_depths],
             "tip_minus_dip_depths": [round(depth, 4) for depth in dip_depths],
+            "palm_scale": round(palm_scale, 4),
             "tip_spread": round(tip_spread, 4),
             "tip_spread_max": self.fist_tip_spread_max,
             "tip_cluster": round(tip_cluster, 4),
             "tip_cluster_max": self.fist_tip_cluster_max,
+            "tip_cluster_ratio": round(tip_cluster_ratio, 4),
+            "tip_cluster_scale_max": self.fist_tip_cluster_scale_max,
+            "cluster_score": round(cluster_score, 4),
             "thumb_to_cluster": round(thumb_to_cluster, 4),
             "thumb_to_tip": round(thumb_to_tip, 4),
             "thumb_cluster_max": self.fist_thumb_cluster_max,
+            "thumb_cluster_ratio": round(thumb_cluster_ratio, 4),
+            "thumb_cluster_scale_max": self.fist_thumb_cluster_scale_max,
+            "thumb_support_score": round(thumb_support_score, 4),
+            "open_score": round(open_score, 4),
+            "open_score_max": self.fist_open_score_max,
             "tip_spread_ok": tip_spread_ok,
             "tip_cluster_ok": tip_cluster_ok,
             "thumb_ok": thumb_ok,
+            "forming_fist": forming_fist,
         }
         return score, evidence
 
     def _is_fist_candidate(self, *, fist_score: float, evidence: dict[str, object]) -> bool:
         return (
-            int(evidence["strong_folded_fingers"]) >= self.min_fist_folded_fingers
+            int(evidence["closed_fingers"]) >= self.min_fist_closed_fingers
             and bool(evidence["tip_spread_ok"])
             and bool(evidence["tip_cluster_ok"])
             and bool(evidence["thumb_ok"])
+            and float(evidence["cluster_score"]) >= 0.10
+            and float(evidence["open_score"]) <= self.fist_open_score_max
             and fist_score >= self.fist_confidence_threshold
         )
+
+    def _finger_curl_fact(
+        self,
+        hand: NormalizedHand,
+        *,
+        mcp_index: int,
+        pip_index: int,
+        dip_index: int,
+        tip_index: int,
+        palm_scale: float,
+    ) -> dict[str, float]:
+        landmarks = hand.landmarks.landmarks
+        mcp = landmarks[mcp_index]
+        pip = landmarks[pip_index]
+        dip = landmarks[dip_index]
+        tip = landmarks[tip_index]
+        mcp_to_tip = dist((mcp.x, mcp.y, mcp.z), (tip.x, tip.y, tip.z))
+        mcp_to_dip = dist((mcp.x, mcp.y, mcp.z), (dip.x, dip.y, dip.z))
+        chain_length = (
+            dist((mcp.x, mcp.y, mcp.z), (pip.x, pip.y, pip.z))
+            + dist((pip.x, pip.y, pip.z), (dip.x, dip.y, dip.z))
+            + dist((dip.x, dip.y, dip.z), (tip.x, tip.y, tip.z))
+        )
+        straightness = 1.0 if chain_length <= 0 else mcp_to_tip / chain_length
+        tip_to_mcp_ratio = mcp_to_tip / palm_scale
+        dip_to_mcp_ratio = mcp_to_dip / palm_scale
+        tip_close_score = _inverse_ratio_score(
+            tip_to_mcp_ratio,
+            closed_at=0.55,
+            open_at=1.28,
+        )
+        joint_close_score = _inverse_ratio_score(
+            dip_to_mcp_ratio,
+            closed_at=0.42,
+            open_at=0.88,
+        )
+        bend_score = _inverse_ratio_score(
+            straightness,
+            closed_at=0.58,
+            open_at=0.88,
+        )
+        vertical_score = _clamp((tip.y - mcp.y) / self.fist_fold_threshold)
+        score = (
+            tip_close_score * 0.38
+            + joint_close_score * 0.30
+            + bend_score * 0.22
+            + vertical_score * 0.10
+        )
+        return {
+            "finger_tip": float(tip_index),
+            "score": score,
+            "tip_to_mcp_ratio": tip_to_mcp_ratio,
+            "dip_to_mcp_ratio": dip_to_mcp_ratio,
+            "straightness": straightness,
+            "tip_close_score": tip_close_score,
+            "joint_close_score": joint_close_score,
+            "bend_score": bend_score,
+            "vertical_score": vertical_score,
+        }
 
     def _open_palm_score(self, *, extended_fingers: int, finger_spread: float) -> float:
         return (
@@ -383,6 +523,25 @@ class ControlPoseRecognizer:
         b = landmarks[second]
         return dist((a.x, a.y, a.z), (b.x, b.y, b.z))
 
+    @staticmethod
+    def _palm_scale(hand: NormalizedHand) -> float:
+        landmarks = hand.landmarks.landmarks
+        index_mcp = landmarks[5]
+        middle_mcp = landmarks[9]
+        pinky_mcp = landmarks[17]
+        wrist = landmarks[WRIST]
+        palm_width = dist(
+            (index_mcp.x, index_mcp.y, index_mcp.z),
+            (pinky_mcp.x, pinky_mcp.y, pinky_mcp.z),
+        )
+        palm_length = dist(
+            (wrist.x, wrist.y, wrist.z),
+            (middle_mcp.x, middle_mcp.y, middle_mcp.z),
+        )
+        bbox_width = max(0.0, hand.bbox[2] - hand.bbox[0])
+        bbox_height = max(0.0, hand.bbox[3] - hand.bbox[1])
+        return max(palm_width, palm_length, (bbox_width**2 + bbox_height**2) ** 0.5 * 0.35, 0.05)
+
     def _palm_zone(self, palm_x: float) -> str:
         if palm_x <= self.left_zone_max:
             return "left"
@@ -400,3 +559,9 @@ class ControlPoseRecognizer:
 
 def _clamp(value: float, *, minimum: float = 0.0, maximum: float = 1.0) -> float:
     return max(minimum, min(maximum, value))
+
+
+def _inverse_ratio_score(value: float, *, closed_at: float, open_at: float) -> float:
+    if open_at <= closed_at:
+        return 0.0
+    return _clamp((open_at - value) / (open_at - closed_at))

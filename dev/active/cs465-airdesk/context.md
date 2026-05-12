@@ -229,14 +229,17 @@ Sprint 2 established a working live and replay foundation:
 Current next step:
 
 > Continue the deterministic live-control path, but do not treat workspace
-> switching or move-window as live-proven yet. The latest pre-hardening logs
-> showed the newest dry-run almost never stabilized fist, while the older
-> execute run fired workspace commands that Hyprland reported as `ok` but never
-> produced `movetoworkspace` intents. The control pose layer now logs
-> per-pose evidence/confidence and ambiguity, suppresses close fist/pinch/open
-> conflicts, and uses an anchored fist grammar for workspace and window moves.
-> The next live step is a fresh dry-run that inspects `pose_evidence`,
-> `ambiguity`, and `grammar_diagnostics` before any further tuning.
+> switching or move-window as live-proven yet. The newest live execute/dry-run
+> logs showed zero stable `fist` command poses after the previous hardening
+> pass, many `index_middle_pinch_conflict` frames while Caden was forming a
+> fist, and multiple accidental click intents caused by ambiguous pinch-release
+> frames. The control pose layer now uses rotation-friendlier closed-hand
+> evidence, cancels pinch taps when fist/pinch ambiguity appears, routes the
+> preview overlay through the control pose resolver, and defaults workspace
+> dispatches to current-monitor relative `r+1` / `r-1` selectors with
+> post-dispatch verification. The next live step is a fresh dry-run that
+> inspects `pose_evidence`, `ambiguity`, `event_summaries`, `intents`, and
+> `grammar_diagnostics` before any further tuning.
 
 2026-05-11 logic-control architecture decision:
 
@@ -261,10 +264,12 @@ Current next step:
 2026-05-11 live-control hardening update:
 
 - `ControlPoseRecognizer` now treats command poses as resolved facts, not
-  independent booleans. Fist must have all-finger fold evidence plus fingertip
-  clustering, low fingertip spread, and thumb support. Clean dominant poses win;
-  close fist/pinch/open-palm conflicts emit no command pose and log the
-  ambiguity.
+  independent booleans. Fist uses multi-finger, multi-landmark closed-hand
+  evidence: finger-chain curl/closure, fingertip clustering, thumb support, low
+  open-palm evidence, and the older vertical fold threshold as only one signal.
+  Sideways fists no longer depend on fingertips moving down in image
+  coordinates. Clean dominant poses win; close fist/pinch/open-palm conflicts
+  emit no command pose and log the ambiguity.
 - `control_seen` logs now include `features[]` with per-pose scores,
   `pose_evidence`, active/suppressed poses, ambiguity, and
   `grammar_diagnostics`.
@@ -272,9 +277,24 @@ Current next step:
   from that anchor switches workspaces; horizontal motion or side-zone crossing
   moves the active/window-under-cursor to a neighboring workspace; release,
   expiry, or one fired command consumes the arm.
+- Pinch tap grammar now cancels pending taps when a forming-fist or ambiguous
+  pinch frame appears, and it rejects releases onto another pinch pose. This
+  blocks the live failure where a pinch briefly entered while Caden was making a
+  fist and then clicked on the ambiguous release.
+- The `airdesk control run --show` overlay now uses control pose names rather
+  than the old static Sprint 0 preview recognizer, so the overlay should not
+  show stale `fist, pinch` labels when the command resolver is suppressing the
+  frame.
+- Workspace and move-window dispatches default to `workspace r-1` / `r+1` and
+  `movetoworkspace r-1` / `r+1` for current-monitor relative behavior. Pass
+  `--workspace-selector-prefix ""` to try raw `-1` / `+1` again. Guarded real
+  Hyprland execution now logs before/after active workspace or active-window
+  workspace state so an `ok` result can be distinguished from a real state
+  change.
 - Focused tests cover relaxed curl, partial curl, real fist, pinch-like fist
-  artifacts, noisy/sideways hand conflicts, anchored workspace/window moves,
-  consumed arms, and diagonal ambiguity suppression.
+  artifacts, sideways closed fist, forming-fist pinch conflict, noisy/sideways
+  hand conflicts, ambiguous pinch-release suppression, anchored
+  workspace/window moves, consumed arms, and diagonal ambiguity suppression.
 
 MVP grammar candidate:
 
@@ -285,8 +305,9 @@ MVP grammar candidate:
 - Thumb/middle pinch hold plus vertical movement: scroll through a future input target.
 - Fist held: arm one command from the fist anchor and show active window title.
 - Fist moved left/right from anchor or across side zone:
-  `hyprctl dispatch movetoworkspace -1` / `+1`.
-- Fist moved up/down from fist start: `hyprctl dispatch workspace -1` / `+1`.
+  `hyprctl dispatch movetoworkspace r-1` / `r+1` by default.
+- Fist moved up/down from fist start: `hyprctl dispatch workspace r-1` / `r+1`
+  by default.
 - Open palm -> sideways open palm: `hyprctl dispatch global caelestia:launcher`.
 - Open palm -> fist -> open palm: close active window via
   `hyprctl dispatch killactive`, with visible close-armed feedback.
@@ -755,9 +776,10 @@ The first deterministic control slice is now in place:
   `0.25` alpha and a `1px` dead zone; all are exposed on `airdesk control run`
   for live tuning. The control runtime filters to one active hand, and the
   recommended live command uses `--max-num-hands 1`.
-- Fist detection now requires a stronger fold: all four fingertips must sit at
-  least `0.09` normalized y-units below their MCP joints before `fist` can
-  trigger, so a relaxed curled hand should stay in cursor mode.
+- Fist detection now combines closed-finger scores, intermediate-joint
+  evidence, fingertip clustering, thumb support, low open-palm evidence, and
+  the older `--fist-fold-threshold` vertical fold signal. This keeps relaxed
+  curled hands out of the command pose while accepting a sideways closed fist.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
   release can still click if tracking briefly drops on release.
 - Real pointer click/scroll injection is available through explicit
@@ -766,22 +788,21 @@ The first deterministic control slice is now in place:
 
 Latest live-test stop point:
 
-- Caden is stopping this session because workspace/move-window command behavior
-  is still not reliable enough for live testing.
-- Change workspace is still not working in practice, even after switching from
-  top/bottom zones to fist vertical motion from the fist anchor.
-- Move to workspace is also not working reliably.
-- Fist recognition needs a harder evidence model. Current logic still appears
-  too dependent on one finger/too few landmarks; next session should make fist a
-  multi-finger, multi-landmark pose with explicit evidence/confidence fields.
-- Suppression/conflict handling likely needs redesign. If a frame has plausible
-  evidence for multiple command poses, the runtime should either choose the
-  safest dominant pose or mark it ambiguous and emit no command pose. Do not keep
-  letting fist/pinch/open-palm artifacts all feed command grammar.
-- Next session should inspect `data/logs/control-live-*.jsonl` before editing,
-  summarize what the runtime saw during intended fist-up/down and fist-left/right,
-  and add tests for hardened fist evidence plus ambiguous-pose suppression before
-  retesting live Hyprland actions.
+- Latest logs inspected this pass:
+  `data/logs/control-live-dry-run.jsonl` and
+  `data/logs/control-live-execute.jsonl`.
+- Dry-run: 326 seen frames, 224 frames with hand features, no stable fist, no
+  workspace or move-window intents, 35 `index_middle_pinch_conflict` frames, and
+  four pointer click intents.
+- Execute: 2,549 seen frames, 2,133 frames with hand features, no stable fist,
+  no workspace or move-window intents, 1,120 `index_middle_pinch_conflict`
+  frames, and 25 pointer click/hold intents. Several clicks were emitted when
+  the current frame was ambiguous or when the hand disappeared after a pinch.
+- Interpretation: the latest workspace/move-window failures are currently
+  primitive/grammar-input failures, not Hyprland dispatch failures: the grammar
+  had no stable `fist` events to arm from. The next live dry-run should first
+  verify that a sideways/near-face fist now appears as stable `fist` with clear
+  evidence; only then tune anchor movement or Hyprland selectors.
 
 ### Sprint 3: Pilot-Safe Live Command Mode
 

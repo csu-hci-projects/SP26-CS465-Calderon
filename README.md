@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -171,19 +171,24 @@ flag using `/dev/uinput`; without that flag, pointer button/scroll events remain
 dry-run even when `--execute` is enabled.
 
 Control poses are intentionally resolved rather than treated as independent
-booleans. Fist now requires multi-finger and multi-landmark evidence: strong
-folds, low fingertip spread, fingertip clustering, and thumb support. If a hand
-shape looks like fist plus pinch, sideways palm plus pinch, or open palm plus a
-weak pinch artifact, the runtime either keeps the clearly dominant safe pose or
-emits no command pose with an ambiguity reason. JSONL `control_seen` records
-include per-pose scores/evidence, ambiguity, active/suppressed poses, and
-grammar diagnostics.
+booleans. Fist now uses multi-finger, multi-landmark closed-hand evidence:
+finger-chain curl/closure, fingertip clustering, thumb support, low open-palm
+evidence, and the older vertical fold check as only one signal. Sideways fists
+therefore do not depend on "fingertips moved down in the image." If a hand shape
+looks like fist plus pinch, sideways palm plus pinch, or open palm plus a weak
+pinch artifact, the runtime either keeps the clearly dominant safe pose or emits
+no command pose with an ambiguity reason. JSONL `control_seen` records include
+per-pose scores/evidence, ambiguity, active/suppressed poses, and grammar
+diagnostics.
 
 Live control is currently scoped to one active hand. The recommended command
 uses `--max-num-hands 1`, and the runtime filters to one active hand even if a
-tracker provides more. Cursor gain defaults to `12.0`; fist detection requires a
-stronger finger fold through `--fist-fold-threshold 0.09` plus the multi-finger
-evidence checks above so relaxed curled hands can keep driving the cursor.
+tracker provides more. The live `--show` overlay for `airdesk control run` now
+uses the control pose resolver instead of the old static Sprint 0 preview
+recognizer, so it should no longer show stale `fist, pinch` labels when the
+control runtime is suppressing an ambiguous frame. Cursor gain defaults to
+`12.0`; `--fist-fold-threshold 0.09` remains available as one closed-hand
+signal, but the command fist gate is no longer mostly a vertical fold threshold.
 
 Fist is the explicit command clutch. A stable fist arms a short command window
 from its starting anchor; moving that fist left/right by
@@ -194,6 +199,13 @@ Releasing fist, firing one action, or waiting out the short arming window
 returns to neutral so stale command state does not trigger after hand reset.
 Ambiguous diagonal motion logs a suppression reason instead of choosing a
 workspace/window command arbitrarily.
+
+Workspace commands now default to Hyprland's current-monitor relative workspace
+selector prefix: `workspace r-1` / `r+1` and `movetoworkspace r-1` / `r+1`.
+Pass `--workspace-selector-prefix ""` if a live setup needs the raw global
+relative selectors `-1` / `+1` instead. Guarded real execution also verifies the
+active workspace/window workspace after these dispatches and logs whether
+Hyprland actually changed state.
 
 `airdesk label suggest` is a bootstrap helper for dynamic gestures. It finds the strongest palm-motion window in a recording, applies a phase/event label, and should still be reviewed before training or evaluation.
 `airdesk gesture chart-record` is the structured "Guitar Hero for swipes" collection path. It takes compact charts such as `RR | rest | RL | rest | RRR`, shows an on-screen colored chart HUD with a default 3-second lead-in, a smooth progress bar for the current cue, and fixed upcoming cards for get-ready/stroke/reset/rest prompts, records the replayable landmark stream, and writes coarse chart-derived stroke/recovery/event labels by default. Combo blocks such as `RRR` are shown as one active prompt so the swipes can happen at a natural pace inside that block. Chart recording now defaults to two tracked hands and should remain the recommended combo path; treat the generated labels as prompt-timing labels that may still need manual refinement before final training.

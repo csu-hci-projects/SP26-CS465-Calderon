@@ -91,6 +91,9 @@ class MediaPipeHandTrackerBackend:
     preview_extended_threshold: float = 0.08
     preview_pinch_threshold: float = 0.06
     preview_status_provider: Callable[[], str] | None = None
+    preview_candidates_provider: (
+        Callable[[tuple[NormalizedHand, ...], int, int], dict[str, tuple[str, ...]]] | None
+    ) = None
     preview_dashboard_provider: Callable[[], dict[str, Any] | None] | None = None
     preview_chart_provider: Callable[[], dict[str, Any] | None] | None = None
     preview_key_handler: Callable[[int], bool] | None = None
@@ -667,6 +670,8 @@ class MediaPipeHandTrackerBackend:
     ) -> dict[str, tuple[str, ...]]:
         if not self.preview_gestures or not hands:
             return {}
+        if self.preview_candidates_provider is not None:
+            return self.preview_candidates_provider(hands, width, height)
         recognizer = StaticHandPoseRecognizer(
             extended_threshold=self.preview_extended_threshold,
             pinch_threshold=self.preview_pinch_threshold,

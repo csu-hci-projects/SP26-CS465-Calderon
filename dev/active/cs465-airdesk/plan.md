@@ -192,13 +192,23 @@ Current MVP grammar candidate:
 | Thumb/middle pinch tap | Right click | Keep separate threshold/hysteresis from index pinch. |
 | Thumb/middle pinch hold + vertical movement | Scroll | Use accumulated dy, dead zone, and repeat rate limit. |
 | Fist held in center | Arm one fist command | Show target window title before any move-window action. |
-| Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace -1` / `movetoworkspace +1`; cooldown to avoid repeated moves. |
-| Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace -1` / `workspace +1`; consume the arm after one switch. |
+| Fist held then moved left/right zone | Move active/window-under-cursor to adjacent workspace | Dispatch `movetoworkspace r-1` / `movetoworkspace r+1` by default; cooldown to avoid repeated moves. |
+| Fist held then moved up/down zone | Switch workspace without moving a window | Dispatch `workspace r-1` / `workspace r+1` by default; consume the arm after one switch. |
 | Open palm -> sideways open palm | Open launcher | Dispatch `global caelestia:launcher` on Caden's setup. |
 | Open palm -> fist -> open palm | Close active window | Dispatch `killactive`; show "close armed" and focused window before firing. |
 
 The goal is not a large vocabulary. The goal is a small "mid-air mouse plus
 window manager" grammar that strings together without accidental overlap.
+
+Live-control hardening update: the command fist gate should not depend mostly on
+image-y fingertip fold. It now combines closed-finger scores, intermediate-joint
+evidence, fingertip clustering, thumb support, low open-palm evidence, and the
+older fold threshold as one signal. Pinch taps must be canceled when an
+ambiguous or forming-fist frame appears, because live logs showed accidental
+clicks when a pinch briefly entered while Caden was making a fist and then
+released through an ambiguous frame. Hyprland workspace selectors default to
+current-monitor relative `r+1` / `r-1`; keep `+1` / `-1` available as a CLI
+override for live setup comparison.
 
 Cleanup rule: do not delete or rewrite the old recognizer stack during the first
 logic-control implementation. Park it as preview/replay/evaluation future work,

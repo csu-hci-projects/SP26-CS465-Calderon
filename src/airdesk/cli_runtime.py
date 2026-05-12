@@ -15,6 +15,7 @@ from airdesk.actions.hyprland import (
     HYPRLAND_DISPATCH,
     SAFE_HYPRLAND_DISPATCHERS,
     GuardedHyprlandActionTarget,
+    HyprlandActionTarget,
 )
 from airdesk.actions.input import DryRunPointerInputTarget, UInputPointerInputTarget
 from airdesk.capture.opencv import CameraSettings
@@ -430,6 +431,15 @@ def control_run(
         float,
         typer.Option(help="Normalized fist left/right movement needed to move a window."),
     ] = 0.12,
+    workspace_selector_prefix: Annotated[
+        str,
+        typer.Option(
+            help=(
+                "Prefix for relative Hyprland workspace selectors. "
+                "Use 'r' for current-monitor relative workspaces, or '' for raw +/-."
+            )
+        ),
+    ] = "r",
     left_zone_max: Annotated[
         float,
         typer.Option(help="Palm x at or below this value counts as the left side zone."),
@@ -486,7 +496,10 @@ def control_run(
     )
     cursor_target: CursorTarget = HyprlandCursorTarget() if execute else DryRunCursorTarget()
     hyprland_target = (
-        GuardedHyprlandActionTarget(allowed_dispatchers=CONTROL_HYPRLAND_DISPATCHERS)
+        GuardedHyprlandActionTarget(
+            inner=HyprlandActionTarget(verify_after_dispatch=True),
+            allowed_dispatchers=CONTROL_HYPRLAND_DISPATCHERS,
+        )
         if execute
         else DryRunActionTarget()
     )
@@ -508,6 +521,7 @@ def control_run(
             ControlGrammarConfig(
                 workspace_motion_threshold=workspace_motion_threshold,
                 move_window_motion_threshold=move_window_motion_threshold,
+                workspace_selector_prefix=workspace_selector_prefix,
             )
         ),
         event_writer=event_writer,
@@ -555,6 +569,7 @@ def _attach_control_preview_controls(
     if not isinstance(tracker, MediaPipeHandTrackerBackend):
         return
     tracker.preview_status_provider = runtime.status_text
+    tracker.preview_candidates_provider = runtime.preview_candidates_for_hands
 
     def handle_key(key: int) -> bool:
         if key == ord("p"):

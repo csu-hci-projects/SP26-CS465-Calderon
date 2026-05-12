@@ -103,8 +103,12 @@ MVP grammar:
 Caden's Hyprland setup:
 
 - Launcher: `hyprctl dispatch global caelestia:launcher`
-- Workspace: `hyprctl dispatch workspace -1` / `+1`
-- Move window to workspace: `hyprctl dispatch movetoworkspace -1` / `+1`
+- Workspace: AirDesk now defaults to `hyprctl dispatch workspace r-1` / `r+1`
+  for current-monitor relative movement; raw `-1` / `+1` is still available
+  with `--workspace-selector-prefix ""`.
+- Move window to workspace: AirDesk now defaults to
+  `hyprctl dispatch movetoworkspace r-1` / `r+1`; raw `-1` / `+1` is still
+  available with `--workspace-selector-prefix ""`.
 - Close active window: `hyprctl dispatch killactive`
 - Move cursor: `hyprctl dispatch movecursor <x> <y>`
 - `hyprctl` is installed.
@@ -127,29 +131,37 @@ Current implementation status:
   armed move-window/workspace switching, launcher combo, and deliberate
   close-window combo.
 - Control pose facts are resolved through a suppression policy rather than a
-  blind priority list. Fist must clearly dominate pinch evidence, sideways palm
-  must clearly dominate pinch artifacts, clean pinch can suppress plain
-  open-palm, and close calls emit no command pose with an ambiguity reason.
+  blind priority list. Fist now uses multi-finger, multi-landmark closed-hand
+  evidence: finger-chain curl/closure, intermediate-joint evidence, fingertip
+  clustering, thumb support, low open-palm evidence, and the older vertical fold
+  threshold as only one signal. Sideways fists no longer depend on fingertips
+  moving down in image coordinates. Clean dominant poses win, and close calls
+  emit no command pose with an ambiguity reason.
 - Guarded move/close actions can query the active window title for target-window
-  feedback.
+  feedback. Guarded workspace/move-window execution now also logs before/after
+  Hyprland state so an `ok` response can be separated from a real state change.
 - Fist is now the command clutch: a stable fist creates a short-lived anchor,
   left/right motion or side-zone crossing from that anchor fires one
   `movetoworkspace`, and up/down motion from that anchor fires one `workspace`
   switch. Firing, release, or expiry consumes the arm. Ambiguous diagonal motion
   logs a suppression reason and emits no command. Side zones default to
   `left <= 0.30` and `right >= 0.70`; workspace motion defaults to `0.10`;
-  move-window motion defaults to `0.12`; cursor gain defaults to `12.0` with
+  move-window motion defaults to `0.12`; workspace selectors default to
+  current-monitor relative `r+1` / `r-1`; cursor gain defaults to `12.0` with
   smoother `0.25` alpha and a `1px` dead zone. The control runtime filters to
   one active hand, and the recommended live command now uses `--max-num-hands 1`.
-- Fist detection now requires multi-finger, multi-landmark evidence: all four
-  fingertips must sit at least `0.09` normalized y-units below their MCP joints,
-  the curled fingertips must remain clustered/low-spread, and the thumb must
-  support the fist shape. Relaxed curl, partial curl, pinch-like fist artifacts,
-  and noisy sideways hands are covered by tests.
+- Fist detection tests cover relaxed curl, partial curl, real fist, sideways
+  closed fist, pinch-like fist artifacts, forming-fist pinch artifacts, and noisy
+  sideways hands.
 - Pinch taps are more forgiving: tap max is now `0.45s`, and a short pinch
-  release can still click if tracking briefly drops on release. Holding an index
-  pinch past the tap window presses and holds the left button until release;
-  middle-pinch hold is reserved for scrolling.
+  release can still click if tracking briefly drops on a clean release. Pending
+  pinch taps are canceled by forming-fist/ambiguous-pinch frames, and releases
+  onto the other pinch pose are rejected. Holding an index pinch past the tap
+  window presses and holds the left button until release; middle-pinch hold is
+  reserved for scrolling.
+- The `airdesk control run --show` preview now uses the control pose resolver
+  rather than the old static Sprint 0 preview recognizer, so visual labels
+  should match command-safe poses and ambiguity suppression.
 - Pointer button/scroll real execution is available with explicit
   `--pointer-execute` through `/dev/uinput`.
 - Focused tests cover primitive control poses, debouncing, combo
@@ -160,23 +172,27 @@ Latest live-test findings and next priority:
 
 - Stop treating workspace switching and move-window as done until a fresh
   post-hardening live dry-run proves them.
-- Latest pre-hardening log read:
-  - `control-live-dry-run.jsonl` saw mostly `index_pinch`,
-    `middle_pinch`, and relaxed states. It had only two single-frame fist
-    sightings, no `fist:entered` or `fist:held`, no armed state, and no
-    `workspace_*` or `move_window_*` intents.
-  - `control-live-execute.jsonl` saw many fists, usually with
-    `suppressed=index_pinch,middle_pinch`. It fired eight `workspace_*`
-    intents and Hyprland returned `ok` for each, but it fired zero
-    `movetoworkspace` intents. The move-window failure in that log was grammar
-    level; the newest dry-run failure was primitive/conflict level.
+- Latest post-hardening log read after Caden reported the system was still not
+  working:
+  - `control-live-dry-run.jsonl`: 326 seen frames, 224 frames with hand
+    features, no stable `fist`, no `workspace_*` or `move_window_*` intents, 35
+    `index_middle_pinch_conflict` frames, and four pointer click intents.
+  - `control-live-execute.jsonl`: 2,549 seen frames, 2,133 frames with hand
+    features, no stable `fist`, no `workspace_*` or `move_window_*` intents,
+    1,120 `index_middle_pinch_conflict` frames, and 25 pointer click/hold
+    intents.
+  - Interpretation: the latest workspace/move-window failure is currently a
+    primitive/grammar-input failure. The grammar had no stable `fist` events to
+    arm from. Several accidental clicks came from pinch enter/release events
+    wrapped around ambiguous frames.
 - The next live pass should inspect `features[].pose_evidence`,
-  `features[].ambiguity`, and `grammar_diagnostics` before changing thresholds.
-  If fist never stabilizes, tune primitive thresholds. If fist stabilizes but
-  `workspace_*` / `move_window_*` do not fire, tune anchor-motion thresholds or
-  axis ambiguity. If Hyprland returns `ok` but the desktop does not change,
-  verify Caden's desired workspace token (`+1` / `-1` versus `r+1` / `r-1`) in
-  the live setup before changing the gesture grammar.
+  `features[].ambiguity`, `event_summaries`, `intents`, and
+  `grammar_diagnostics` before changing thresholds. If fist never stabilizes,
+  tune primitive thresholds. If fist stabilizes but `workspace_*` /
+  `move_window_*` do not fire, tune anchor-motion thresholds or axis ambiguity.
+  If Hyprland returns `ok` but the desktop does not change, check the
+  before/after verification message and optionally compare `r+1` / `r-1` with
+  raw `+1` / `-1` via `--workspace-selector-prefix ""`.
 
 Recommended next implementation slice:
 
@@ -191,7 +207,7 @@ Recommended next implementation slice:
    - both should consume the arm, expire quickly, and log why they did or did
      not fire.
 4. Then run live dry-run testing with:
-   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
+   `uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.25 --cursor-dead-zone-px 1 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show`
 5. Improve live status/dashboard rendering so it clearly shows `Seeing`,
    `Combo`, `Armed`, `Target window`, `Executed`, and `Suppressed`.
 6. Only after dry-run feels stable, consider guarded real Hyprland movement

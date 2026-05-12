@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from airdesk.actions.hyprland import HYPRLAND_DISPATCH
 from airdesk.control.combos import ComboBuffer
 from airdesk.control.debounce import PoseEvent
-from airdesk.control.poses import ControlPoseFeatures
+from airdesk.control.poses import PINCH_POSES, ControlPoseFeatures
 from airdesk.state.types import ActionRequest
 
 POINTER_ACTION = "pointer.input"
@@ -37,6 +37,7 @@ class ControlGrammarConfig:
     workspace_motion_threshold: float = 0.10
     move_window_motion_threshold: float = 0.12
     fist_axis_margin: float = 0.04
+    workspace_selector_prefix: str = "r"
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class ControlGrammar:
     combo_buffer: ComboBuffer = field(default_factory=ComboBuffer)
     _last_fired: dict[str, float] = field(default_factory=dict)
     _pending_taps: dict[tuple[str, str], bool] = field(default_factory=dict)
+    _blocked_taps: set[tuple[str, str]] = field(default_factory=set)
     _held_buttons: dict[tuple[str, str], str] = field(default_factory=dict)
     _fist_arms: dict[str, _FistArm] = field(default_factory=dict)
     last_diagnostics: list[str] = field(default_factory=list)
@@ -72,6 +74,7 @@ class ControlGrammar:
         scroll_delta_by_hand = scroll_delta_by_hand or {}
         self.last_diagnostics = []
         self._expire_fist_arms(timestamp)
+        self._update_conflict_blocks(features)
 
         for event in events:
             self.combo_buffer.add(event)
@@ -81,9 +84,15 @@ class ControlGrammar:
             if event.event_type == "entered":
                 if event.pose == "index_pinch":
                     self._pending_taps[(event.hand_id, "index_pinch")] = True
+                    self._blocked_taps.discard((event.hand_id, "index_pinch"))
                 elif event.pose == "middle_pinch":
                     self._pending_taps[(event.hand_id, "middle_pinch")] = True
+                    self._blocked_taps.discard((event.hand_id, "middle_pinch"))
                 elif event.pose == "fist" and hand_features is not None:
+                    self._cancel_pending_pinch_taps(
+                        hand_id=event.hand_id,
+                        reason="fist entered",
+                    )
                     self._arm_fist(
                         hand_id=event.hand_id,
                         hand_features=hand_features,
@@ -138,6 +147,10 @@ class ControlGrammar:
                             )
                         )
                 if event.pose == "fist":
+                    self._cancel_pending_pinch_taps(
+                        hand_id=event.hand_id,
+                        reason="fist held",
+                    )
                     self._arm_fist_if_missing(
                         hand_id=event.hand_id,
                         hand_features=hand_features,
@@ -231,6 +244,36 @@ class ControlGrammar:
                 )
 
         return intents
+
+    def _update_conflict_blocks(self, features: list[ControlPoseFeatures]) -> None:
+        for hand_features in features:
+            pinch_conflict = (
+                hand_features.ambiguity is not None
+                and bool(hand_features.suppressed_poses & PINCH_POSES)
+            )
+            closed_hand_conflict = (
+                "fist" in hand_features.poses
+                or hand_features.ambiguity == "forming_fist_pinch_conflict"
+            )
+            if pinch_conflict or closed_hand_conflict:
+                self._cancel_pending_pinch_taps(
+                    hand_id=hand_features.hand_id,
+                    reason=hand_features.ambiguity or "fist pose active",
+                )
+
+    def _cancel_pending_pinch_taps(self, *, hand_id: str, reason: str) -> None:
+        blocked: list[str] = []
+        for pose in PINCH_POSES:
+            key = (hand_id, pose)
+            if self._pending_taps.get(key):
+                self._pending_taps[key] = False
+                self._blocked_taps.add(key)
+                blocked.append(pose)
+        if blocked:
+            self.last_diagnostics.append(
+                f"{hand_id}: canceled pending pinch tap(s) "
+                f"{','.join(sorted(blocked))} due to {reason}"
+            )
 
     def armed_summary(self, *, now: float) -> str:
         """Return a compact runtime summary of currently armed control states."""
@@ -447,26 +490,36 @@ class ControlGrammar:
 
         if vertical_ready:
             direction = "-1" if dy < 0 else "+1"
+            workspace_arg = self._workspace_arg(direction)
             self._fist_arms.pop(hand_features.hand_id, None)
+            self.last_diagnostics.append(
+                f"{hand_features.hand_id}: firing workspace {workspace_arg} "
+                f"from fist dy={dy:.3f}"
+            )
             return self._hyprland_intent_if_ready(
-                key=f"{hand_features.hand_id}:workspace:{direction}",
+                key=f"{hand_features.hand_id}:workspace:{workspace_arg}",
                 timestamp=timestamp,
-                name=f"workspace_{direction}",
+                name=f"workspace_{workspace_arg}",
                 command="workspace",
-                args=[direction],
+                args=[workspace_arg],
                 hand_id=hand_features.hand_id,
                 reason=f"fist vertical motion from anchor dy={dy:.3f}",
             )
 
         if horizontal_ready:
             direction = "+1" if dx < 0 or hand_features.palm_zone == "left" else "-1"
+            workspace_arg = self._workspace_arg(direction)
             self._fist_arms.pop(hand_features.hand_id, None)
+            self.last_diagnostics.append(
+                f"{hand_features.hand_id}: firing movetoworkspace {workspace_arg} "
+                f"from fist dx={dx:.3f} zone={hand_features.palm_zone}"
+            )
             return self._hyprland_intent_if_ready(
-                key=f"{hand_features.hand_id}:move_window:{direction}",
+                key=f"{hand_features.hand_id}:move_window:{workspace_arg}",
                 timestamp=timestamp,
-                name=f"move_window_{direction}",
+                name=f"move_window_{workspace_arg}",
                 command="movetoworkspace",
-                args=[direction],
+                args=[workspace_arg],
                 hand_id=hand_features.hand_id,
                 reason=(
                     "fist horizontal motion from anchor "
@@ -493,9 +546,22 @@ class ControlGrammar:
     ) -> list[ControlIntent]:
         pending_key = (hand_id, pose)
         pending = self._pending_taps.pop(pending_key, False)
+        blocked = pending_key in self._blocked_taps
+        self._blocked_taps.discard(pending_key)
+        if blocked:
+            self.last_diagnostics.append(
+                f"{hand_id}: suppressed {pose} tap because the release was ambiguous"
+            )
+            return []
         if not pending or duration > self.config.tap_max_seconds:
             return []
-        if current_features is not None and not self._is_clean_pinch_release(current_features):
+        if current_features is not None and not self._is_clean_pinch_release(
+            current_features,
+            pose=pose,
+        ):
+            self.last_diagnostics.append(
+                f"{hand_id}: suppressed {pose} tap on non-clean release"
+            )
             return []
         return self._intent_if_ready(
             key=f"{hand_id}:{button}_click",
@@ -515,9 +581,20 @@ class ControlGrammar:
         )
 
     @staticmethod
-    def _is_clean_pinch_release(features: ControlPoseFeatures) -> bool:
-        blocked = {"fist", "sideways_open_palm_left", "sideways_open_palm_right"}
+    def _is_clean_pinch_release(features: ControlPoseFeatures, *, pose: str) -> bool:
+        if features.ambiguity is not None:
+            return False
+        blocked = {
+            "fist",
+            "sideways_open_palm_left",
+            "sideways_open_palm_right",
+            *(PINCH_POSES - {pose}),
+        }
         return features.poses.isdisjoint(blocked)
+
+    def _workspace_arg(self, direction: str) -> str:
+        prefix = self.config.workspace_selector_prefix
+        return f"{prefix}{direction}" if prefix else direction
 
     def _intent_if_ready(
         self,

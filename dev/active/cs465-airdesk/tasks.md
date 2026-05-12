@@ -27,18 +27,28 @@ Immediate next-session checklist:
       enter/held events, no arming, and no workspace/move-window intents; the
       older execute log fired workspace intents that Hyprland reported as `ok`,
       but never fired `movetoworkspace`.
+- [x] Review the newer post-hardening live logs after Caden reported that fist,
+      workspace, and move-window were still failing: the dry-run and execute
+      logs had zero stable fist poses, zero workspace/move-window intents, many
+      `index_middle_pinch_conflict` frames while making a fist, and accidental
+      click intents caused by ambiguous pinch releases.
 - [x] Add the new live-control path side-by-side, preferably under
       `src/airdesk/control/` and `airdesk control run`; do not overload the old
       learned/dynamic `gestures` stack.
 - [x] Add primitive logic features for stable open palm, fist, sideways open
       palm, index pinch, middle pinch, palm zone, and simple vertical motion.
 - [x] Harden `ControlPoseRecognizer` so fist requires multi-finger and
-      multi-landmark evidence: strong folds, low fingertip spread, fingertip
-      clustering, and thumb/finger-cluster support.
+      multi-landmark evidence. It now combines closed-finger scores,
+      intermediate-joint evidence, fingertip clustering, thumb support,
+      low open-palm evidence, and the older vertical fold signal instead of
+      depending mostly on image-y fingertip fold.
 - [x] Log per-pose scores/evidence and ambiguity reasons in `control_seen`
       records so live false positives can be diagnosed frame-by-frame.
 - [x] Suppress ambiguous fist/pinch/open-palm frames instead of letting one hand
       shape emit overlapping command poses.
+- [x] Cancel pending pinch taps when a forming-fist or ambiguous pinch frame
+      appears, and reject releases onto a different pinch pose, so a brief pinch
+      during fist formation cannot click on release.
 - [x] Add a stable-pose debouncer that emits enter/held/release events rather
       than per-frame spam.
 - [x] Add a per-hand combo buffer, max about 4 events / 2 seconds, with same-hand
@@ -57,6 +67,9 @@ Immediate next-session checklist:
       and pointer button/scroll injection. Execution must stay guarded.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
       `Target window`, `Executed`, and `Suppressed`.
+- [x] Route `airdesk control run --show` preview labels through the control pose
+      resolver instead of the old static Sprint 0 recognizer, so preview labels
+      match command-safe poses and suppressions.
 - [x] Add focused tests for primitive pose classification, debouncing, combo
       expiry/matching, grammar conflicts, cooldown, dry-run action routing, and
       guarded Hyprland command allowlisting.
@@ -83,12 +96,14 @@ Logic-control hardening note: `airdesk control run` exists and is dry-run by
 default. The grammar covers open-hand relative cursor movement, index-pinch
 left click/drag, middle-pinch right click/scroll, launcher combo, deliberate
 close-window combo, and anchor-based fist workspace/window commands. Fist is no
-longer a mostly single-axis fold check: the control pose layer requires
-all-finger fold evidence plus fingertip clustering/spread/thumb support, emits
-per-pose evidence into logs, and suppresses ambiguous fist/pinch/open-palm
-frames. The remaining MVP polish is richer live overlay/preview rendering and
-fresh live dry-run validation of workspace switching and `movetoworkspace`
-after this primitive hardening.
+longer a mostly single-axis fold check: the control pose layer uses
+rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
+suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
+respects ambiguity, and workspace selectors default to current-monitor relative
+`r+1` / `r-1` with post-dispatch verification during guarded execution. The
+remaining MVP polish is richer live dashboard rendering and fresh live dry-run
+validation of workspace switching and `movetoworkspace` after this primitive
+hardening.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,
@@ -109,8 +124,8 @@ Logic-control implementation note: Caden's current Hyprland setup exposes the
 needed OS commands directly:
 
 - `hyprctl dispatch global caelestia:launcher`
-- `hyprctl dispatch workspace -1` / `+1`
-- `hyprctl dispatch movetoworkspace -1` / `+1`
+- `hyprctl dispatch workspace r-1` / `r+1` by default in AirDesk control
+- `hyprctl dispatch movetoworkspace r-1` / `r+1` by default in AirDesk control
 - `hyprctl dispatch killactive`
 - `hyprctl dispatch movecursor <x> <y>`
 

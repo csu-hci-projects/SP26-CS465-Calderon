@@ -152,6 +152,57 @@ def test_control_guard_allows_demo_dispatchers_with_injected_runner() -> None:
     assert calls == [["hyprctl", "dispatch", "movetoworkspace", "+1"]]
 
 
+def test_hyprland_verifies_workspace_dispatch_with_before_after_state() -> None:
+    calls: list[list[str]] = []
+    responses = [
+        subprocess.CompletedProcess(
+            ["hyprctl", "activeworkspace", "-j"],
+            0,
+            stdout='{"id": 7, "name": "7", "monitor": "HDMI-A-1"}\n',
+            stderr="",
+        ),
+        subprocess.CompletedProcess(
+            ["hyprctl", "dispatch", "workspace", "r+1"],
+            0,
+            stdout="ok\n",
+            stderr="",
+        ),
+        subprocess.CompletedProcess(
+            ["hyprctl", "activeworkspace", "-j"],
+            0,
+            stdout='{"id": 8, "name": "8", "monitor": "HDMI-A-1"}\n',
+            stderr="",
+        ),
+    ]
+
+    def runner(
+        command: Sequence[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        return responses.pop(0)
+
+    target = HyprlandActionTarget(runner=runner, verify_after_dispatch=True)
+    request = ActionRequest(
+        action_type=HYPRLAND_DISPATCH,
+        command="workspace",
+        parameters={"args": ["r+1"]},
+    )
+
+    result = target.execute(request)
+
+    assert result.ok is True
+    assert "verified workspace changed 7:7@HDMI-A-1 -> 8:8@HDMI-A-1" in result.message
+    assert calls == [
+        ["hyprctl", "activeworkspace", "-j"],
+        ["hyprctl", "dispatch", "workspace", "r+1"],
+        ["hyprctl", "activeworkspace", "-j"],
+    ]
+
+
 def test_dry_run_pointer_input_records_buttons_and_scrolls() -> None:
     target = DryRunPointerInputTarget()
 

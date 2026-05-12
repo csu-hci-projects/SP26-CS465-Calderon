@@ -16,7 +16,7 @@ from airdesk.control.debounce import PoseDebouncer, PoseEvent
 from airdesk.control.grammar import POINTER_ACTION, ControlGrammar, ControlIntent
 from airdesk.control.poses import ControlPoseFeatures, ControlPoseRecognizer
 from airdesk.recording.jsonl import JsonlRecordingWriter
-from airdesk.state.types import ActionResult, EventLogEntry, utc_timestamp
+from airdesk.state.types import ActionResult, EventLogEntry, NormalizedHand, utc_timestamp
 from airdesk.tracking.interfaces import HandTrackerBackend
 
 
@@ -241,6 +241,22 @@ class ControlRuntime:
             f"Armed: {armed} | Target window: {target_window} | "
             f"Executed: {executed} | Suppressed: {suppressed}"
         )
+
+    def preview_candidates_for_hands(
+        self,
+        hands: tuple[NormalizedHand, ...],
+        width: int,
+        height: int,
+    ) -> dict[str, tuple[str, ...]]:
+        """Return control-pose names for the live preview overlay."""
+        _ = (width, height)
+        candidates: dict[str, tuple[str, ...]] = {}
+        for hand in hands:
+            features = self.pose_recognizer.features_for_hand(hand, timestamp=0.0)
+            if features is None:
+                continue
+            candidates[hand.hand_id] = tuple(sorted(features.poses))
+        return candidates
 
     def _execute_intent(self, intent: ControlIntent) -> ActionResult:
         if intent.request.command in {"killactive", "movetoworkspace"}:

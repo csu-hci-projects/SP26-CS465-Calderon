@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from airdesk.tracking.mediapipe import (
+    MediaPipeHandTrackerBackend,
     _base_options_delegate,
     _chart_segment_at,
     _chart_segment_progress,
@@ -119,6 +120,21 @@ def test_hand_label_includes_handedness_and_confidence() -> None:
     )
 
     assert hand_label(hands[0]) == "Left 0.88"
+
+
+def test_preview_candidates_can_be_overridden_for_control_runtime() -> None:
+    points = [FakePoint(x=index / 100, y=(20 - index) / 100, z=0.01) for index in range(21)]
+    hands = normalized_hands_from_mediapipe_results(
+        FakeResults(
+            multi_hand_landmarks=[FakeLandmarks(points)],
+            multi_handedness=[FakeHandedness([FakeClassification(label="Left", score=0.876)])],
+        )
+    )
+    tracker = MediaPipeHandTrackerBackend(
+        preview_candidates_provider=lambda _hands, _width, _height: {"hand-0": ("fist",)}
+    )
+
+    assert tracker._preview_candidates(hands, width=640, height=480) == {"hand-0": ("fist",)}
 
 
 def test_base_options_delegate_maps_cpu_and_gpu() -> None:
