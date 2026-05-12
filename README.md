@@ -1,8 +1,8 @@
 # AirDesk
 
-AirDesk is a CS465 HCI / 3DUI project about using webcam-based mid-air hand gestures as a secondary desktop control layer for Hyprland Linux. The project is not trying to replace the keyboard and mouse. It focuses on moments where ordinary input is temporarily inconvenient, unavailable, dirty, painful, or physically costly.
+AirDesk is a webcam-based prototype for controlling a Hyprland Linux desktop with mid-air hand gestures. It is motivated by situationally impaired interaction: moments when keyboard and mouse input is unavailable, undesirable, dirty, painful, or physically costly. The goal is not to replace traditional desktop input. AirDesk explores whether a small gesture vocabulary can work as a secondary control channel for coarse desktop actions and occasional mouse-like interaction.
 
-The final prototype uses MediaPipe hand landmarks and deterministic landmark math to control a small desktop vocabulary: pointer movement, click, drag/select, scroll, right click, workspace switching, moving windows between workspaces, opening a launcher, and closing a window with a deliberate combo.
+The final prototype uses MediaPipe hand landmarks and deterministic landmark math to control pointer movement, click, drag/select, scroll, right click, workspace switching, moving windows between workspaces, opening a launcher, and closing a window with a deliberate combo. In a small two-person pilot, keyboard and mouse were faster under normal desk conditions, but AirDesk became competitive in a dirty-hands condition where ordinary input required cleanup first.
 
 ## Grader Note
 
@@ -23,8 +23,10 @@ Project links:
 
 - GitHub: https://github.com/csu-hci-projects/SP26-CS465-Calderon
 - Overleaf: https://www.overleaf.com/read/ttdzxcqmcknp#c89490
-- Project / presentation video: https://youtu.be/3thM46mDVHU
+- Presentation video: https://youtu.be/3thM46mDVHU
+- Presentation video download: https://drive.google.com/file/d/1XAMB-HHQE76BjrKMkjtq2zPOGcjPx-Qb/view?usp=drive_link
 - Short demo video: https://youtu.be/k68HIlHOwME
+- Short demo video download: https://drive.google.com/file/d/1B-Cn4X27JnyJQ8ABxrLtDb8aUUv9jLzv/view?usp=drive_link
 
 ## What Is Implemented
 
