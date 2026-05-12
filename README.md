@@ -19,7 +19,7 @@ Project links:
 
 - GitHub: https://github.com/csu-hci-projects/SP26-CS465-Calderon
 - Overleaf: https://www.overleaf.com/read/ttdzxcqmcknp#c89490
-- Project / presentation video: https://youtu.be/k68HIlHOwME
+- Project / presentation video: https://youtu.be/3thM46mDVHU
 - Programming / technical walkthrough video: https://youtu.be/k68HIlHOwME
 
 ## What Is Implemented
