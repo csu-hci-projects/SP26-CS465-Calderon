@@ -1,6 +1,41 @@
 # AirDesk Tasks
 
-Current next sprint: crunch-time deterministic logic-control pivot. The all-IPN
+Current next sprint: submission/readiness cleanup for a fast CS465 grading pass.
+Do not collect new data, train models, or tune live hand-control thresholds
+unless cleanup exposes an obvious broken command. The root `README.md` is now
+the main grader entrypoint and should remain concise, public-facing, and focused
+on `airdesk control run` as the current demo surface.
+
+Submission cleanup status:
+
+- [x] Preserve existing dirty `paper/` user edits and keep `paper/` out of this
+      cleanup/staging scope.
+- [x] Audit `.gitignore`, tracked files, tracked `dev/active`/`dev/archive`,
+      tracked `data`, and ignored local artifacts.
+- [x] Rewrite root `README.md` into a grader-facing entrypoint with overview,
+      what works, setup, dry-run demo, optional live execute, gesture cheat
+      sheet, repo map, architecture, verification, limitations, and grader
+      notes.
+- [x] Verify CLI help for `airdesk --help`, `airdesk control run --help`,
+      `airdesk gesture --help`, and `airdesk cursor run --help`.
+- [x] Run `uv run ruff check .`.
+- [x] Run `uv run pytest`.
+- [x] Commit and push only the submission/readiness cleanup files to
+      `origin/main`; do not stage `paper/`.
+
+Submission recommendation:
+
+- The repo is mostly clean for generated artifacts because `data/*` is ignored
+  except `data/.gitkeep`.
+- The tracked `dev/active/` and `dev/archive/` docs are useful provenance but
+  not ideal for a skim-grade submission. Prefer a clean grader export/zip or
+  submission branch that includes README, source, configs, tests, scripts, and
+  selected study docs while excluding internal planning/session docs.
+- Do not delete project provenance blindly. If a smaller surface is required,
+  create an explicit export or branch after the README has summarized the
+  important public-facing facts.
+
+Previous implementation lane: crunch-time deterministic logic-control pivot. The all-IPN
 TCN v2 checkpoint is a useful public-data prior, and the mode-aware learned
 filter exists for preview/replay diagnostics, but live preview showed that the
 model is not safe enough for global desktop commands. For the class-ready demo,

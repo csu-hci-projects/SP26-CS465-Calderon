@@ -6,6 +6,11 @@ __pycache__/
 .mypy_cache/
 .pyright/
 
+# Local agent/editor context
+.codex/
+.agents/
+.claude/
+
 # Local runtime artifacts
 data/*
 !data/.gitkeep

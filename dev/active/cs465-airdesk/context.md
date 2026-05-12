@@ -2,7 +2,44 @@
 
 ## Date
 
-2026-05-06
+2026-05-11
+
+## Current Submission-Readiness State
+
+AirDesk is now in a fast CS465 grading cleanup pass, not a live hand-control
+tuning pass. The root `README.md` is the primary grader entrypoint and should
+stay concise, public-facing, and demo-oriented. It now explains:
+
+- what AirDesk is and why it matters for situationally impaired interaction;
+- the current live demo command, `airdesk control run`;
+- safe dry-run behavior by default;
+- optional Hyprland/Linux/uinput execution with `--execute --pointer-execute`;
+- the gesture/control cheat sheet;
+- the important repo map, architecture, tests, limitations, and grader notes.
+
+Important framing: use "designed with" or "may be relevant to" accessibility
+and situational-impairment use cases. Do not claim validated accessibility
+benefits for populations that were not tested.
+
+Submission surface audit:
+
+- `data/*` is ignored except `data/.gitkeep`, so raw logs, recordings, public
+  dataset imports, generated features, evaluations, and model checkpoints are
+  local artifacts unless explicitly force-added later.
+- Python caches, `.venv`, `.pytest_cache`, and `.ruff_cache` are ignored or
+  untracked local artifacts.
+- `dev/active/` and `dev/archive/` are tracked internal planning/provenance
+  docs. They are useful for continuation, but graders do not need them for a
+  quick pass. Prefer a clean grader export/zip or submission branch that keeps
+  README/source/configs/tests/scripts/study docs and excludes internal planning
+  docs, rather than deleting provenance blindly from the working repo.
+- `paper/` currently has user edits and is explicitly out of scope for this
+  cleanup pass.
+
+The current recommendation is a clean generated grader export or cleaned
+submission branch, not the GitHub repo exactly as-is, because the tracked
+`dev/` planning docs are useful locally but too agent/session-oriented for a
+skim-grade surface.
 
 ## Project Summary
 
