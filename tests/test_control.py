@@ -179,6 +179,21 @@ def test_control_pose_blocks_forming_fist_pinch_artifact(
     assert {"index_pinch", "middle_pinch"}.issubset(features.suppressed_poses)
 
 
+def test_control_pose_allows_dominant_index_tap_with_weak_curl(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    index_tap = _index_pinch_with_weak_curl(make_hand("open_palm"))
+
+    features = recognizer.features_for_frame(make_tracking_frame(index_tap))[0]
+
+    assert features.pose_evidence["fist"]["forming_fist"] is True
+    assert features.pose_scores["index_pinch"] >= recognizer.clean_pinch_confidence_threshold
+    assert features.poses == frozenset({"index_pinch"})
+    assert features.ambiguity is None
+
+
 def test_control_runtime_allows_cursor_motion_during_index_pinch(
     make_hand: Callable[[str], NormalizedHand],
     make_tracking_frame: Callable[..., TrackingFrame],
@@ -311,8 +326,11 @@ def test_control_runtime_scroll_anchor_is_fixed_until_middle_pinch_release(
     start_features = recognizer.features_for_frame(
         make_tracking_frame(_middle_pinch_hand(make_hand("open_palm")))
     )
-    moved_features = recognizer.features_for_frame(
+    down_features = recognizer.features_for_frame(
         make_tracking_frame(_middle_pinch_hand(_move_hand(make_hand("open_palm"), y=0.62)))
+    )
+    up_features = recognizer.features_for_frame(
+        make_tracking_frame(_middle_pinch_hand(_move_hand(make_hand("open_palm"), y=0.47)))
     )
 
     runtime._prepare_scroll_locks(
@@ -320,14 +338,16 @@ def test_control_runtime_scroll_anchor_is_fixed_until_middle_pinch_release(
         events=[PoseEvent("hand-0", "middle_pinch", "entered", 1.0)],
     )
     assert runtime._scroll_delta_by_hand(start_features) == {}
-    first_scroll = runtime._scroll_delta_by_hand(moved_features)
-    repeated_scroll = runtime._scroll_delta_by_hand(moved_features)
+    first_scroll = runtime._scroll_delta_by_hand(down_features)
+    repeated_scroll = runtime._scroll_delta_by_hand(down_features)
+    opposite_scroll = runtime._scroll_delta_by_hand(up_features)
     runtime._release_scroll_locks(
         [PoseEvent("hand-0", "middle_pinch", "released", 1.2, duration=0.2)]
     )
 
-    assert first_scroll == {"hand-0": 1}
-    assert repeated_scroll == {"hand-0": 1}
+    assert first_scroll == {"hand-0": 4}
+    assert repeated_scroll == {"hand-0": 4}
+    assert opposite_scroll == {"hand-0": -4}
     assert runtime._pinch_scroll_anchor_y == {}
 
 
@@ -360,15 +380,54 @@ def test_pose_debouncer_enters_pinches_after_one_frame() -> None:
         timestamp=1.03,
         active_poses=frozenset(),
     )
-    released = debouncer.update(
+    second_missing = debouncer.update(
         hand_id="hand-0",
         timestamp=1.06,
+        active_poses=frozenset(),
+    )
+    third_missing = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.09,
+        active_poses=frozenset(),
+    )
+    released = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.12,
         active_poses=frozenset(),
     )
 
     assert entered == [PoseEvent("hand-0", "index_pinch", "entered", 1.0)]
     assert first_missing == []
+    assert second_missing == []
+    assert third_missing == []
     assert released[0].event_type == "released"
+
+
+def test_pose_debouncer_keeps_middle_pinch_across_brief_dropouts() -> None:
+    debouncer = PoseDebouncer(PoseDebounceConfig())
+
+    entered = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.0,
+        active_poses=frozenset({"middle_pinch"}),
+    )
+    missing = [
+        debouncer.update(
+            hand_id="hand-0",
+            timestamp=1.03 + index * 0.03,
+            active_poses=frozenset(),
+        )
+        for index in range(5)
+    ]
+    still_active = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.20,
+        active_poses=frozenset({"middle_pinch"}),
+    )
+
+    assert entered == [PoseEvent("hand-0", "middle_pinch", "entered", 1.0)]
+    assert missing == [[], [], [], [], []]
+    assert still_active == []
 
 
 def test_pose_debouncer_reports_tracked_hand_ids() -> None:
@@ -1143,6 +1202,30 @@ def _ambiguous_double_pinch_hand(hand: NormalizedHand) -> NormalizedHand:
     landmarks[4] = Landmark(0.46, 0.30, 0.0)
     landmarks[8] = Landmark(0.46, 0.30, 0.0)
     landmarks[12] = Landmark(0.46, 0.30, 0.0)
+    return NormalizedHand(
+        hand_id=hand.hand_id,
+        landmarks=type(hand.landmarks)(
+            tuple(landmarks),
+            handedness=hand.landmarks.handedness,
+            confidence=hand.landmarks.confidence,
+        ),
+        palm_center=hand.palm_center,
+        bbox=hand.bbox,
+        handedness=hand.handedness,
+        confidence=hand.confidence,
+    )
+
+
+def _index_pinch_with_weak_curl(hand: NormalizedHand) -> NormalizedHand:
+    landmarks = list(hand.landmarks.landmarks)
+    landmarks[4] = Landmark(0.39, 0.32, 0.0)
+    landmarks[8] = Landmark(0.39, 0.32, 0.0)
+    for tip, x, y in ((12, 0.48, 0.62), (16, 0.58, 0.38), (20, 0.64, 0.58)):
+        point = landmarks[tip]
+        landmarks[tip] = Landmark(x, y, point.z, point.visibility, point.presence)
+    for dip, x, y in ((11, 0.48, 0.60), (15, 0.57, 0.36), (19, 0.64, 0.55)):
+        point = landmarks[dip]
+        landmarks[dip] = Landmark(x, y, point.z, point.visibility, point.presence)
     return NormalizedHand(
         hand_id=hand.hand_id,
         landmarks=type(hand.landmarks)(

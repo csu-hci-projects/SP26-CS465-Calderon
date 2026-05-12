@@ -81,6 +81,12 @@ Immediate next-session checklist:
 - [x] Rework middle pinch as a scroll clutch: lock the cursor while held, keep a
       fixed scroll anchor until release, use the start zone as the pause zone,
       and allow right-click only on clean non-scroll release.
+- [x] Add pinch release grace so brief tracker/pose dropouts do not repeatedly
+      break index drag or middle scroll holds.
+- [x] Speed up middle-pinch scrolling and allow up/down reversal within the same
+      held pinch by keeping the original anchor until release.
+- [x] Let clearly dominant index-pinches survive weak forming-fist evidence so
+      quick finger taps do not get canceled as fist artifacts.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
       `Target window`, `Executed`, and `Suppressed`.
 - [x] Route `airdesk control run --show` preview labels through the control pose
@@ -117,16 +123,20 @@ instead of forcing a release/re-form after each step. Fist is no longer a
 mostly single-axis fold check: the control pose layer uses
 rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
 suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
-allows non-closed index/middle release ambiguity for index clicks while still
-canceling forming-fist ambiguity. Middle pinch defaults to the same strict
-threshold as index pinch, but its click path is stricter: right-click emits only
-on clean release, never after tracking dropout/fuzzy release/scroll. Index pinch
-continues cursor motion for select/highlight, middle pinch locks the cursor for
-scrolling, and workspace selectors default to current-monitor relative `r+1` /
-`r-1` with post-dispatch verification during guarded execution. The remaining
-MVP polish is richer live dashboard rendering and fresh live dry-run validation
-of cursor jitter, middle-pinch scroll/right-click feel, repeated workspace
-switching, and repeated `movetoworkspace` after the held fist grammar update.
+allows non-closed index/middle release ambiguity and weak forming-fist evidence
+for clearly dominant index clicks while still canceling strong closed-hand
+ambiguity. Pinch holds also tolerate brief dropouts before emitting release
+events. Middle pinch defaults to the same strict threshold as index pinch, but
+its click path is stricter: right-click emits only on clean release, never after
+tracking dropout/fuzzy release/scroll. Index pinch continues cursor motion for
+select/highlight, middle pinch locks the cursor for scrolling, scrolls faster by
+default, can reverse up/down direction within one held pinch by crossing the
+fixed anchor, and workspace selectors default to current-monitor relative
+`r+1` / `r-1` with post-dispatch verification during guarded execution. The
+remaining MVP polish is richer live dashboard rendering and fresh live dry-run
+validation of cursor jitter, middle-pinch scroll/right-click feel, repeated
+workspace switching, and repeated `movetoworkspace` after the held fist grammar
+update.
 
 Learned-recognition implementation note: `watch-tcn-v2` now accepts `--recognition-mode`,
 `--debug-all-heads`, `--head-thresholds`, `--evidence-margin`,

@@ -36,7 +36,7 @@ class ControlGrammarConfig:
     middle_click_release_margin: float = 0.02
     index_drag_hold_seconds: float = 0.35
     index_drag_motion_threshold: float = 0.025
-    scroll_cooldown_seconds: float = 0.12
+    scroll_cooldown_seconds: float = 0.04
     fist_command_arm_seconds: float = 1.25
     fist_repeat_cooldown_seconds: float = 0.75
     workspace_motion_threshold: float = 0.10

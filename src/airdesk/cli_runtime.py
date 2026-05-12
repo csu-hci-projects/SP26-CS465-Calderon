@@ -431,7 +431,11 @@ def control_run(
     scroll_amount_per_step: Annotated[
         int,
         typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
-    ] = 1,
+    ] = 4,
+    scroll_cooldown_seconds: Annotated[
+        float,
+        typer.Option(help="Minimum seconds between middle-pinch scroll ticks."),
+    ] = 0.04,
     click_cooldown_seconds: Annotated[
         float,
         typer.Option(help="Minimum seconds between repeated pinch tap clicks."),
@@ -578,6 +582,7 @@ def control_run(
                 middle_click_release_margin=middle_click_release_margin,
                 index_drag_hold_seconds=index_drag_hold_seconds,
                 index_drag_motion_threshold=index_drag_motion_threshold,
+                scroll_cooldown_seconds=scroll_cooldown_seconds,
                 workspace_motion_threshold=workspace_motion_threshold,
                 move_window_motion_threshold=move_window_motion_threshold,
                 workspace_selector_prefix=workspace_selector_prefix,

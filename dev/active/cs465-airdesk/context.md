@@ -767,18 +767,23 @@ The first deterministic control slice is now in place:
   ordinary client pointer-motion stream that clickable hover states expect.
 - Pinch behavior is now split so quick pinch releases feel more like direct
   tap/click: pinch poses can enter after one stable frame, tap max is `0.55s`,
-  and click cooldown is `0.16s`. Index pinch keeps cursor movement live and
-  starts a held left button on drag motion or a short hold for select/highlight.
-  Middle pinch is now a scroll clutch first: it locks the cursor in place,
-  keeps one fixed scroll anchor until release, uses the start zone as the
-  no-scroll/pause zone, and suppresses right-click if any scroll fired. A
-  stationary middle pinch can right-click only on clean release, not on contact
-  or tracking dropout; release distance has an extra margin so a threshold
-  flicker while still pinched does not open a context menu. A clean index tap can
-  survive a non-closed index/middle release ambiguity, but forming-fist/
-  closed-hand ambiguity still cancels it. Middle pinch defaults to the same
-  strict `0.06` distance as index pinch, with `--index-pinch-threshold` and
-  `--middle-pinch-threshold` exposed separately for live tuning.
+  and click cooldown is `0.16s`. Pinch release now has pose-specific grace
+  frames (`4` for index, `6` for middle) so a one-frame or two-frame tracking
+  dropout does not tear down a click/drag/scroll hold. Index pinch keeps cursor
+  movement live and starts a held left button on drag motion or a short hold for
+  select/highlight. A clean index tap can now survive weak forming-fist evidence
+  if index pinch is clearly dominant, while strong closed-hand/fist ambiguity
+  still cancels it. Middle pinch is a scroll clutch first: it locks the cursor in
+  place, keeps one fixed scroll anchor until release, uses the start zone as the
+  no-scroll/pause zone, can reverse direction within the same hold by crossing
+  that anchor, and suppresses right-click if any scroll fired. Scroll defaults
+  are faster now: `--scroll-amount-per-step 4` and
+  `--scroll-cooldown-seconds 0.04`. A stationary middle pinch can right-click
+  only on clean release, not on contact or tracking dropout; release distance
+  has an extra margin so a threshold flicker while still pinched does not open a
+  context menu. Middle pinch defaults to the same strict `0.06` distance as
+  index pinch, with `--index-pinch-threshold` and `--middle-pinch-threshold`
+  exposed separately for live tuning.
 - Control pose facts are prioritized to reduce overlap from noisy sideways/fist
   tracking: fist suppresses pinch artifacts, sideways-open-palm suppresses pinch
   artifacts, and clean pinch suppresses plain open-palm.
@@ -808,11 +813,12 @@ The first deterministic control slice is now in place:
   the older `--fist-fold-threshold` vertical fold signal. This keeps relaxed
   curled hands out of the command pose while accepting a sideways closed fist.
 - Pinch taps are more forgiving for index pinch: tap max is now `0.55s`, click
-  cooldown is `0.16s`, and a short index release can still click if tracking
-  briefly drops or if release passes through non-closed index/middle ambiguity.
-  Middle right-click is deliberately stricter because accidental context menus
-  are more disruptive: no dropout click, no ambiguous/fuzzy release click, and
-  no click after scroll.
+  cooldown is `0.16s`, release waits through short dropouts, and a short index
+  release can still click if tracking briefly drops, if release passes through
+  non-closed index/middle ambiguity, or if the recognizer sees only weak
+  forming-fist evidence around a dominant index pinch. Middle right-click is
+  deliberately stricter because accidental context menus are more disruptive: no
+  dropout click, no ambiguous/fuzzy release click, and no click after scroll.
 - Real pointer movement/click/scroll injection is available through explicit
   `--execute --pointer-execute` using `/dev/uinput`. Without `--pointer-execute`,
   cursor movement falls back to Hyprland `movecursor`, and pointer click/scroll

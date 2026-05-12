@@ -222,7 +222,15 @@ class ControlPoseRecognizer:
             and bool(fist_evidence.get("forming_fist"))
             and bool(raw_poses & PINCH_POSES)
         )
-        if forming_fist and "fist" not in raw_poses:
+        if (
+            forming_fist
+            and "fist" not in raw_poses
+            and not self._dominant_index_pinch_during_weak_forming_fist(
+                raw_poses,
+                pose_scores=pose_scores,
+                fist_evidence=fist_evidence,
+            )
+        ):
             return set(), "forming_fist_pinch_conflict", "closed hand is not a clean pinch"
 
         if "fist" in raw_poses:
@@ -277,6 +285,29 @@ class ControlPoseRecognizer:
         if "open_palm" in raw_poses:
             return {"open_palm"}, None, None
         return set(), None, None
+
+    def _dominant_index_pinch_during_weak_forming_fist(
+        self,
+        raw_poses: set[str],
+        *,
+        pose_scores: dict[str, float],
+        fist_evidence: dict[str, object] | object,
+    ) -> bool:
+        """Keep a crisp index tap from being mistaken for a weak forming fist."""
+        if raw_poses & PINCH_POSES != {"index_pinch"}:
+            return False
+        if pose_scores.get("index_pinch", 0.0) < self.clean_pinch_confidence_threshold:
+            return False
+        if not isinstance(fist_evidence, dict):
+            return False
+        closed_fingers = int(fist_evidence.get("closed_fingers", 0))
+        strong_folded = int(fist_evidence.get("strong_folded_fingers", 0))
+        fist_score = float(fist_evidence.get("score", 0.0))
+        return (
+            closed_fingers <= 2
+            and strong_folded == 0
+            and fist_score < self.fist_confidence_threshold
+        )
 
     def _extended_fingers(self, hand: NormalizedHand) -> int:
         landmarks = hand.landmarks.landmarks

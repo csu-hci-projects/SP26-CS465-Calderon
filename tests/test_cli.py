@@ -229,6 +229,7 @@ def test_control_run_help_exposes_control_controls() -> None:
     assert "--workspace-motion-threshold" in result.stdout
     assert "--workspace-selector-prefix" in result.stdout
     assert "--scroll-motion-threshold" in result.stdout
+    assert "--scroll-cooldown-seconds" in result.stdout
     assert "--click-cooldown-seconds" in result.stdout
     assert "--tap-max-seconds" in result.stdout
     assert "--middle-click-max-seconds" in result.stdout

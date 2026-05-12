@@ -121,7 +121,7 @@ uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-sprint4-
 uv run airdesk gesture watch-tcn-v2 --model data/models/gestures/tcn-v2-ipn-all-w16-80ep-h64-l4.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --show --preview-layout dashboard --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3 --events-out data/logs/live-ipn-command-filter-preview.jsonl
 uv run airdesk gesture replay-tcn-v2-log data/logs/live-ipn-all-tcn-v2-calibration-20260511-122007.jsonl --recognition-mode command --evidence-threshold 0.80 --evidence-margin 0.15 --persistence-frames 3
 uv run airdesk control run --backend replay --recording tests/fixtures/replay-one-frame.jsonl --events-out data/logs/control-dry-run.jsonl --max-frames 1 --no-show
-uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.16 --cursor-dead-zone-px 4 --cursor-jitter-gate-px 10 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --click-cooldown-seconds 0.16 --tap-max-seconds 0.55 --middle-click-max-seconds 1.25 --middle-click-release-margin 0.02 --index-drag-hold-seconds 0.35 --index-drag-motion-threshold 0.025 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --events-out data/logs/control-live-dry-run.jsonl --show
+uv run airdesk control run --backend mediapipe --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 1 --cursor-gain 12.0 --cursor-smoothing-alpha 0.16 --cursor-dead-zone-px 4 --cursor-jitter-gate-px 10 --left-zone-max 0.30 --right-zone-min 0.70 --top-zone-max 0.30 --bottom-zone-min 0.70 --fist-fold-threshold 0.09 --index-pinch-threshold 0.06 --middle-pinch-threshold 0.06 --click-cooldown-seconds 0.16 --tap-max-seconds 0.55 --middle-click-max-seconds 1.25 --middle-click-release-margin 0.02 --index-drag-hold-seconds 0.35 --index-drag-motion-threshold 0.025 --workspace-motion-threshold 0.10 --move-window-motion-threshold 0.12 --fist-repeat-cooldown-seconds 0.75 --workspace-selector-prefix r --scroll-motion-threshold 0.045 --scroll-amount-per-step 4 --scroll-cooldown-seconds 0.04 --events-out data/logs/control-live-dry-run.jsonl --show
 uv run airdesk public-data ipn-convert --videos-dir data/public/ipn/videos --annotations-dir data/public/ipn/annotations-download --out-dir data/public/ipn/airdesk --split train --limit 1 --manifest-out data/public/ipn/airdesk/tcn-v2-ipn-smoke-manifest.json --mapping-out data/public/ipn/airdesk/ipn-airdesk-mapping.csv
 scripts/airdesk-nvidia-mediapipe-wayland gesture watch-tcn --model data/models/gestures/tcn-sprint4-003-004-two-hand-motion-gated020-phase-stroke.pt --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --max-num-hands 2 --hand-delegate gpu --show --profile-timing --confidence-threshold 0.35
 uv run airdesk gesture watch-dtw --model data/models/gestures/caden-dtw-sprint4-swipes-001-holdout-window-features-gated.json --device /dev/video0 --width 640 --height 480 --fps 30 --fourcc MJPG --show
@@ -216,14 +216,17 @@ longer looser than index pinch.
 
 Pinch timing is tuned for short tap/release clicks: pinch poses can enter after
 one frame, tap max defaults to `0.55s`, click cooldown defaults to `0.16s`, and
-a clean index tap can still click if release passes through a non-closed
-index/middle pinch ambiguity. Closed-hand/forming-fist ambiguity still cancels
-the tap. Index pinch keeps moving the cursor and starts a held left button on
-drag motion or a `0.35s` hold, while middle pinch drag emits scroll ticks
-continuously instead of waiting for a long hold event. Middle pinch also locks
-the cursor in place until release; its scroll anchor stays fixed so returning to
-the start zone pauses scrolling. A stationary middle pinch can right-click only
-on a clean release, not on contact, and scroll releases never right-click.
+pinch release now tolerates brief tracker dropouts before ending the held pose.
+A clean index tap can survive non-closed index/middle ambiguity and weak
+forming-fist evidence when the index pinch is clearly dominant. Strong
+closed-hand/forming-fist ambiguity still cancels the tap. Index pinch keeps
+moving the cursor and starts a held left button on drag motion or a `0.35s`
+hold. Middle pinch drag emits faster scroll ticks (`4` wheel units every
+`0.04s` by default) and locks the cursor in place until release; its scroll
+anchor stays fixed so returning to the start zone pauses scrolling, and crossing
+the anchor reverses scroll direction within the same held pinch. A stationary
+middle pinch can right-click only on a clean release, not on contact, and scroll
+releases never right-click.
 
 Workspace commands now default to Hyprland's current-monitor relative workspace
 selector prefix: `workspace r-1` / `r+1` and `movetoworkspace r-1` / `r+1`.

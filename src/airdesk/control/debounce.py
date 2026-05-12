@@ -27,7 +27,9 @@ class PoseDebounceConfig:
     pose_enter_frames: Mapping[str, int] = field(
         default_factory=lambda: {"index_pinch": 1, "middle_pinch": 1}
     )
-    pose_release_frames: Mapping[str, int] = field(default_factory=dict)
+    pose_release_frames: Mapping[str, int] = field(
+        default_factory=lambda: {"index_pinch": 4, "middle_pinch": 6}
+    )
 
 
 @dataclass
