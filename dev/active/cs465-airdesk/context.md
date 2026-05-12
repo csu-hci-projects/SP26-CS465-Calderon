@@ -777,8 +777,8 @@ The first deterministic control slice is now in place:
   place, keeps one fixed scroll anchor until release, uses the start zone as the
   no-scroll/pause zone, can reverse direction within the same hold by crossing
   that anchor, and suppresses right-click if any scroll fired. Scroll defaults
-  are faster now: `--scroll-amount-per-step 4` and
-  `--scroll-cooldown-seconds 0.04`. A stationary middle pinch can right-click
+  are moderated after live testing: `--scroll-amount-per-step 3` and
+  `--scroll-cooldown-seconds 0.06`. A stationary middle pinch can right-click
   only on clean release, not on contact or tracking dropout; release distance
   has an extra margin so a threshold flicker while still pinched does not open a
   context menu. Middle pinch defaults to the same strict `0.06` distance as
@@ -795,8 +795,10 @@ The first deterministic control slice is now in place:
   `movetoworkspace`, and up/down fist movement fires `workspace` without moving
   a window. The anchor now stays alive while fist tracking remains stable, so
   holding past the movement threshold repeats workspace/window steps after
-  `--fist-repeat-cooldown-seconds`; moving back near the anchor stops repeats,
-  and fist release or tracking expiry returns to neutral.
+  `--fist-repeat-cooldown-seconds`; motion is evaluated on every active fist
+  frame instead of waiting for the next debounced held tick, moving back near the
+  anchor stops repeats, and fist release or tracking expiry returns to neutral
+  after a five-frame release grace.
 - Live testing also showed sideways-hand shapes and open-palm workspace arming
   are too unreliable for workspace switching during cursor use, so open palm no
   longer triggers workspace changes.
@@ -835,11 +837,19 @@ Latest live-test stop point:
   and three move-window intents (`move_window_r-1` / `move_window_r+1`). This
   means the primitive fist fix is now taking effect live and Hyprland grammar
   input exists.
-- The remaining live feel problem is interaction design, not a total primitive
-  failure: the previous grammar consumed the fist arm after each workspace or
-  move-window dispatch, forcing Caden to release/re-form fist for every step.
-  The next live pass should validate the new held-repeat behavior and tune
-  `--fist-repeat-cooldown-seconds` if the repeat is too fast or too slow.
+- The newest execute log reviewed after the held-repeat update showed
+  6,935 `control_seen` frames, 1,779 stable `fist` frames, 38
+  `fist:entered` / `fist:released` events, 30 workspace intents, and six
+  move-window intents. Fist primitive recognition is therefore present, but 22
+  anchored fist segments produced no workspace/window intent; several of those
+  crossed the vertical workspace threshold between periodic held events and
+  released before the next held tick. The grammar now evaluates fist motion
+  every active frame while keeping the repeat cooldown as the execution guard.
+- The next live pass should validate continuous fist evaluation plus the
+  five-frame fist release grace. If it now fires too eagerly, tune
+  `--workspace-motion-threshold`, `--move-window-motion-threshold`, and
+  `--fist-repeat-cooldown-seconds` from the new log evidence rather than
+  weakening the primitive fist detector first.
 - Middle-pinch evidence is still noisy in the latest logs, so its default
   threshold was tightened to match index pinch. If middle-pinch still enters
   during normal fist formation, inspect `pose_evidence.middle_pinch.distance`

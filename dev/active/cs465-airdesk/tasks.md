@@ -68,6 +68,10 @@ Immediate next-session checklist:
       holding past the movement threshold repeats workspace/window steps after a
       cooldown; moving back near the anchor stops repeats, and release clears
       the arm.
+- [x] Rework fist grammar after the newest execute log showed no-fire segments
+      crossing thresholds between held ticks: stable fist release now has a
+      five-frame grace, and workspace/move-window motion is evaluated on every
+      active fist frame while repeat cooldowns still guard execution.
 - [x] Tighten middle-pinch detection to match the index-pinch default threshold
       and expose both pinch thresholds on `airdesk control run`.
 - [x] Add or extend action adapters for launcher, `movetoworkspace`, `killactive`,
@@ -85,6 +89,8 @@ Immediate next-session checklist:
       break index drag or middle scroll holds.
 - [x] Speed up middle-pinch scrolling and allow up/down reversal within the same
       held pinch by keeping the original anchor until release.
+- [x] Calm middle-pinch scrolling after live testing by moderating defaults from
+      the very fast `4` units / `0.04s` setting to `3` units / `0.06s`.
 - [x] Let clearly dominant index-pinches survive weak forming-fist evidence so
       quick finger taps do not get canceled as fist artifacts.
 - [ ] Update the live dashboard/status to show `Seeing`, `Combo`, `Armed`,
@@ -119,8 +125,11 @@ default. The grammar covers open-hand relative cursor movement, index-pinch
 tap left click, index-pinch drag/select, middle-pinch drag scroll, launcher combo, deliberate
 close-window combo, and anchor-based fist workspace/window commands. Fist
 workspace/window commands now repeat while the fist is held past the threshold
-instead of forcing a release/re-form after each step. Fist is no longer a
-mostly single-axis fold check: the control pose layer uses
+instead of forcing a release/re-form after each step, and active fist frames are
+checked continuously so threshold crossings are not missed between debounced
+held events. Fist release now has a five-frame grace to survive brief pose
+dropouts without resetting the anchor immediately. Fist is no longer a mostly
+single-axis fold check: the control pose layer uses
 rotation-friendlier closed-hand evidence, emits per-pose evidence into logs, and
 suppresses ambiguous fist/pinch/open-palm frames. Pinch release handling now
 allows non-closed index/middle release ambiguity and weak forming-fist evidence
@@ -129,9 +138,9 @@ ambiguity. Pinch holds also tolerate brief dropouts before emitting release
 events. Middle pinch defaults to the same strict threshold as index pinch, but
 its click path is stricter: right-click emits only on clean release, never after
 tracking dropout/fuzzy release/scroll. Index pinch continues cursor motion for
-select/highlight, middle pinch locks the cursor for scrolling, scrolls faster by
-default, can reverse up/down direction within one held pinch by crossing the
-fixed anchor, and workspace selectors default to current-monitor relative
+select/highlight, middle pinch locks the cursor for scrolling, scrolls at a
+moderated default, can reverse up/down direction within one held pinch by
+crossing the fixed anchor, and workspace selectors default to current-monitor relative
 `r+1` / `r-1` with post-dispatch verification during guarded execution. The
 remaining MVP polish is richer live dashboard rendering and fresh live dry-run
 validation of cursor jitter, middle-pinch scroll/right-click feel, repeated

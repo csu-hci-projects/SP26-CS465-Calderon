@@ -32,7 +32,7 @@ class ControlRuntimeConfig:
     cursor_jitter_gate_px: int = 10
     mirror_x: bool = True
     scroll_motion_threshold: float = 0.045
-    scroll_amount_per_step: int = 4
+    scroll_amount_per_step: int = 3
 
 
 @dataclass(frozen=True)

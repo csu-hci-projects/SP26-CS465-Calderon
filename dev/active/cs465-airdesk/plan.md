@@ -214,9 +214,13 @@ and move-window dispatches working, but one-shot arm consumption made multi-step
 workspace travel clumsy. The fist anchor now remains active while the fist stays
 stable, repeated workspace/window steps are rate-limited by
 `--fist-repeat-cooldown-seconds`, and moving back near the original anchor or
-releasing fist returns to neutral. Middle pinch now defaults to the same strict
-`0.06` threshold as index pinch, has longer release grace than index so scroll
-does not flicker off on short tracker dropouts, and scrolls faster by default.
+releasing fist returns to neutral. The newest execute-log pass showed some
+no-fire fist segments crossing the workspace threshold between held ticks, so
+fist motion is now evaluated on every active fist frame and fist release has a
+five-frame grace against brief pose dropouts. Middle pinch now defaults to the
+same strict `0.06` threshold as index pinch, has longer release grace than index
+so scroll does not flicker off on short tracker dropouts, and scrolls at a
+moderated default after live testing.
 
 Cleanup rule: do not delete or rewrite the old recognizer stack during the first
 logic-control implementation. Park it as preview/replay/evaluation future work,

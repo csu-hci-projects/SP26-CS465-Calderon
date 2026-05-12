@@ -345,23 +345,29 @@ def test_control_runtime_scroll_anchor_is_fixed_until_middle_pinch_release(
         [PoseEvent("hand-0", "middle_pinch", "released", 1.2, duration=0.2)]
     )
 
-    assert first_scroll == {"hand-0": 4}
-    assert repeated_scroll == {"hand-0": 4}
-    assert opposite_scroll == {"hand-0": -4}
+    assert first_scroll == {"hand-0": 3}
+    assert repeated_scroll == {"hand-0": 3}
+    assert opposite_scroll == {"hand-0": -3}
     assert runtime._pinch_scroll_anchor_y == {}
 
 
 def test_pose_debouncer_emits_enter_held_and_release_events() -> None:
     debouncer = PoseDebouncer(PoseDebounceConfig(enter_frames=2, release_frames=2))
 
-    first = debouncer.update(hand_id="hand-0", timestamp=1.0, active_poses=frozenset({"fist"}))
-    entered = debouncer.update(hand_id="hand-0", timestamp=1.1, active_poses=frozenset({"fist"}))
-    held = debouncer.update(hand_id="hand-0", timestamp=1.6, active_poses=frozenset({"fist"}))
+    first = debouncer.update(
+        hand_id="hand-0", timestamp=1.0, active_poses=frozenset({"open_palm"})
+    )
+    entered = debouncer.update(
+        hand_id="hand-0", timestamp=1.1, active_poses=frozenset({"open_palm"})
+    )
+    held = debouncer.update(
+        hand_id="hand-0", timestamp=1.6, active_poses=frozenset({"open_palm"})
+    )
     missing = debouncer.update(hand_id="hand-0", timestamp=1.7, active_poses=frozenset())
     released = debouncer.update(hand_id="hand-0", timestamp=1.8, active_poses=frozenset())
 
     assert first == []
-    assert entered == [PoseEvent("hand-0", "fist", "entered", 1.1)]
+    assert entered == [PoseEvent("hand-0", "open_palm", "entered", 1.1)]
     assert held[0].event_type == "held"
     assert missing == []
     assert released[0].event_type == "released"
@@ -428,6 +434,39 @@ def test_pose_debouncer_keeps_middle_pinch_across_brief_dropouts() -> None:
     assert entered == [PoseEvent("hand-0", "middle_pinch", "entered", 1.0)]
     assert missing == [[], [], [], [], []]
     assert still_active == []
+
+
+def test_pose_debouncer_keeps_fist_across_short_dropouts() -> None:
+    debouncer = PoseDebouncer(PoseDebounceConfig())
+
+    first_seen = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.0,
+        active_poses=frozenset({"fist"}),
+    )
+    entered = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.03,
+        active_poses=frozenset({"fist"}),
+    )
+    missing = [
+        debouncer.update(
+            hand_id="hand-0",
+            timestamp=1.06 + index * 0.03,
+            active_poses=frozenset(),
+        )
+        for index in range(4)
+    ]
+    released = debouncer.update(
+        hand_id="hand-0",
+        timestamp=1.18,
+        active_poses=frozenset(),
+    )
+
+    assert first_seen == []
+    assert entered == [PoseEvent("hand-0", "fist", "entered", 1.03)]
+    assert missing == [[], [], [], []]
+    assert released[0].event_type == "released"
 
 
 def test_pose_debouncer_reports_tracked_hand_ids() -> None:
@@ -645,6 +684,40 @@ def test_fist_move_window_repeats_while_held_after_cooldown(
     assert repeated[0].name == "move_window_r-1"
     assert recentered == []
     assert after_release == []
+    assert any("fist arm released after firing" in item for item in grammar.last_diagnostics)
+
+
+def test_fist_motion_fires_without_waiting_for_next_held_event(
+    make_hand: Callable[[str], NormalizedHand],
+    make_tracking_frame: Callable[..., TrackingFrame],
+) -> None:
+    recognizer = ControlPoseRecognizer()
+    grammar = ControlGrammar(
+        ControlGrammarConfig(
+            command_cooldown_seconds=0.0,
+            fist_repeat_cooldown_seconds=0.5,
+            move_window_motion_threshold=0.12,
+        )
+    )
+    center_features = recognizer.features_for_frame(make_tracking_frame(make_hand("fist")))
+    side_features = recognizer.features_for_frame(
+        make_tracking_frame(_move_hand(make_hand("fist"), x=0.70))
+    )
+
+    grammar.update(
+        features=center_features,
+        events=[PoseEvent("hand-0", "fist", "entered", 1.0)],
+        timestamp=1.0,
+    )
+    move_window = grammar.update(
+        features=side_features,
+        events=[],
+        timestamp=1.12,
+    )
+
+    assert move_window[0].name == "move_window_r-1"
+    assert move_window[0].request.command == "movetoworkspace"
+    assert any("firing movetoworkspace" in item for item in grammar.last_diagnostics)
 
 
 def test_fist_motion_ambiguity_does_not_fire_command(

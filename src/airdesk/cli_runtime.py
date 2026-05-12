@@ -431,11 +431,11 @@ def control_run(
     scroll_amount_per_step: Annotated[
         int,
         typer.Option(help="Pointer scroll ticks emitted per pinch-hold motion step."),
-    ] = 4,
+    ] = 3,
     scroll_cooldown_seconds: Annotated[
         float,
         typer.Option(help="Minimum seconds between middle-pinch scroll ticks."),
-    ] = 0.04,
+    ] = 0.06,
     click_cooldown_seconds: Annotated[
         float,
         typer.Option(help="Minimum seconds between repeated pinch tap clicks."),
